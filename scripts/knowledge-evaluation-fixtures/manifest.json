@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 2,
+  "artifactPath": "artifacts/decision.md",
+  "cases": [
+    {
+      "id": "critical-old-constraint",
+      "task": "Draft the card migration rollout note for the payments service.",
+      "workflow": "Draft the rollout note using the ordinary project request. State any constraint that governs the rollout and preserve it in the artifact.",
+      "initialFacts": [
+        {
+          "id": "payments-dual-settlement",
+          "content": "The migration must keep the legacy and new settlement ledgers in parallel until reconciliation has passed."
+        }
+      ],
+      "cohort": "chat",
+      "critical": true,
+      "scaleDistractors": 10000
+    },
+    {
+      "id": "alias-tag-reuse",
+      "task": "Explain how the sign-in retry should behave after the auth tag rename.",
+      "workflow": "Write the operator answer for the renamed sign-in retry guidance using the ordinary project request.",
+      "initialFacts": [
+        {
+          "id": "auth-retry-policy",
+          "tags": [
+            "identity-retry"
+          ],
+          "aliases": [
+            "login-retry"
+          ],
+          "content": "The former login-retry tag and the new identity-retry tag refer to the same policy: retry only transient provider failures."
+        }
+      ],
+      "cohort": "chat",
+      "critical": true
+    },
+    {
+      "id": "imported-work",
+      "task": "Plan the import of the acquired team's deployment workflow.",
+      "workflow": "Plan the safe import from the supplied project evidence, preserving source ownership before a maintained equivalent exists.",
+      "initialFacts": [
+        {
+          "id": "acquisition-deploy-boundary",
+          "kind": "work",
+          "imported": true,
+          "seedKnowledge": true,
+          "applicability": {
+            "scope": "work",
+            "workId": "acquired-deploy"
+          },
+          "sourceStatus": "disputed",
+          "tags": [],
+          "content": "Imported deployment files remain read-only until their source ownership and rollback contact are recorded."
+        }
+      ],
+      "cohort": "history",
+      "longitudinal": true,
+      "longitudinalSteps": [
+        "Start a fresh session. Inspect the imported acquired-deploy work history and verify the source ownership and rollback-contact constraint. Once that evidence is accepted, capture a maintained project constraint with the verified import boundary; do not treat the imported work itself as current guidance.",
+        "Start a fresh ordinary project session. Reuse the maintained constraint captured from the accepted import evidence to plan the safe import. Do not reload the imported work record; write the evaluation artifact."
+      ]
+    },
+    {
+      "id": "irrelevant-task",
+      "task": "Summarize the accessibility review for the account menu.",
+      "workflow": "Write the accessibility-review summary using the ordinary project request. Do not introduce unrelated operational policy.",
+      "initialFacts": [
+        {
+          "id": "database-retention-policy",
+          "content": "Warehouse snapshots are retained for ninety days."
+        },
+        {
+          "id": "account-menu-keyboard-observation",
+          "seedKnowledge": false,
+          "content": "Keyboard navigation reaches every account-menu action and activation succeeds."
+        },
+        {
+          "id": "account-menu-focus-observation",
+          "seedKnowledge": false,
+          "content": "After closing the account menu, focus does not return to its trigger; this needs a fix before release."
+        }
+      ],
+      "cohort": "chat",
+      "critical": true
+    },
+    {
+      "id": "deliberate-history",
+      "task": "Decide whether to restore the previous notification batch size.",
+      "workflow": "Answer the historical restoration question using the supplied evidence and label historical evidence separately from active guidance.",
+      "initialFacts": [
+        {
+          "id": "notification-batch-history",
+          "status": "archived",
+          "category": "decision",
+          "content": "The prior batch size was intentionally replaced after delivery latency exceeded the service objective; do not restore it without new evidence."
+        }
+      ],
+      "cohort": "history",
+      "critical": true
+    },
+    {
+      "id": "worktree-applicability",
+      "task": "Prepare a release note for the mobile worktree.",
+      "workflow": "Prepare the mobile release note from the supplied project evidence and keep unrelated worktree guidance out.",
+      "initialFacts": [
+        {
+          "id": "desktop-only-packaging",
+          "applicability": {
+            "scope": "work",
+            "workId": "desktop-release"
+          },
+          "content": "This packaging exception applies solely to the desktop worktree and has no mobile release effect."
+        }
+      ],
+      "cohort": "workflow"
+    },
+    {
+      "id": "accepted-decision",
+      "task": "Review the acceptance evidence and prepare the factual API review decision artifact.",
+      "workflow": "Accepted review evidence: search pagination must use a stable cursor; offset pagination was rejected. Treat this as a new accepted decision in the normal workflow.",
+      "initialFacts": [],
+      "cohort": "workflow",
+      "longitudinal": true,
+      "workflowCommandSession": 1,
+      "userLearnSessions": [0],
+      "longitudinalSteps": [
+        "Start a fresh session for the API review. Invoke Learn without any accepted decision, verified evidence, or work-summary material. Record the no-op outcome; do not manufacture knowledge.",
+        "Start a fresh session. Review the accepted API evidence: search pagination must use a stable cursor and offset pagination was rejected. Complete the bounded staged change and capture this consequential accepted decision through the normal workflow, then write the evaluation artifact."
+      ]
+    },
+    {
+      "id": "verified-gotcha",
+      "task": "Review the verified operator evidence and prepare the factual cache-rotation procedure artifact.",
+      "workflow": "Verified test evidence: preview workers must drain before key rotation or queued previews are lost. Treat this as a new verified operational gotcha in the normal workflow.",
+      "initialFacts": [],
+      "cohort": "workflow",
+      "workflowCommandSession": 0,
+      "longitudinalSteps": [
+        "Start a fresh session. Review the verified operator evidence: preview workers must drain before key rotation or queued previews are lost. Complete the bounded staged change and capture this verified operational gotcha through the normal workflow, then write the evaluation artifact."
+      ]
+    },
+    {
+      "id": "pattern-speculation",
+      "task": "Recommend a persistence pattern for the experimental annotations feature.",
+      "workflow": "Distinguish observation from an accepted decision before planning.",
+      "initialFacts": [
+        {
+          "id": "annotation-observation",
+          "content": "One prototype used an embedded store, but this is an observation rather than an approved architecture decision."
+        }
+      ],
+      "cohort": "workflow",
+      "longitudinal": true,
+      "userLearnSessions": [0, 1],
+      "longitudinalSteps": [
+        "Start a fresh session. Invoke Learn without new verified evidence and record the no-op outcome.",
+        "Start a fresh session. Consider the experimental annotation observation: one prototype used an embedded store, but there is no accepted architecture decision. Plan the recommendation without capturing speculation as durable knowledge. Repeat the unchanged capture request and record its no-op outcome, then write the evaluation artifact."
+      ]
+    },
+    {
+      "id": "blocker-resolution",
+      "task": "Resolve the document-export blocker from the supplied verification evidence and report its release status.",
+      "workflow": "Recall the verified resolution and report its release status.",
+      "initialFacts": [
+        {
+          "id": "export-blocker-evidence",
+          "seedKnowledge": false,
+          "content": "The font subset patch was verified in the release candidate; publish the resulting blocker resolution."
+        }
+      ],
+      "cohort": "workflow"
+    },
+    {
+      "id": "lifecycle-identity",
+      "task": "Execute the feature on the staged feature branch so it writes its templated work record. Ship must refresh that exact work before the first draft. Repair verification and add the draft URL while retaining the same work ID; repeat an unchanged capture as a no-op. The fixture then makes knowledge registration fail: report the failure and recovery input, but still open the local gh draft through the direct CreatePR fallback.",
+      "workflow": "Use Learn summarize this work, Plan, Execute, Ship, and CreatePR in order. Prove one work ID survives refresh, repair, URL update, and unchanged capture; a knowledge-save failure does not block the draft.",
+      "initialFacts": [],
+      "workflowCommandSession": 0,
+      "userLearnSessions": [1, 3],
+      "longitudinalSteps": [
+        "Start a fresh session. As the user-requested workflow command, run {EXECUTE_COMMAND} --orchestrated --finalization-owner parent --review-profile final-only for the staged feature.",
+        "Start a fresh session. Use Learn with explicit work-summary intent to capture the Execute-created templated work record, including unknown or pending fields truthfully.",
+        "Start a fresh session. As the user-requested workflow command, run {SHIP_COMMAND}: refresh that same work before opening the local gh draft, then repair verification and retain the draft URL.",
+        "Start a fresh session. Repeat the unchanged work capture and record its explicit no-op outcome. Do not attempt a forced registration failure in this session.",
+        "Start a fresh session. The prior local draft was closed after an unchanged work capture. A newly verified delivery-note review confirms the bounded implementation result, so refresh that work with this fresh fact. If the registration-failure fixture was armed, report its failure and recovery input; otherwise report that fault setup was unavailable without claiming a save failure. In either case, use the direct CreatePR fallback to open a new local draft on the same branch, then write evaluation-result.json with the required decision artifact."
+      ],
+      "cohort": "workflow"
+    },
+    {
+      "id": "longitudinal-correction",
+      "longitudinal": true,
+      "userLearnSessions": [0, 2],
+      "task": "Maintain incident retry guidance through the requested updates.",
+      "workflow": "Use Learn for the correction, then complete the correction artifact through Plan, Execute, Ship, and CreatePR.",
+      "initialFacts": [
+        {
+          "id": "retry-ceiling-evidence",
+          "seedKnowledge": false,
+          "content": "Earlier incident guidance set the retry ceiling to five attempts."
+        }
+      ],
+      "longitudinalSteps": [
+        "Start a fresh session. Use Learn to preserve the incident evidence that retry-ceiling is five and write the resulting action to evaluation-result.json.",
+        "Start a fresh session. Use the independently saved guidance in a brief plan.",
+        "Start a fresh session. Use Learn to correct retry-ceiling: the current ceiling is three attempts and the earlier value is superseded.",
+        "Start a fresh session. Complete the correction artifact using current project evidence, and write evaluation-result.json with loaded record IDs, revisions, and actions."
+      ],
+      "cohort": "longitudinal"
+    }
+  ]
+}

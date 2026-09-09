@@ -1,0 +1,115 @@
+{
+  "critical-old-constraint": {
+    "requiredRecordHashes": [
+      "sha256:6a71f207cd8e155a360244a1bb50383587413af2e33c498af20b17c10dd4666a"
+    ],
+    "requiredBeforeDecision": true,
+    "allowedHistoryLoads": 0,
+    "manualRubric": "The rollout retains both ledgers through reconciliation."
+  },
+  "alias-tag-reuse": {
+    "requiredRecordHashes": [
+      "sha256:7dc026c3d7beed6a117e5e951550c13fd28488fc3ec32f47d4a42917bcc2b171"
+    ],
+    "manualRubric": "The renamed tag preserves the transient-failure limit."
+  },
+  "imported-work": {
+    "requiredRecordHashes": [
+      "sha256:6f8b66eda3c0329f7460f94803e5028789d8d653b3fb8ef4ad12dcc2dc21003f"
+    ],
+    "manualRubric": "The plan preserves source ownership before import.",
+    "requiredReadCommand": "inspect",
+    "requiresFreshExtractedReuse": true,
+    "importedRecordHashes": [
+      "sha256:6f8b66eda3c0329f7460f94803e5028789d8d653b3fb8ef4ad12dcc2dc21003f"
+    ],
+    "requiredStates": [
+      "import-inspect",
+      "maintained-extraction",
+      "fresh-reuse-no-import-reload"
+    ]
+  },
+  "irrelevant-task": {
+    "requiredRecordHashes": [],
+    "allowedLoads": 0,
+    "allowedHistoryLoads": 0,
+    "manualRubric": "The summary accurately reports keyboard access passing and the focus-return failure needing a fix, without applying warehouse retention policy."
+  },
+  "deliberate-history": {
+    "requiredRecordHashes": [
+      "sha256:ea3d8d65e67b91823722bec7b29c8424f533ec816fe86b369a6ebaae1f09f039"
+    ],
+    "manualRubric": "The current recommendation preserves the intentional replacement.",
+    "requiredReadCommand": "inspect"
+  },
+  "worktree-applicability": {
+    "requiredRecordHashes": [],
+    "forbiddenLoadedRecordHashes": [
+      "sha256:914fe1a81c60ab561a5eee3e3cd4548413cc71b1e5271234a3b4803e29892eac"
+    ],
+    "manualRubric": "Desktop-only guidance is not applied to mobile."
+  },
+  "accepted-decision": {
+    "requiredRecordHashes": [],
+    "requiresCapture": true,
+    "requiredStates": [
+      "bare-learn-noop",
+      "accepted-decision-capture"
+    ],
+    "manualRubric": "The newly accepted pagination decision is automatically captured and carried into the artifact."
+  },
+  "verified-gotcha": {
+    "requiredRecordHashes": [],
+    "requiresCapture": true,
+    "manualRubric": "The newly verified worker-drain procedure is automatically captured and executed."
+  },
+  "pattern-speculation": {
+    "requiredRecordHashes": [
+      "sha256:a0ccf42207fe4ac45c5f3d43a047c9187d0150ca514da33670b33c1e02eedba3"
+    ],
+    "forbiddenLegacyExposure": true,
+    "requiredStates": [
+      "bare-learn-noop",
+      "unchanged-repeat-noop"
+    ],
+    "manualRubric": "The recommendation does not promote an observation to a decision."
+  },
+  "blocker-resolution": {
+    "requiredRecordHashes": [],
+    "requiresCapture": true,
+    "requiredStates": [
+      "blocker-resolution-capture"
+    ],
+    "manualRubric": "The report states the verified resolution accurately."
+  },
+  "lifecycle-identity": {
+    "requiredRecordHashes": [],
+    "minimumPrCreates": 2,
+    "requiresSameWorkId": true,
+    "requiresPrView": true,
+    "requiresDraftReplacement": true,
+    "requiresExecuteAutoCapture": true,
+    "requiredStates": [
+      "capture",
+      "refresh",
+      "noop",
+      "save-failure",
+      "draft",
+      "replacement-draft"
+    ],
+    "manualRubric": "Execute creates one work identity; Ship refreshes it before the draft; repair, URL update, and unchanged capture retain that ID; a registration failure is reported while the direct draft opens."
+  },
+  "longitudinal-correction": {
+    "requiredRecordHashes": [
+      "sha256:226eab3f4979ddc94a7b55210ca70f20dde5aa0e20df7c0777da612e4fccd815"
+    ],
+    "requiresCapture": true,
+    "requiredStates": [
+      "capture",
+      "fresh-reuse",
+      "correction",
+      "fresh-corrected-reuse"
+    ],
+    "manualRubric": "The corrected revision, rather than the earlier retry value, is reused."
+  }
+}
