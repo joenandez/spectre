@@ -58,7 +58,7 @@ Skills are contract-form workflow prompts that:
 
 ### Knowledge Skills
 
-`/spectre:learn` writes reusable project skills under `.agents/skills/`. Codex project installs sync those skill paths into config, and agents discover them from their descriptions. Spectre does not inject startup memory.
+SPECTRE stores maintained knowledge and work accounts as typed, revisioned records in the user-level project store. SessionStart provides a bounded discovery index, while agents use task-aware search and verified exact loads before relying on a record. The primary captures qualifying accepted Execute findings and maintains the same work account through Ship/Create PR; `/spectre:learn` is an on-demand capture or work-summary route, not knowledge-skill authoring or a mandatory post-work step.
 
 ## Working in This Repo
 

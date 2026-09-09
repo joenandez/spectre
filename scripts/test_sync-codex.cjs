@@ -13,6 +13,17 @@ const hooks = require('./translators/hooks.cjs');
 const skills = require('./translators/skills.cjs');
 const { runSync } = require('./sync-codex.cjs');
 
+test('knowledge translators retain every public operation', () => {
+  const operations = ['search', 'tags', 'load', 'register', 'work', 'history', 'inspect', 'registry', 'migrate'];
+  const source = operations.map(operation => `spectre knowledge ${operation} fixture`).join('\n');
+  for (const rewrite of [hooks.rewriteRuntimeScript, skills.rewriteTextForCodex]) {
+    const translated = rewrite(source);
+    for (const operation of operations) {
+      assert.match(translated, new RegExp(`knowledge-cli\\.mjs" ${operation} fixture`));
+    }
+  }
+});
+
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-sync-test-'));
 }
@@ -1720,7 +1731,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    '7f0a21a5d42d64a35cdb0d14e2325c43ed7695169da9c645f303dee5abf293f2',
+    '90ed76a25952c44a412c8c419216c12a229155e8f928c3a8d7c66e7ee42e1de5',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(

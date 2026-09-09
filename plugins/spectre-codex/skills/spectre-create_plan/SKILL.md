@@ -20,6 +20,7 @@ Turn confirmed Scope into the smallest correct implementation plan. Behavioral s
 - Reuse a managed `FEATURE_ROOT` only when explicit/current-thread evidence ties it to this work (physical directory wins; never branch/recency/lifecycle/scans); distinct work ignores ambient roots. Otherwise, including on collision, standalone MUST first load and follow `Skill(spectre-feature-root)` through DONE; orchestrated calls escalate. Keep writes beneath it and pass it unchanged. Repair touched stale metadata.
 - Read repository rules and real code. Reuse evidence first; otherwise use `@spectre_finder`, `@spectre_analyst`, and `@spectre_patterns` only for unresolved material questions. They do not write planning artifacts.
 - Treat confirmed IN/OUT/ANTI-SCOPE, success criteria, constraints, and approved design as authoritative. Never silently change them.
+- Search the actual task with `node "${PLUGIN_ROOT}/hooks/scripts/knowledge-cli.mjs" search <task> --project-dir .`, assess applicability, and exact-load applicable guidance before affected decisions. Keep only exact loaded IDs/revisions in existing `task_context.md`; previews and unloaded candidates are not evidence.
 
 ## Outputs + DONE
 
@@ -43,6 +44,7 @@ DONE when every planned mechanism maps to a current requirement, constraint, pre
 ## Method / guardrails
 
 - Start with one cohesive vertical slice using the closest established local pattern. Keep cross-layer work together when splitting would create foundations or handoffs with no independent value.
+- Refine retrieval after affected files are known. Inspect work previews within the shared budget; load a work body only to answer a stated question, including a critical imported constraint without a maintained equivalent. Do not reload an unchanged revision already in context. Workers receive compact applicable findings and provenance, never record bodies.
 - A new abstraction/layer, public interface, dependency, persistence model, configuration surface, process, migration/compatibility mechanism, telemetry surface, or extension point is admitted only when a current requirement/constraint requires it or the simpler local approach demonstrably fails. Record under Technical Approach: `Addition | Required now by | Simpler local option | Why it fails now | Verification`. No valid row means delete or defer it.
 - Reversible decisions take the local default without research or alternatives. For a material irreversible/public/persisted decision, compare at most two realistic options. Unknown feasibility becomes a bounded spike with a question, evidence, and stop condition—not production architecture.
 - Keep one representative happy-path and primary-failure test per distinct required behavior; add cases only for another requirement, public boundary, credible regression, or materially different risk.

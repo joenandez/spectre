@@ -195,7 +195,7 @@ In SPECTRE, the **structured workflows** generate some combination of the follow
 - `validation/validation_gaps.md` - task list of gaps identified from validation
 - `proof/proof.json` and `proof/proof.html` - acceptance status and reviewed evidence
 
-Durable project knowledge is stored separately under `~/.spectre/projects/.../knowledge/<record-id>/SKILL.md` so your Agent can retrieve it when relevant.
+Durable project context lives separately in typed record packages under `~/.spectre/projects/.../knowledge/<record-id>/record.json`. Maintained knowledge and work accounts share that revisioned format, so an Agent can discover and verify the relevant context without treating a generated skill file as the source of truth.
 
 ### My Workflow Iteration Process
 
@@ -206,7 +206,7 @@ For example:
 - I iterated on `/spectre:scope` until I felt like the types of questions actually help me get clear on what I'm building, without asking questions that it could easily get from codebase research
 - I iterated on the `/spectre:execute` workflow until it successfully delivered large tasks in a single context window using subagents that deliver completion reports to handoff to the next subagents, use TDD effectively, and autonomously adapt the tasks based on what was discovered DURING development instead of blindly
 - I iterated on the `/spectre:clean` and `/spectre:test` workflows until it felt automatic that we were sticking to our linting rules, every new feature was well tested/covered, the commits were grouped logically with the appropriate amount of detail.
-- I iterated on the `/spectre:learn` workflow and the registry/search/load flow until 1) your Agent reached for relevant knowledge before starting work, 2) captured the *right* details and insights, and 3) kept relevant knowledge current as we make changes and learn more.
+- I iterated on the knowledge search/load and capture lifecycle until 1) your Agent reaches for relevant knowledge before an affected decision, 2) the primary captures supported decisions, constraints, corrections, and work outcomes at the workflow boundary, and 3) `/spectre:learn` remains available when I explicitly want to preserve or summarize something.
 - I iterated on the `/spectre:handoff` workflow until the status update had the appropriate detail/context, and worked perfectly if I'm working across MANY sessions or just one.
 - I added the new `/spectre:prove` workflow when it became clear I was spending far too much time validating the features were built right, and gave the agent a feedback loop to check its own work.
 - I iterated on the `/spectre:plan` workflow until I could use it for *everything*. I didn't want to have to make decisions about using native plan mode or Spectre, but I also didn't want a Comprehensive 40m planning workflow for a small feature.
@@ -235,22 +235,27 @@ If you want to start fresh — /spectre:forget archives the current branch's act
 
 The more I used SPECTRE and the faster I could build, the more frequently I found myself wanting to reference past work. Debugging sessions, a new architectural pattern, or how a feature works/was built.
 
-SPECTRE keeps knowledge explicit: use `/spectre:learn` to capture durable project knowledge. Claude Code and Codex receive a compact metadata registry at SessionStart, then your Agent uses the neutral knowledge CLI to search and load records on demand.
+SPECTRE keeps durable context in two typed record kinds: maintained **knowledge** and seven-section **work** accounts. A size-bounded startup index exposes only discovery metadata; task-aware search uses canonical tags and paths to find applicable records without loading every body. The primary agent then verifies an exact record load before using it.
 
 ### How It Works
 
-`/spectre:learn` captures patterns, gotchas, decisions, and procedures in SPECTRE's canonical user-level project store under `~/.spectre/projects/`.
+The primary captures supported decisions, reusable patterns and constraints, corrections, blockers, and work summaries through the same revision-checked record path. It does this automatically after accepted Execute batches when a capture trigger is present, writes the stable Execute work account at completion, and refreshes that same account before Ship or Create PR opens a draft. Capture never changes acceptance, verification, or PR authority; a save failure is surfaced with recovery input rather than blocking the draft.
 
-1. **Registry** — SessionStart supplies metadata for available records: ID, version, use condition, activation cues, and an exact load command.
-2. **Verified retrieval** — when the task subject and a record's use condition match, your Agent loads that exact record before applying it.
+`/spectre:learn` is the on-demand route: use it to preserve an evidenced insight or correction, or to request a work summary. A bare invocation can truthfully return a no-op; it does not create a knowledge skill, a startup entry, or a mandatory post-work task.
+
+1. **Bounded discovery** — startup metadata and `knowledge search` return only a relevance-ranked preview: canonical tags, applicability, revision, estimated load size, and an exact load command. Work previews are historical evidence, not active guidance.
+2. **Verified retrieval** — when the task subject and a record's use condition match, your Agent uses the neutral knowledge CLI to search and load records, then verifies and loads the full record at that exact revision before relying on it. Linked resources and historical revisions stay opt-in.
+3. **Stable work identity** — Execute, Ship, and Create PR carry or resolve the same exact work ID from a run, PR, or candidate association, never from a branch-name guess.
 
 ### The Hook + Skill Loop
 
-What is great about SPECTRE's learning system is that your Agent knows what knowledge is available without loading every record into context.
+SPECTRE lets an Agent find applicable context without putting every record body into the conversation.
 
-1. **SessionStart hook** — every time you start a conversation, SPECTRE injects a size-bounded metadata registry into context. Your Agent now *knows what it can know* before you type a single word.
+1. **SessionStart discovery** — every time you start a conversation, SPECTRE supplies a size-bounded metadata index. It names potentially relevant records but does not load their bodies or activate historical claims.
 
-2. **Exact loading** — when your task matches both the subject and use condition of a record (e.g., authentication refresh work and `feature-auth-flows`), your Agent verifies and loads the full record *before* relying on it. No wasted tool calls rediscovering what's already documented.
+2. **Task-aware search and exact loading** — the Agent narrows by the actual task, canonical tags, and paths; it assesses applicability and verifies the selected record before relying on it. The record's revision token prevents a stale update from silently replacing current guidance.
+
+3. **Workflow capture** — accepted Execute findings are reviewed by the primary for qualifying capture triggers. Execute and Ship maintain a truthful work account across the PR lifecycle, while routine progress, speculation, and duplicate facts remain skips or no-ops.
 
 The result: knowledge compounds across sessions instead of resetting to zero. The more you learn, the faster and more accurate every future session becomes.
 
@@ -258,11 +263,11 @@ The result: knowledge compounds across sessions instead of resetting to zero. Th
 
 | Category | Example |
 | --- | --- |
-| **Gotchas** | "The websocket reconnect silently fails if..." |
-| **Decisions** | "We chose SQLite over Postgres because..." |
-| **Features** | Architecture dossiers — key files, flows, common tasks |
-| **Patterns** | Reusable solutions established across the codebase |
-| **Procedures** | Multi-step processes like deploy, release, migrate |
+| **Gotchas** | A verified non-obvious constraint, such as a reconnect failure condition |
+| **Decisions** | An accepted durable choice with its evidence and applicability |
+| **Patterns** | A verified reusable solution, not an incidental code shape |
+| **Blockers** | A confirmed blocking condition and its resolution criterion |
+| **Work accounts** | Truthful requested outcome, changes, decisions, verification, unknowns, and related context |
 
 ## 🤖 Subagents
 
@@ -324,7 +329,7 @@ Although I do sometimes use `@spectre:web-research` in Claude Code or `@spectre_
   - runs /spectre:rebase to get sync'd up with and address any merge conflicts with the target branch
   - runs /spectre:create_pr to create the final PR.
 
-- Finally, if the feature is significant and one I'll surely return to for future enhancements or bug fixes, I run /spectre:learn to capture any knowledge worth preserving — patterns, gotchas, decisions. This builds institutional memory that your Agent can find in future sessions.
+- Execute and Ship capture qualifying evidence and refresh the same work account automatically. When I have an additional evidenced insight, correction, or work-summary request, I can use `/spectre:learn` on demand; it is not a required post-Ship step.
 
 ## 📋 Slash Command Reference
 

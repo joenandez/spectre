@@ -18,6 +18,7 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 
 - `FEATURE_ROOT = .spectre/features/<feature-name>/`, resolved from the input or proposed below.
 - captured session or current thread memory for this area, if present
+- Search the actual task with `node "${PLUGIN_ROOT}/hooks/scripts/knowledge-cli.mjs" search <task> --project-dir .`; use previews within the shared budget, assess applicability, then exact-load applicable records only. Retain each used ID and revision in `concepts/scope.md` with the decision it informed, excluding preview-only and unloaded candidates.
 
 ## Feature root contract
 
@@ -28,6 +29,7 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 - **Reply before tools.** Acknowledge first; never go silent to "think." No tool calls in the opening reply except reading `KICKOFF_DOC` when `FROM_KICKOFF=true`.
 - **WHAT, not HOW.** Ask only about boundaries, user value, and anti-scope. Defer architecture/trade-offs/integration to `spectre-plan`. Exception: scope that is inherently technical (e.g. "migrate DB X→Y").
 - **Ground once.** Start with exactly **one** fast lookup to anchor the hypothesis in repo reality — a single `@spectre_finder` query, or one `grep`/`glob`; skip it if slow. Needing broader grounding exceeds this fast scope pass.
+- **Use knowledge before affected decisions.** Search before settling a boundary or assumption; refine after affected files are known. A work body answers only a stated question, including a potentially critical imported constraint without a maintained equivalent. Do not reload an unchanged revision already in context; workers receive compact applicable findings and provenance, never record bodies.
 - Lead with a grounded hypothesis (problem, who it affects, proposed feature name/root, IN / OUT / ANTI-SCOPE) and 5–8 questions tagged **(blocking)** / *(optional)*. Iterate boundaries (IN / OUT / ANTI-SCOPE / Unsure) until confirmed, then clarify remaining ambiguity with `AskUserQuestion` (≤4 at a time). No clarification files.
 
 ## Outputs + DONE
