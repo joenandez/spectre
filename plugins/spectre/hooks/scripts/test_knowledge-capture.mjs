@@ -9,6 +9,8 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { refreshKnowledgeIndex } from './knowledge/records.mjs';
+import { registerCanonicalKnowledge } from './knowledge/registration.mjs';
+import { captureCanonicalKnowledge } from './knowledge/capture.mjs';
 import { resolveProjectStore } from './knowledge/store.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -92,6 +94,43 @@ function filledTemplate(kind, overrides = {}) {
     PLUGIN_ROOT, 'skills', 'spectre-capture', 'references', `${kind}-capture-input.json`,
   ), 'utf8'));
   return { ...template, ...(kind === 'knowledge' ? knowledgeInput() : workInput()), ...overrides };
+}
+
+function rawKnowledgeRecord(input) {
+  return {
+    schemaVersion: 1, id: input.id, kind: 'knowledge', title: input.title, summary: input.summary,
+    tags: ['authentication'], applicability: { scope: 'project' },
+    provenance: { origin: 'captured', capturedAt: '2026-09-09T00:00:00.000Z' }, relatedRecordIds: [],
+    category: input.category, useWhen: input.useWhen, content: input.content, evidence: input.evidence,
+    status: 'active',
+  };
+}
+
+async function registerResourceRecord(value, input) {
+  const directory = path.join(value.root, 'proposal', input.id);
+  fs.mkdirSync(path.join(directory, 'references'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'record.json'), `${JSON.stringify(rawKnowledgeRecord(input), null, 2)}\n`);
+  fs.writeFileSync(path.join(directory, 'references', 'proof.md'), 'Durable proof resource.\n');
+  return registerCanonicalKnowledge({ projectDir: value.projectDir, spectreHome: value.spectreHome, recordPath: directory });
+}
+
+async function registerResourceWork(value, id, input) {
+  const directory = path.join(value.root, 'work-proposal', id);
+  fs.mkdirSync(path.join(directory, 'references'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'record.json'), `${JSON.stringify({
+    schemaVersion: 1, id, kind: 'work', title: input.title, summary: input.summary,
+    tags: ['authentication'], applicability: { scope: 'work', workId: id, runIds: ['run-a'] },
+    provenance: { origin: 'captured', capturedAt: '2026-09-09T00:00:00.000Z', sourceRunIds: ['run-a'] }, relatedRecordIds: [],
+    work: {
+      requestedOutcome: input.requestedOutcome, scope: input.scope, actualChanges: input.actualChanges,
+      reasons: input.reasons, discoveries: input.discoveries, verification: input.verification,
+      remainingWork: input.remainingWork, relatedContext: input.relatedContext,
+      execution: { state: 'unknown' }, verificationState: { state: 'unknown' }, pullRequest: { state: 'unknown' },
+      associations: { sourceRunIds: ['run-a'], pullRequestIds: [], candidates: [] },
+    },
+  }, null, 2)}\n`);
+  fs.writeFileSync(path.join(directory, 'references', 'proof.md'), 'Work proof resource.\n');
+  return registerCanonicalKnowledge({ projectDir: value.projectDir, spectreHome: value.spectreHome, recordPath: directory });
 }
 
 describe('semantic knowledge capture', () => {
@@ -203,5 +242,116 @@ describe('semantic knowledge capture', () => {
     assert.equal(output(result).code, 'CAPTURE_INPUT_INVALID');
     assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
     assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
+  });
+
+  it('preserves existing package resources and no-ops on identical semantic capture', async (t) => {
+    const value = await fixture(t);
+    const input = knowledgeInput();
+    const registered = await registerResourceRecord(value, input);
+    const source = inputPath(value, 'resource-record.json', input);
+    const result = run('bundled', ['capture', '--kind', 'knowledge', '--input', source], value);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(output(result).status, 'noop');
+    assert.equal(fs.readFileSync(path.join(registered.storePath, 'knowledge', input.id, 'references', 'proof.md'), 'utf8'), 'Durable proof resource.\n');
+  });
+
+  it('allows placeholder-like prose but rejects whole-value template placeholders', async (t) => {
+    const value = await fixture(t);
+    const valid = inputPath(value, 'valid-prose.json', knowledgeInput({
+      content: "Run knowledge-cli.mjs search '<task>' and note the TODO was stale.",
+      evidence: 'Promise<void> resolves before flush.',
+    }));
+    const created = run('bundled', ['capture', '--kind', 'knowledge', '--input', valid], value);
+    assert.equal(created.status, 0, created.stderr);
+
+    const beforeTags = fs.readFileSync(path.join(value.storePath, 'tags.json'), 'utf8');
+    const template = inputPath(value, 'raw-template.json', JSON.parse(fs.readFileSync(path.join(
+      PLUGIN_ROOT, 'skills', 'spectre-capture', 'references', 'knowledge-capture-input.json',
+    ), 'utf8')));
+    const rejected = run('bundled', ['capture', '--kind', 'knowledge', '--input', template], value);
+    assert.equal(rejected.status, 1);
+    assert.equal(output(rejected).code, 'CAPTURE_INPUT_INVALID');
+    assert.equal(fs.readFileSync(path.join(value.storePath, 'tags.json'), 'utf8'), beforeTags);
+  });
+
+  it('merges later work source runs into associations, applicability, and provenance', async (t) => {
+    const value = await fixture(t);
+    const source = inputPath(value, 'work-runs.json', workInput());
+    const created = run('bundled', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-a'], value);
+    assert.equal(created.status, 0, created.stderr);
+    const initial = output(created);
+    const updated = run('bundled', ['capture', '--kind', 'work', '--input', source, '--work-id', initial.workId, '--source-run-id', 'run-b', '--expected-revision', initial.revisionToken], value);
+    assert.equal(updated.status, 0, updated.stderr);
+    const stored = JSON.parse(fs.readFileSync(path.join(value.storePath, 'knowledge', initial.workId, 'record.json'), 'utf8'));
+    assert.deepEqual(stored.work.associations.sourceRunIds, ['run-a', 'run-b']);
+    assert.deepEqual(stored.applicability.runIds, ['run-a', 'run-b']);
+    assert.deepEqual(stored.provenance.sourceRunIds, ['run-a', 'run-b']);
+  });
+
+  it('applies aliases to existing tags and rejects record-id on work capture', async (t) => {
+    const value = await fixture(t);
+    const alias = inputPath(value, 'existing-alias.json', knowledgeInput({ tags: [{ id: 'authentication', aliases: ['login'] }] }));
+    const created = run('bundled', ['capture', '--kind', 'knowledge', '--input', alias], value);
+    assert.equal(created.status, 0, created.stderr);
+    const tags = JSON.parse(fs.readFileSync(path.join(value.storePath, 'tags.json'), 'utf8'));
+    assert.deepEqual(tags.tags.authentication.aliases, ['auth', 'login']);
+
+    const work = inputPath(value, 'work-record-id.json', workInput());
+    const rejected = run('npm', ['capture', '--kind', 'work', '--input', work, '--record-id', 'ignored', '--source-run-id', 'run-work-id'], value);
+    assert.equal(rejected.status, 1);
+    assert.equal(output(rejected).code, 'CAPTURE_INPUT_INVALID');
+  });
+
+  it('rejects missing descriptions and tag collisions without catalog mutation', async (t) => {
+    const value = await fixture(t);
+    const tagsPath = path.join(value.storePath, 'tags.json');
+    const beforeTags = fs.readFileSync(tagsPath, 'utf8');
+    for (const tags of [[{ id: 'new-tag' }], [{ id: 'new-collision-tag', description: 'Conflicting tag.', aliases: ['auth'] }]]) {
+      const source = inputPath(value, `invalid-tag-${tags[0].id}.json`, knowledgeInput({ tags }));
+      const result = run('bundled', ['capture', '--kind', 'knowledge', '--input', source], value);
+      assert.equal(result.status, 1);
+      assert.match(output(result).code, /TAG_(?:DESCRIPTION_REQUIRED|ALIAS_COLLISION)/);
+      assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
+    }
+  });
+
+  it('reports stale revisions as conflicts and preserves resources plus associations on guarded work updates', async (t) => {
+    const value = await fixture(t);
+    const initial = inputPath(value, 'stale-initial.json', knowledgeInput());
+    const created = run('bundled', ['capture', '--kind', 'knowledge', '--input', initial], value);
+    const firstRevision = output(created).revisionToken;
+    const changed = inputPath(value, 'stale-changed.json', knowledgeInput({ evidence: 'Changed once.' }));
+    const updated = run('bundled', ['capture', '--kind', 'knowledge', '--input', changed, '--expected-revision', firstRevision], value);
+    assert.equal(updated.status, 0, updated.stderr);
+    const staleInput = inputPath(value, 'stale-second-change.json', knowledgeInput({ evidence: 'Changed twice.' }));
+    const stale = run('bundled', ['capture', '--kind', 'knowledge', '--input', staleInput, '--expected-revision', firstRevision], value);
+    assert.equal(stale.status, 1);
+    assert.equal(output(stale).status, 'conflict');
+
+    const rawWork = await registerResourceWork(value, 'resource-work', workInput());
+    const work = inputPath(value, 'resource-work.json', workInput({ actualChanges: 'Updated with a second source run.', tags: undefined }));
+    const workUpdate = run('bundled', ['capture', '--kind', 'work', '--input', work, '--work-id', 'resource-work', '--source-run-id', 'run-b', '--expected-revision', rawWork.revisionToken], value);
+    assert.equal(workUpdate.status, 0, workUpdate.stderr);
+    assert.equal(fs.readFileSync(path.join(value.storePath, 'knowledge', 'resource-work', 'references', 'proof.md'), 'utf8'), 'Work proof resource.\n');
+    const stored = JSON.parse(fs.readFileSync(path.join(value.storePath, 'knowledge', 'resource-work', 'record.json'), 'utf8'));
+    assert.deepEqual(stored.work.associations.sourceRunIds, ['run-a', 'run-b']);
+  });
+
+  it('returns recovery input, tag outcomes, and stable work identity after post-ensure registration failure', async (t) => {
+    const value = await fixture(t);
+    const source = inputPath(value, 'recovery.json', workInput({ tags: [{ id: 'recovery-tag', description: 'Recovery test tag.' }] }));
+    await assert.rejects(
+      captureCanonicalKnowledge({
+        projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work', inputPath: source,
+        sourceRunId: 'run-recovery', afterIndexRefresh: () => { throw new Error('forced registration failure'); },
+      }),
+      (error) => {
+        assert.equal(error.recoveryInput, source);
+        assert.match(error.workId, /^work-/);
+        assert.deepEqual(error.tags, ['recovery-tag']);
+        assert.equal(error.tagOutcomes[0].id, 'recovery-tag');
+        return true;
+      },
+    );
   });
 });

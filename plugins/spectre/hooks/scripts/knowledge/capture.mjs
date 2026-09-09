@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { canonicalRecordBytes, parseKnowledgeRecord, validateKnowledgeRecord } from './records.mjs';
+import { parseKnowledgeRecord, revisionTokenFor, validateKnowledgeRecord } from './records.mjs';
 import { registerCanonicalKnowledge } from './registration.mjs';
 import { resolveProjectStore } from './store.mjs';
 import { ensureTags, loadTagCatalog, resolveTagId } from './tags.mjs';
@@ -21,7 +21,8 @@ const WORK_INPUT_FIELDS = new Set([
   'inputVersion', 'title', 'summary', ...WORK_FIELDS, 'tags', 'execution',
   'verificationState', 'pullRequest', 'relatedRecordIds',
 ]);
-const PLACEHOLDER = /<[^>]+>|{{[^}]+}}|\b(?:TODO|REPLACE[_ -]?ME)\b/i;
+const PLACEHOLDER = /^(?:<[^>]+>|{{[^}]+}}|TODO|REPLACE[_ -]?ME)$/i;
+const UNKNOWN_STATE = { state: 'unknown' };
 
 function codedError(code, message, details = {}) {
   const error = new Error(message);
@@ -71,7 +72,7 @@ function assertAllowedInput(input, kind, { tagsRequired }) {
 }
 
 function assertNoPlaceholder(value, field = 'input') {
-  if (typeof value === 'string' && PLACEHOLDER.test(value)) {
+  if (typeof value === 'string' && PLACEHOLDER.test(value.trim())) {
     throw codedError('CAPTURE_INPUT_INVALID', `Capture input contains an unfilled placeholder at ${field}.`);
   }
   if (Array.isArray(value)) value.forEach((item, index) => assertNoPlaceholder(item, `${field}[${index}]`));
@@ -124,23 +125,31 @@ function existingRecord(storePath, id) {
   if (typeof id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) return null;
   const recordPath = path.join(storePath, 'knowledge', id, 'record.json');
   if (!fs.existsSync(recordPath)) return null;
-  return parseKnowledgeRecord(recordPath);
+  return { ...parseKnowledgeRecord(recordPath), recordDir: path.dirname(recordPath) };
+}
+
+function storeOptions(options) {
+  return {
+    spectreHome: options.spectreHome,
+    gitRunner: options.gitRunner,
+    allocationLockOptions: options.allocationLockOptions,
+  };
 }
 
 function nowIso(options) {
   return new Date(typeof options.now === 'function' ? options.now() : Date.now()).toISOString();
 }
 
-async function canonicalTags({ projectDir, tags, existingTags, lockOptions }) {
+async function canonicalTags({ projectDir, tags, existingTags, lockOptions, ...options }) {
   if (tags === undefined) return { tags: [...existingTags], tagOutcomes: [] };
-  const loaded = await loadTagCatalog({ projectDir, readOnly: false });
+  const loaded = await loadTagCatalog({ projectDir, readOnly: false, ...storeOptions(options) });
   const known = [];
   const unknown = [];
   for (const intent of tags) {
     const resolved = resolveTagId(loaded.catalog, intent.id);
-    if (resolved) known.push({ id: resolved.id, status: 'existing', via: resolved.via });
+    if (resolved && (!intent.aliases || intent.aliases.length === 0)) known.push({ id: resolved.id, status: 'existing', via: resolved.via });
     else {
-      if (!isNonEmptyString(intent.description)) {
+      if (!resolved && !isNonEmptyString(intent.description)) {
         throw codedError('TAG_DESCRIPTION_REQUIRED', `Creating tag ${intent.id} requires a short description of its area.`, { tagId: intent.id });
       }
       unknown.push(intent);
@@ -148,10 +157,10 @@ async function canonicalTags({ projectDir, tags, existingTags, lockOptions }) {
   }
   let ensured = [];
   if (unknown.length > 0) {
-    const result = await ensureTags({ projectDir, tags: unknown, lockOptions });
+    const result = await ensureTags({ projectDir, tags: unknown, lockOptions, ...storeOptions(options) });
     ensured = result.tags.map((tag) => ({ id: tag.id, status: tag.status, description: tag.description, aliases: tag.aliases }));
   }
-  const refreshed = unknown.length > 0 ? await loadTagCatalog({ projectDir, readOnly: false }) : loaded;
+  const refreshed = unknown.length > 0 ? await loadTagCatalog({ projectDir, readOnly: false, ...storeOptions(options) }) : loaded;
   const canonical = [];
   for (const intent of tags) {
     const resolved = resolveTagId(refreshed.catalog, intent.id);
@@ -187,12 +196,6 @@ function constructKnowledge(input, current, tags, options) {
   };
 }
 
-function defaultState(field) {
-  return field === 'execution' ? { state: 'unknown' }
-    : field === 'verificationState' ? { state: 'unknown' }
-      : { state: 'unknown' };
-}
-
 function constructWork(input, current, workId, tags, associations, options) {
   const priorAssociations = current?.work.associations || { sourceRunIds: [], pullRequestIds: [], candidates: [] };
   const mergedAssociations = {
@@ -201,6 +204,9 @@ function constructWork(input, current, workId, tags, associations, options) {
     candidates: mergeCandidates(priorAssociations.candidates, associations.candidates),
   };
   const sourceRunIds = mergeUnique(current?.provenance.sourceRunIds, associations.sourceRunIds);
+  const runIds = mergeUnique(current?.applicability.runIds, sourceRunIds);
+  const applicability = current?.applicability || { scope: 'work', workId };
+  const provenance = current?.provenance || { origin: 'captured', capturedAt: nowIso(options) };
   return {
     schemaVersion: 1,
     id: workId,
@@ -208,20 +214,14 @@ function constructWork(input, current, workId, tags, associations, options) {
     title: input.title,
     summary: input.summary,
     tags,
-    applicability: current?.applicability || {
-      scope: 'work', workId,
-      ...(mergedAssociations.sourceRunIds.length ? { runIds: mergedAssociations.sourceRunIds } : {}),
-    },
-    provenance: current?.provenance || {
-      origin: 'captured', capturedAt: nowIso(options),
-      ...(sourceRunIds.length ? { sourceRunIds } : {}),
-    },
+    applicability: { ...applicability, ...(runIds.length ? { runIds } : {}) },
+    provenance: { ...provenance, ...(sourceRunIds.length ? { sourceRunIds } : {}) },
     relatedRecordIds: input.relatedRecordIds || current?.relatedRecordIds || [],
     work: {
       ...Object.fromEntries(WORK_FIELDS.map((field) => [field, input[field]])),
-      execution: input.execution || current?.work.execution || defaultState('execution'),
-      verificationState: input.verificationState || current?.work.verificationState || defaultState('verificationState'),
-      pullRequest: input.pullRequest || current?.work.pullRequest || defaultState('pullRequest'),
+      execution: input.execution || current?.work.execution || UNKNOWN_STATE,
+      verificationState: input.verificationState || current?.work.verificationState || UNKNOWN_STATE,
+      pullRequest: input.pullRequest || current?.work.pullRequest || UNKNOWN_STATE,
       associations: mergedAssociations,
     },
   };
@@ -245,11 +245,16 @@ function prevalidateSemanticRecord(input, kind, current, requested, options) {
   }
 }
 
-function proposalPath(record) {
+function proposalPath(record, current) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-knowledge-capture-'));
   const directory = path.join(root, record.id);
   fs.mkdirSync(directory);
   fs.writeFileSync(path.join(directory, 'record.json'), `${JSON.stringify(record, null, 2)}\n`);
+  for (const resourcePath of current?.resources || []) {
+    const destination = path.join(directory, resourcePath);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(path.join(current.recordDir, resourcePath), destination);
+  }
   return { root, directory };
 }
 
@@ -264,6 +269,9 @@ export async function captureCanonicalKnowledge(options) {
   const kind = options.kind;
   if (kind !== 'knowledge' && kind !== 'work') {
     throw codedError('CAPTURE_INPUT_INVALID', '--kind must be knowledge or work.');
+  }
+  if (kind === 'work' && options.recordId !== undefined) {
+    throw codedError('CAPTURE_INPUT_INVALID', '--record-id is only valid for knowledge capture.');
   }
   if (kind === 'knowledge' && options.recordId !== undefined && input.id !== options.recordId) {
     throw codedError('CAPTURE_INPUT_INVALID', '--record-id must match the semantic knowledge input id.');
@@ -286,6 +294,7 @@ export async function captureCanonicalKnowledge(options) {
     const existingIdentity = await resolveWorkIdentity({
       projectDir: options.projectDir, workId: options.workId, sourceRunId: options.sourceRunId,
       pullRequestId: options.pullRequestId, candidate: options.candidate, lockOptions: options.lockOptions,
+      ...storeOptions(options),
     });
     if (existingIdentity.status === 'resolved') current = existingRecord(resolved.storePath, existingIdentity.workId);
   }
@@ -298,7 +307,7 @@ export async function captureCanonicalKnowledge(options) {
   prevalidateSemanticRecord(input, kind, current?.record, requested, options);
   try {
     tagResult = await canonicalTags({
-      projectDir: options.projectDir, tags: input.tags, existingTags: current?.record.tags || [], lockOptions: options.lockOptions,
+      projectDir: options.projectDir, tags: input.tags, existingTags: current?.record.tags || [], lockOptions: options.lockOptions, ...storeOptions(options),
     });
     if (kind === 'work') {
       if (!options.workId && !hasExactAssociation(requested)) {
@@ -307,6 +316,7 @@ export async function captureCanonicalKnowledge(options) {
       workIdentity = await resolveOrAllocateWorkIdentity({
         projectDir: options.projectDir, workId: options.workId, sourceRunId: options.sourceRunId,
         pullRequestId: options.pullRequestId, candidate: options.candidate, lockOptions: options.lockOptions,
+        ...storeOptions(options),
       });
       current = existingRecord(resolved.storePath, workIdentity.workId);
     }
@@ -314,15 +324,16 @@ export async function captureCanonicalKnowledge(options) {
       ? constructKnowledge(input, current?.record, tagResult.tags, options)
       : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, options);
     validateKnowledgeRecord(record, path.join('<semantic-capture>', record.id, 'record.json'), { expectedId: record.id });
-    if (current && !options.expectedRevision && canonicalRecordBytes(current.record) !== canonicalRecordBytes(record)) {
+    if (current && !options.expectedRevision && current.revisionToken !== revisionTokenFor(record, current.resourceDigests)) {
       throw codedError('KNOWLEDGE_REVISION_REQUIRED', `Updating ${record.id} requires --expected-revision ${current.revisionToken}.`, {
         status: 'conflict', currentRevision: current.revisionToken,
       });
     }
-    const proposal = proposalPath(record);
+    const proposal = proposalPath(record, current);
     try {
       const registration = await registerCanonicalKnowledge({
         projectDir: options.projectDir, recordPath: proposal.directory, expectedRevision: options.expectedRevision, lockOptions: options.lockOptions,
+        ...storeOptions(options), afterIndexRefresh: options.afterIndexRefresh,
       });
       return {
         ok: true, kind, id: registration.id, ...(kind === 'work' ? { workId: registration.id, association: workIdentity } : {}),
