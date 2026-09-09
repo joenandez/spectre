@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { measurePayload } from '../plugins/spectre/hooks/scripts/knowledge/payload.mjs';
+import { estimatePayloadTokens, measurePayload } from '../plugins/spectre/hooks/scripts/knowledge/payload.mjs';
 
 function valueAfter(argv, flag) {
   const index = argv.indexOf(flag);
@@ -73,6 +73,10 @@ function observeFrame(args, input, stdout, stderr, exitCode) {
     frameCharacters: serializedFrame.length,
     additionalContextCharacters:
       typeof additionalContext === 'string' ? additionalContext.length : null,
+    additionalContextBytes:
+      typeof additionalContext === 'string' ? Buffer.byteLength(additionalContext, 'utf8') : null,
+    additionalContextTokens:
+      typeof additionalContext === 'string' ? estimatePayloadTokens(additionalContext) : null,
     measurement,
     hookEventMatches:
       parsed?.hookSpecificOutput?.hookEventName === 'SessionStart',

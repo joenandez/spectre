@@ -337,23 +337,12 @@ describe('exclusive store locks', () => {
     assert.equal(fs.existsSync(lockPath), false);
   });
 
-  it('recovers dead-PID and timestamp-expired locks exactly once', async (t) => {
+  it('never steals an expired lock from a live owner but recovers a dead owner', async (t) => {
     const tmp = makeTmp(t);
     const storePath = makeProject(tmp, 'store');
     const lockPath = path.join(storePath, '.spectre.lock');
     const { withStoreLock } = await loadStoreModule();
     assert.equal(typeof withStoreLock, 'function');
-
-    fs.writeFileSync(
-      lockPath,
-      JSON.stringify({ pid: 999_999, timestamp: new Date().toISOString(), operation: 'dead' }),
-    );
-    const deadPid = await withStoreLock(storePath, 'register', async () => 'dead-recovered', {
-      timeoutMs: 100,
-      retryDelayMs: 5,
-      isProcessAlive: () => false,
-    });
-    assert.equal(deadPid, 'dead-recovered');
 
     fs.writeFileSync(
       lockPath,
@@ -363,12 +352,19 @@ describe('exclusive store locks', () => {
         operation: 'expired',
       }),
     );
-    const expired = await withStoreLock(storePath, 'register', async () => 'age-recovered', {
-      timeoutMs: 100,
+    await assert.rejects(withStoreLock(storePath, 'register', async () => 'stolen', {
+      timeoutMs: 20,
       retryDelayMs: 5,
       isProcessAlive: () => true,
+    }), (error) => error.code === 'LOCK_TIMEOUT');
+    assert.equal(fs.existsSync(lockPath), true);
+
+    const deadPid = await withStoreLock(storePath, 'register', async () => 'dead-recovered', {
+      timeoutMs: 100,
+      retryDelayMs: 5,
+      isProcessAlive: () => false,
     });
-    assert.equal(expired, 'age-recovered');
+    assert.equal(deadPid, 'dead-recovered');
     assert.equal(fs.existsSync(lockPath), false);
   });
 });

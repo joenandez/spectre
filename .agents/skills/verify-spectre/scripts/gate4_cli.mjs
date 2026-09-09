@@ -275,27 +275,26 @@ async function seedCanonicalRecord(projectDir, {
 } = {}) {
   const resolved = await resolveProjectStore(projectDir, { spectreHome: SPECTRE_HOME });
   const recordDirectory = path.join(resolved.storePath, 'knowledge', id);
-  const skillPath = path.join(recordDirectory, 'SKILL.md');
+  const skillPath = path.join(recordDirectory, 'record.json');
   const resourcePath = path.join(recordDirectory, 'references', 'proof.md');
   fs.mkdirSync(path.dirname(resourcePath), { recursive: true });
-  fs.writeFileSync(skillPath, [
-    '---',
-    `name: ${id}`,
-    'description: Use when diagnosing a hook timeout in the real CLI gate.',
-    'metadata:',
-    '  spectre-category: "gotchas"',
-    `  spectre-triggers: '${JSON.stringify([trigger])}'`,
-    '  spectre-status: "active"',
-    '  spectre-version: "1"',
-    '---',
-    `# ${id}`,
-    '',
-    sentinel,
-    '',
-    'Keep hook diagnostics bounded and deterministic.',
-    '',
-  ].join('\n'));
+  fs.writeFileSync(skillPath, JSON.stringify({
+    schemaVersion: 1, id, kind: 'knowledge', title: id,
+    summary: 'Use when diagnosing a hook timeout in the real CLI gate.',
+    tags: [trigger.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()],
+    applicability: { scope: 'project' },
+    provenance: { origin: 'captured', capturedAt: '2026-07-22T00:00:00.000Z' },
+    relatedRecordIds: [], category: 'gotcha',
+    useWhen: 'Diagnosing a hook timeout in the real CLI gate.',
+    content: `${sentinel}\n\nKeep hook diagnostics bounded and deterministic.`,
+    evidence: 'Gate fixture.', status: 'active',
+  }, null, 2));
   fs.writeFileSync(resourcePath, `${resourceSentinel}\n`);
+  fs.writeFileSync(path.join(resolved.storePath, 'tags.json'), JSON.stringify({
+    schemaVersion: 1,
+    tags: { 'hook-timeout': { description: 'Hook timeout diagnostics.', aliases: [] } },
+    redirects: {},
+  }, null, 2));
   refreshKnowledgeIndex(resolved.storePath);
   return {
     id,
@@ -345,15 +344,16 @@ g.check(registryOutput !== null, 'load-knowledge emits valid SessionStart JSON o
   'Claude Code parses this; malformed JSON silently drops the hook output');
 const registry = registryOutput?.hookSpecificOutput?.additionalContext;
 g.check(
-  typeof registry === 'string' && registry.includes(`ID: ${canonical.id} (v`) &&
-    registry.includes("load '<ID>'"),
+  typeof registry === 'string' && registry.includes('- hook-timeout:') &&
+    registry.includes("load '<id>'"),
   'SessionStart delivers searchable metadata and exact-load guidance',
   `unexpected registry: ${registry}`,
 );
 g.check(
   typeof registry === 'string' &&
-    (registry.match(/knowledge-cli\.mjs' load /g) || []).length === 1,
-  'SessionStart hoists one load command template instead of one per record',
+    (registry.match(/search '<task>'/g) || []).length === 2 &&
+    (registry.match(/load '<id>'/g) || []).length === 1,
+  'SessionStart provides one bounded search and exact-load workflow',
   `unexpected registry: ${registry}`,
 );
 
@@ -394,7 +394,7 @@ g.check(
 );
 g.check(
   previewOutput?.measurement?.ok === true &&
-    previewOutput?.includedRecords?.some((record) => record.id === canonical.id) &&
+    previewOutput?.includedCount === 1 &&
     !fs.existsSync(previewActivityPath),
   'knowledge registry preview reports budget and inclusion without activity writes',
 );
@@ -412,7 +412,7 @@ let loadOutput = null;
 try { loadOutput = JSON.parse(loadRun.stdout); } catch { /* handled below */ }
 g.check(loadRun.code === 0, 'knowledge load exits 0 for an exact ID', loadRun.stderr);
 g.check(
-  loadOutput?.content?.includes(canonical.sentinel),
+  loadOutput?.rendered?.includes(canonical.sentinel),
   'knowledge load returns the complete verified canonical record',
 );
 g.check(
@@ -540,7 +540,7 @@ g.check(
 );
 g.check(
   codexPreviewOutput?.measurement?.ok === true &&
-    codexPreviewOutput?.includedRecords?.some((record) => record.id === codexCanonical.id) &&
+    codexPreviewOutput?.includedCount === 1 &&
     !fs.existsSync(codexPreviewActivityPath),
   'generated Codex registry preview reports budget and inclusion without activity writes',
 );
@@ -557,7 +557,7 @@ const codexLoadRun = codexKnowledgeCli(['load', codexCanonical.id], codexProject
 let codexLoadOutput = null;
 try { codexLoadOutput = JSON.parse(codexLoadRun.stdout); } catch { /* handled below */ }
 g.check(
-  codexLoadRun.code === 0 && codexLoadOutput?.content?.includes(codexCanonical.sentinel),
+  codexLoadRun.code === 0 && codexLoadOutput?.rendered?.includes(codexCanonical.sentinel),
   'generated Codex bundled exact load returns the verified full core',
   codexLoadRun.stderr || codexLoadRun.stdout,
 );

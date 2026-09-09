@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { refreshKnowledgeIndex } from '../plugins/spectre/hooks/scripts/knowledge/records.mjs';
 import { resolveProjectStore } from '../plugins/spectre/hooks/scripts/knowledge/store.mjs';
 
 const CLI_PATH = path.resolve('bin/spectre.js');
@@ -22,21 +23,39 @@ function writeRecord(storePath, {
   const recordDir = path.join(storePath, 'knowledge', id);
   fs.mkdirSync(recordDir, { recursive: true });
   fs.writeFileSync(
-    path.join(recordDir, 'SKILL.md'),
-    [
-      '---',
-      `name: ${id}`,
-      `description: ${description}`,
-      'metadata:',
-      `  spectre-category: "${category}"`,
-      `  spectre-triggers: '${JSON.stringify(triggers)}'`,
-      '  spectre-status: "active"',
-      '  spectre-version: "1"',
-      '---',
-      `# ${id}`,
-      '',
-    ].join('\n'),
+    path.join(recordDir, 'record.json'),
+    JSON.stringify(typedKnowledgeRecord({
+      id,
+      category: category === 'feature' ? 'pattern' : category === 'procedures' ? 'decision' : category,
+      description,
+      tags: triggers.map((trigger) => trigger.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()),
+    }), null, 2),
   );
+}
+
+function typedKnowledgeRecord({
+  id,
+  category = 'pattern',
+  description = `Use when applying ${id}`,
+  tags = [id],
+  content = `Apply the recorded guidance for ${id}.`,
+} = {}) {
+  return {
+    schemaVersion: 1,
+    id,
+    kind: 'knowledge',
+    title: id,
+    summary: description,
+    tags,
+    applicability: { scope: 'project' },
+    provenance: { origin: 'captured', capturedAt: '2026-09-06T00:00:00.000Z' },
+    relatedRecordIds: [],
+    category,
+    useWhen: description,
+    content,
+    evidence: 'Test fixture.',
+    status: 'active',
+  };
 }
 
 function writeProposal(root, {
@@ -49,19 +68,14 @@ function writeProposal(root, {
   const recordDir = path.join(root, id);
   fs.mkdirSync(recordDir, { recursive: true });
   fs.writeFileSync(
-    path.join(recordDir, 'SKILL.md'),
-    [
-      '---',
-      `name: ${JSON.stringify(id)}`,
-      `description: ${JSON.stringify(description)}`,
-      'metadata:',
-      `  spectre-category: ${JSON.stringify(category)}`,
-      `  spectre-triggers: ${JSON.stringify(JSON.stringify(triggers))}`,
-      '  spectre-status: "active"',
-      '  spectre-version: "1"',
-      '---',
-      body,
-    ].join('\n'),
+    path.join(recordDir, 'record.json'),
+    JSON.stringify(typedKnowledgeRecord({
+      id,
+      category: category === 'feature' ? 'pattern' : category,
+      description,
+      tags: triggers.map((trigger) => trigger.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()),
+      content: body,
+    }), null, 2),
   );
   return recordDir;
 }
@@ -113,6 +127,7 @@ async function makeFixture() {
     description: 'Publish a release.',
     triggers: ['release publish'],
   });
+  refreshKnowledgeIndex(store.storePath);
   return { root, projectDir, spectreHome };
 }
 
@@ -130,7 +145,7 @@ test('knowledge search is target-independent with project-dir, human, JSON, and 
     });
     assert.equal(human.status, 0, human.stderr);
     assert.match(human.stdout, /feature-auth/);
-    assert.match(human.stdout, /account sign in/);
+    assert.match(human.stdout, /Authentication and session behavior/);
     assert.doesNotMatch(human.stderr, /Codex target/);
 
     const json = runCli([
@@ -158,8 +173,8 @@ test('knowledge search is target-independent with project-dir, human, JSON, and 
       env: { SPECTRE_HOME: fixture.spectreHome },
     });
     assert.equal(empty.status, 0, empty.stderr);
-    assert.match(empty.stdout, /feature:/);
-    assert.match(empty.stdout, /procedures:/);
+    assert.match(empty.stdout, /feature-auth/);
+    assert.match(empty.stdout, /procedure-release/);
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -213,7 +228,7 @@ test('knowledge register writes canonical store/index and reports validation err
     assert.equal(parsed.id, 'feature-cli-register');
     const storePath = findOnlyStore(spectreHome);
     assert.equal(
-      fs.existsSync(path.join(storePath, 'knowledge', 'feature-cli-register', 'SKILL.md')),
+      fs.existsSync(path.join(storePath, 'knowledge', 'feature-cli-register', 'record.json')),
       true,
     );
     assert.deepEqual(
@@ -223,8 +238,11 @@ test('knowledge register writes canonical store/index and reports validation err
 
     const invalid = writeProposal(path.join(proposals, 'invalid'), {
       id: 'feature-cli-register',
-      body: `\n${'x'.repeat(9_100)}\n`,
     });
+    const invalidRecordPath = path.join(invalid, 'record.json');
+    const invalidRecord = JSON.parse(fs.readFileSync(invalidRecordPath, 'utf8'));
+    invalidRecord.status = 'retired';
+    fs.writeFileSync(invalidRecordPath, JSON.stringify(invalidRecord, null, 2));
     const failed = runCli([
       'knowledge',
       'register',
@@ -272,7 +290,7 @@ test('knowledge migrate runs target-independent migration and lock timeouts seri
       env: { SPECTRE_HOME: spectreHome },
     });
     assert.equal(migrated.status, 0, migrated.stderr);
-    assert.deepEqual(JSON.parse(migrated.stdout).entries.map(({ code }) => code), ['MIGRATED']);
+    assert.deepEqual(JSON.parse(migrated.stdout).entries.map(({ code }) => code), ['IMPORTED']);
     const storePath = findOnlyStore(spectreHome);
 
     fs.writeFileSync(
@@ -359,6 +377,7 @@ test('knowledge search serializes unexpected runtime failures when JSON is reque
       }
     }
     assert.equal(projectMetadata.length, 1);
+    fs.rmSync(path.join(projectMetadata[0], 'index.json'), { force: true });
     fs.mkdirSync(path.join(projectMetadata[0], 'index.json'));
 
     const failed = runCli([

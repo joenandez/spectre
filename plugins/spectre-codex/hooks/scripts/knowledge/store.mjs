@@ -233,11 +233,9 @@ function staleLockOwner(lockPath, options) {
       ? raw
       : null;
   }
-  const parsedTimestamp = Date.parse(owner.timestamp);
-  const expired =
-    !Number.isFinite(parsedTimestamp) ||
-    nowMilliseconds(options) - parsedTimestamp > options.staleMs;
-  return expired || !options.isProcessAlive(owner.pid) ? raw : null;
+  // Age alone cannot prove a writer is gone: long registrations may still be
+  // between durable steps. A dead owner is the only safe recovery condition.
+  return options.isProcessAlive(owner.pid) ? null : raw;
 }
 
 function createLock(lockPath, operation, options) {

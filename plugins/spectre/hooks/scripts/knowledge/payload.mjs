@@ -116,6 +116,11 @@ function estimateCodexTokens(content) {
   );
 }
 
+export function estimatePayloadTokens(content) {
+  if (typeof content !== 'string') throw new TypeError('content must be a string');
+  return estimateCodexTokens(content);
+}
+
 export function measurePayload(host, framedContent) {
   if (typeof framedContent !== 'string') {
     throw new TypeError('framedContent must be a string');

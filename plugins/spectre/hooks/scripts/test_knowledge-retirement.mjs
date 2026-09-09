@@ -7,10 +7,32 @@ import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { migrateLegacyKnowledge } from './knowledge/migration.mjs';
+
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, '..', '..', '..', '..');
 const PLUGIN_ROOT = path.join(REPOSITORY_ROOT, 'plugins', 'spectre');
 const require = createRequire(import.meta.url);
+
+function makeTmp(t) {
+  const root = fs.mkdtempSync(path.join('/tmp', 'spectre-knowledge-retirement-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+function addLegacySource(projectDir, nativeRoot, id, { managed = false, body = '# Historical\n' } = {}) {
+  const sourceDir = path.join(projectDir, nativeRoot, 'skills', id);
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, 'SKILL.md'), [
+    '---', `name: ${id}`, `description: Use when consulting ${id}`,
+    ...(managed ? ['metadata:', '  spectre-migration-origin: legacy-spectre-learning'] : []),
+    '---', body, '',
+  ].join('\n'));
+  const registry = path.join(projectDir, nativeRoot, 'skills', 'spectre-recall', 'references', 'registry.toon');
+  fs.mkdirSync(path.dirname(registry), { recursive: true });
+  fs.appendFileSync(registry, `${id}|feature|legacy retirement|Use when consulting ${id}\n`);
+  return sourceDir;
+}
 
 function read(relativePath) {
   return fs.readFileSync(path.join(REPOSITORY_ROOT, relativePath), 'utf8');
@@ -35,7 +57,8 @@ describe('retired prompt-time knowledge delivery', () => {
     const registration = read('plugins/spectre/hooks/scripts/knowledge/registration.mjs');
     const registry = read('plugins/spectre/hooks/scripts/knowledge/registry.mjs');
     assert.doesNotMatch(registration, /measurePayload|validatePayloadSafe|KNOWLEDGE_PAYLOAD_UNSAFE/);
-    assert.match(registry, /measurePayload/);
+    assert.match(registry, /estimatePayloadTokens/);
+    assert.match(registry, /SESSION_START_TOKEN_LIMIT\s*=\s*300/);
     assert.equal(
       fs.existsSync(path.join(PLUGIN_ROOT, 'hooks', 'scripts', 'knowledge', 'payload.mjs')),
       true,
@@ -99,14 +122,54 @@ describe('retired active recall surface', () => {
   });
 });
 
-describe('legacy recall compatibility remains migration-only', () => {
-  it('preserves both legacy registry roots and the conservative oversized classification', () => {
-    const migration = read('plugins/spectre/hooks/scripts/knowledge/migration.mjs');
-    assert.match(migration, /nativeRoot: '\.claude', recallName: 'spectre-recall'/);
-    assert.match(migration, /nativeRoot: '\.agents', recallName: 'spectre-recall'/);
-    assert.match(
-      migration,
-      /exceedsPromptBudget\s*&&\s*!normalized\.legacySpectreLearning/,
-    );
+describe('provenance-gated legacy skill retirement', () => {
+  it('preserves an unrelated user-authored legacy skill after import', async (t) => {
+    const root = makeTmp(t);
+    const projectDir = path.join(root, 'project');
+    const storePath = path.join(root, 'store');
+    const sourceDir = addLegacySource(projectDir, '.claude', 'user-authored');
+
+    await migrateLegacyKnowledge({ projectDir, storePath });
+    assert.equal(fs.existsSync(path.join(sourceDir, 'SKILL.md')), true);
+    assert.equal(fs.existsSync(path.join(storePath, 'knowledge', 'user-authored', 'record.json')), true);
+  });
+
+  it('retires only a managed copy after its imported package, archive, and receipt verify', async (t) => {
+    const root = makeTmp(t);
+    const projectDir = path.join(root, 'project');
+    const storePath = path.join(root, 'store');
+    const managed = addLegacySource(projectDir, '.claude', 'managed-copy', { managed: true });
+    const user = addLegacySource(projectDir, '.claude', 'neighbor-skill');
+
+    const result = await migrateLegacyKnowledge({ projectDir, storePath });
+    assert.equal(fs.existsSync(managed), false);
+    assert.equal(fs.existsSync(user), true);
+    assert.deepEqual(result.retirement.map(({ code }) => code), ['RETIRED']);
+  });
+
+  it('keeps a managed copy and reports recovery guidance when its import cannot verify', async (t) => {
+    const root = makeTmp(t);
+    const projectDir = path.join(root, 'project');
+    const storePath = path.join(root, 'store');
+    const managed = addLegacySource(projectDir, '.agents', 'unverified-copy', { managed: true });
+    const { retireManagedLegacyCopies } = await import('./knowledge/migration.mjs');
+
+    const result = await retireManagedLegacyCopies({ projectDir, storePath });
+    assert.equal(fs.existsSync(managed), true);
+    assert.equal(result[0].code, 'PRESERVED');
+    assert.match(result[0].message, /import.*archive.*receipt/i);
+  });
+
+  it('retires duplicate managed copies with one imported work record', async (t) => {
+    const root = makeTmp(t);
+    const projectDir = path.join(root, 'project');
+    const storePath = path.join(root, 'store');
+    const first = addLegacySource(projectDir, '.claude', 'managed-duplicate', { managed: true });
+    const second = addLegacySource(projectDir, '.agents', 'managed-duplicate', { managed: true });
+
+    await migrateLegacyKnowledge({ projectDir, storePath });
+    assert.equal(fs.existsSync(first), false);
+    assert.equal(fs.existsSync(second), false);
+    assert.deepEqual(fs.readdirSync(path.join(storePath, 'knowledge')), ['managed-duplicate']);
   });
 });

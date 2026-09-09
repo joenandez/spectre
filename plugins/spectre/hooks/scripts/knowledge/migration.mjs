@@ -1,16 +1,17 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { measurePayload } from './payload.mjs';
 import {
-  CATEGORIES,
-  LEGACY_SPECTRE_LEARNING_METADATA_FIELD,
-  LEGACY_SPECTRE_LEARNING_METADATA_VALUE,
   parseKnowledgeRecord,
   refreshKnowledgeIndex,
 } from './records.mjs';
 import {
-  atomicWriteFile,
+  findImportReceipt,
+  readImportReceipts,
+  withImportReceipt,
+} from './receipts.mjs';
+import {
   atomicWriteJson,
   resolveProjectStore,
   withStoreLock,
@@ -22,734 +23,450 @@ const LEGACY_ROOTS = [
   { nativeRoot: '.claude', recallName: 'spectre-find' },
   { nativeRoot: '.agents', recallName: 'spectre-find' },
 ];
-const STANDARD_FIELDS = new Set([
-  'name',
-  'description',
-  'license',
-  'compatibility',
-  'metadata',
-  'allowed-tools',
-  'user-invocable',
-]);
-const SPECTRE_METADATA = new Set([
-  'spectre-category',
-  'spectre-triggers',
-  'spectre-status',
-  'spectre-version',
-  LEGACY_SPECTRE_LEARNING_METADATA_FIELD,
-]);
+const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const MANAGED_LEGACY_ORIGIN = 'legacy-spectre-learning';
 
-function malformed(message) {
+function recoverable(message) {
   const error = new Error(message);
-  error.code = 'MALFORMED';
+  error.code = 'RECOVERABLE_FAILURE';
   return error;
 }
 
-function parseString(rawValue, key) {
-  const value = rawValue.trim();
-  if (value === '') throw malformed(`${key} must be a string`);
-  if (value.startsWith('"')) {
-    try {
-      const parsed = JSON.parse(value);
-      if (typeof parsed !== 'string') throw malformed(`${key} must be a string`);
-      return parsed;
-    } catch (error) {
-      if (error.code === 'MALFORMED') throw error;
-      throw malformed(`${key} contains an invalid quoted string`);
-    }
-  }
-  if (value.startsWith("'")) {
-    if (!value.endsWith("'")) throw malformed(`${key} contains an invalid quoted string`);
-    return value.slice(1, -1).replaceAll("''", "'");
-  }
-  if (
-    /^(?:true|false|null|~)$/i.test(value) ||
-    /^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(value) ||
-    value.startsWith('[') ||
-    value.startsWith('{')
-  ) {
-    throw malformed(`${key} must be a string`);
-  }
-  return value.replace(/\s+#.*$/, '');
-}
-
-function splitLegacySkill(content, sourcePath) {
-  const opening = content.match(/^---\r?\n/);
-  if (!opening) throw malformed(`${sourcePath}: missing frontmatter`);
-  const remainder = content.slice(opening[0].length);
-  const closing = remainder.match(/\r?\n---(?=\r?\n|$)/);
-  if (!closing) throw malformed(`${sourcePath}: missing closing frontmatter`);
-  return {
-    frontmatter: remainder.slice(0, closing.index),
-    body: remainder.slice(closing.index + closing[0].length),
-  };
-}
-
-function parseLegacyFrontmatter(frontmatter, sourcePath) {
-  const lines = frontmatter.split(/\r?\n/);
-  const fields = {};
-  const metadata = {};
-  let currentMap = null;
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
-    const indentation = line.length - line.trimStart().length;
-    const trimmed = line.trim();
-    const separator = trimmed.indexOf(':');
-    if (separator <= 0) throw malformed(`${sourcePath}: malformed frontmatter`);
-    const key = trimmed.slice(0, separator).trim();
-    const rawValue = trimmed.slice(separator + 1);
-
-    if (indentation === 0) {
-      currentMap = null;
-      if (!STANDARD_FIELDS.has(key)) {
-        throw malformed(`${sourcePath}: unknown top-level field ${key}`);
-      }
-      if (Object.hasOwn(fields, key)) {
-        throw malformed(`${sourcePath}: duplicate top-level field ${key}`);
-      }
-      if (key === 'metadata') {
-        if (rawValue.trim() !== '' && rawValue.trim() !== '{}') {
-          throw malformed(`${sourcePath}: metadata must be a mapping`);
-        }
-        fields.metadata = metadata;
-        currentMap = metadata;
-        continue;
-      }
-      if (key === 'user-invocable') {
-        if (!/^(?:true|false)$/i.test(rawValue.trim())) {
-          throw malformed(`${sourcePath}: user-invocable must be boolean`);
-        }
-        fields[key] = rawValue.trim().toLowerCase() === 'true';
-        continue;
-      }
-      if (rawValue.trim() === '|' || rawValue.trim() === '>') {
-        const folded = rawValue.trim() === '>';
-        const parts = [];
-        while (index + 1 < lines.length && /^\s+/.test(lines[index + 1])) {
-          index += 1;
-          parts.push(lines[index].trim());
-        }
-        fields[key] = folded ? parts.join(' ') : parts.join('\n');
-        continue;
-      }
-      fields[key] = parseString(rawValue, key);
-      continue;
-    }
-
-    if (currentMap !== metadata) {
-      throw malformed(`${sourcePath}: unexpected indentation`);
-    }
-    if (Object.hasOwn(metadata, key)) {
-      throw malformed(`${sourcePath}: duplicate metadata field ${key}`);
-    }
-    metadata[key] = parseString(rawValue, `metadata.${key}`);
-  }
-  return { fields, metadata };
-}
-
-function normalizeLegacyRecord(sourcePath, id, category, triggers) {
-  const skillPath = path.join(sourcePath, 'SKILL.md');
-  const sourceBytes = fs.readFileSync(skillPath);
-  const content = sourceBytes.toString('utf8');
-  if (!Buffer.from(content, 'utf8').equals(sourceBytes)) {
-    throw malformed(`${skillPath}: source is not valid UTF-8`);
-  }
-  const { frontmatter, body } = splitLegacySkill(content, sourcePath);
-  const { fields, metadata } = parseLegacyFrontmatter(frontmatter, sourcePath);
-  if (
-    fields.name !== id ||
-    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) ||
-    id.length > 64
-  ) {
-    throw malformed(`${sourcePath}: legacy name must match its valid directory ID`);
-  }
-  const triggerSuffix = fields.description?.match(/\s+TRIGGER when:\s*(.+)$/);
-  const description = fields.description
-    ?.replace(/\s+TRIGGER when:.*$/, '')
-    .trim();
-  if (!description || description.length > 1_024) {
-    throw malformed(`${sourcePath}: invalid description`);
-  }
-  if (fields.compatibility !== undefined && fields.compatibility.length > 500) {
-    throw malformed(`${sourcePath}: invalid compatibility`);
-  }
-
-  const unrelatedMetadata = {};
-  for (const [key, value] of Object.entries(metadata)) {
-    if (!SPECTRE_METADATA.has(key)) unrelatedMetadata[key] = value;
-  }
-  const legacySpectreLearning = hasLegacySpectreLearningProvenance(
-    triggerSuffix?.[1],
-    triggers,
-  );
-  if (legacySpectreLearning) {
-    unrelatedMetadata[LEGACY_SPECTRE_LEARNING_METADATA_FIELD] =
-      LEGACY_SPECTRE_LEARNING_METADATA_VALUE;
-  }
-  const canonical = {
-    id,
-    description,
-    ...(fields.license === undefined ? {} : { license: fields.license }),
-    ...(fields.compatibility === undefined ? {} : { compatibility: fields.compatibility }),
-    ...(fields['allowed-tools'] === undefined ? {} : { allowedTools: fields['allowed-tools'] }),
-    metadata: unrelatedMetadata,
-    category,
-    triggers,
-    status: 'active',
-    version: 1,
-    body,
-  };
-  return {
-    canonical,
-    content: buildCanonicalContent(canonical),
-    legacySpectreLearning,
-  };
-}
-
-function buildCanonicalContent(record) {
-  const lines = [
-    '---',
-    `name: ${JSON.stringify(record.id)}`,
-    `description: ${JSON.stringify(record.description)}`,
-  ];
-  if (record.license !== undefined) lines.push(`license: ${JSON.stringify(record.license)}`);
-  if (record.compatibility !== undefined) {
-    lines.push(`compatibility: ${JSON.stringify(record.compatibility)}`);
-  }
-  if (record.allowedTools !== undefined) {
-    lines.push(`allowed-tools: ${JSON.stringify(record.allowedTools)}`);
-  }
-  lines.push('metadata:');
-  for (const [key, value] of Object.entries(record.metadata).sort(([left], [right]) =>
-    left.localeCompare(right))) {
-    lines.push(`  ${key}: ${JSON.stringify(value)}`);
-  }
-  lines.push(
-    `  spectre-category: ${JSON.stringify(record.category)}`,
-    `  spectre-triggers: ${JSON.stringify(JSON.stringify(record.triggers))}`,
-    '  spectre-status: "active"',
-    '  spectre-version: "1"',
-    '---',
-  );
-  return `${lines.join('\n')}${record.body}`;
-}
-
-function directorySnapshot(root) {
-  const snapshot = {};
+function packageEntries(root) {
+  const entries = [];
   const pending = [root];
   while (pending.length > 0) {
     const current = pending.pop();
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const entryPath = path.join(current, entry.name);
-      if (entry.isSymbolicLink()) throw malformed(`${entryPath}: symlinks are not migratable`);
+      if (entry.isSymbolicLink()) throw recoverable(`${entryPath}: symlinks cannot be imported`);
       if (entry.isDirectory()) pending.push(entryPath);
-      else if (entry.isFile()) {
-        snapshot[path.relative(root, entryPath)] = fs.readFileSync(entryPath).toString('base64');
-      } else {
-        throw malformed(`${entryPath}: unsupported filesystem entry`);
-      }
+      else if (entry.isFile()) entries.push({
+        relativePath: path.relative(root, entryPath).split(path.sep).join('/'),
+        sourcePath: entryPath,
+      });
+      else throw recoverable(`${entryPath}: unsupported source entry`);
     }
   }
-  return Object.fromEntries(
-    Object.entries(snapshot).sort(([left], [right]) => left.localeCompare(right)),
-  );
+  return entries.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-function expectedDestinationSnapshot(sourcePath, canonicalContent) {
-  const snapshot = directorySnapshot(sourcePath);
-  snapshot['SKILL.md'] = Buffer.from(canonicalContent).toString('base64');
-  return Object.fromEntries(
-    Object.entries(snapshot).sort(([left], [right]) => left.localeCompare(right)),
-  );
-}
-
-function snapshotsEqual(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function parseTriggers(rawTriggers) {
-  const triggers = [];
-  const seen = new Set();
-  for (const part of rawTriggers.split(',')) {
-    const trigger = part.trim();
-    const key = trigger.toLocaleLowerCase();
-    if (!trigger || seen.has(key)) continue;
-    seen.add(key);
-    triggers.push(trigger);
+export function sourcePackageDigest(sourceDir) {
+  const hash = createHash('sha256');
+  for (const entry of packageEntries(sourceDir)) {
+    hash.update(entry.relativePath);
+    hash.update('\0');
+    hash.update(fs.readFileSync(entry.sourcePath));
+    hash.update('\0');
   }
-  if (triggers.length === 0) throw malformed('registry triggers must not be empty');
-  return triggers;
+  return `sha256:${hash.digest('hex')}`;
 }
 
-function triggerSetsEqual(left, right) {
-  const normalizedLeft = new Set(left.map((trigger) => trigger.toLocaleLowerCase()));
-  const normalizedRight = new Set(right.map((trigger) => trigger.toLocaleLowerCase()));
-  return (
-    normalizedLeft.size === normalizedRight.size &&
-    [...normalizedLeft].every((trigger) => normalizedRight.has(trigger))
-  );
-}
-
-function hasLegacySpectreLearningProvenance(rawTriggerSuffix, registryTriggers) {
-  if (typeof rawTriggerSuffix !== 'string') return false;
-  try {
-    return triggerSetsEqual(parseTriggers(rawTriggerSuffix), registryTriggers);
-  } catch {
-    return false;
+function copyPackage(sourceDir, destinationDir) {
+  for (const entry of packageEntries(sourceDir)) {
+    const destination = path.join(destinationDir, entry.relativePath);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(entry.sourcePath, destination);
   }
 }
 
-function readRegistryRows(projectDir) {
+function legacyRows(projectDir) {
   const rows = [];
   for (const root of LEGACY_ROOTS) {
-    const skillsDir = path.join(projectDir, root.nativeRoot, 'skills');
     const registryPath = path.join(
-      skillsDir,
-      root.recallName,
-      'references',
-      'registry.toon',
+      projectDir, root.nativeRoot, 'skills', root.recallName, 'references', 'registry.toon',
     );
     if (!fs.existsSync(registryPath)) continue;
-    const lines = fs.readFileSync(registryPath, 'utf8').split(/\r?\n/);
-    for (const [lineIndex, line] of lines.entries()) {
+    for (const line of fs.readFileSync(registryPath, 'utf8').split(/\r?\n/)) {
       if (!line.trim() || line.startsWith('#')) continue;
-      const parts = line.split('|');
-      const id = parts[0]?.trim() || `malformed-row-${lineIndex + 1}`;
+      const [id, category, rawCues, ...descriptionParts] = line.split('|');
       rows.push({
-        id,
-        category: parts[1]?.trim(),
-        rawTriggers: parts[2] ?? '',
-        description: parts.slice(3).join('|').trim(),
-        raw: line,
-        lineIndex,
+        id: id?.trim() || '',
+        category: category?.trim() || '',
+        cues: rawCues?.trim() || '',
+        description: descriptionParts.join('|').trim(),
         registryPath,
-        nativeRoot: root.nativeRoot,
-        recallName: root.recallName,
-        sourcePath: path.join(skillsDir, id),
-        malformed: parts.length < 4,
+        sourceDir: path.join(projectDir, root.nativeRoot, 'skills', id?.trim() || ''),
       });
     }
   }
   return rows;
 }
 
-function readExistingReport(reportPath) {
-  try {
-    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-    if (report?.schemaVersion === 1 && Array.isArray(report.entries)) return report;
-  } catch {
-    // Missing or invalid reports are replaced after the next classified run.
-  }
-  return null;
-}
-
-function mergeTriggers(rows) {
-  const merged = [];
-  const seen = new Set();
-  for (const row of rows) {
-    for (const trigger of parseTriggers(row.rawTriggers)) {
-      const key = trigger.toLocaleLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(trigger);
-    }
-  }
-  return merged;
-}
-
-function frameForMeasurement(content) {
-  return [
-    '# Spectre applied knowledge',
-    '',
-    content,
-    '',
-    'x'.repeat(750),
-  ].join('\n');
-}
-
-function matchesCommittedIndex(destinationPath, parsed) {
-  const storePath = path.dirname(path.dirname(destinationPath));
-  try {
-    const index = JSON.parse(
-      fs.readFileSync(path.join(storePath, 'index.json'), 'utf8'),
-    );
-    const entry = index?.records?.find(({ id }) => id === parsed.record.id);
-    return (
-      entry !== undefined &&
-      path.resolve(storePath, entry.recordPath) ===
-        path.resolve(destinationPath, 'SKILL.md') &&
-      entry.sourceFingerprint === parsed.fingerprint
-    );
-  } catch {
-    return false;
-  }
-}
-
-function includesEveryTrigger(committedTriggers, survivingTriggers) {
-  const committed = new Set(
-    committedTriggers.map((trigger) => trigger.toLocaleLowerCase()),
-  );
-  return survivingTriggers.every((trigger) =>
-    committed.has(trigger.toLocaleLowerCase()));
-}
-
-function matchesCommittedDestination(destinationPath, id, category, triggers) {
-  const skillPath = path.join(destinationPath, 'SKILL.md');
-  if (!fs.existsSync(skillPath)) return false;
-  try {
-    const parsed = parseKnowledgeRecord(skillPath);
-    const { record } = parsed;
-    return (
-      record.id === id &&
-      record.category === category &&
-      includesEveryTrigger(record.triggers, triggers) &&
-      record.status === 'active' &&
-      record.version === 1 &&
-      matchesCommittedIndex(destinationPath, parsed)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function matchesCommittedDestinationFromSources(
-  destinationPath,
-  sourcePaths,
-  id,
-  category,
-  triggers,
-) {
-  if (!fs.existsSync(destinationPath) || sourcePaths.length === 0) return false;
-  try {
-    const sourceSnapshots = sourcePaths.map(directorySnapshot);
-    if (
-      sourceSnapshots.some((snapshot) =>
-        !snapshotsEqual(snapshot, sourceSnapshots[0]))
-    ) {
-      return false;
-    }
-    const normalized = normalizeLegacyRecord(
-      sourcePaths[0],
-      id,
-      category,
-      triggers,
-    );
-    const expected = expectedDestinationSnapshot(
-      sourcePaths[0],
-      normalized.content,
-    );
-    return snapshotsEqual(directorySnapshot(destinationPath), expected);
-  } catch {
-    return false;
-  }
-}
-
-function classifyGroup(id, rows, storePath) {
-  const sourcePaths = [...new Set(rows.map(({ sourcePath }) => sourcePath))];
-  const destinationPath = path.join(storePath, 'knowledge', id);
-  const base = {
-    id,
-    sourcePaths,
-    registryPaths: [...new Set(rows.map(({ registryPath }) => registryPath))],
-    destinationPath,
-  };
-
-  try {
-    if (rows.some(({ malformed: rowMalformed }) => rowMalformed)) {
-      throw malformed(`${id}: malformed registry row`);
-    }
-    if (rows.some(({ category }) => !CATEGORIES.has(category))) {
-      throw malformed(`${id}: invalid category`);
-    }
-    const missingSourcePaths = sourcePaths.filter(
-      (sourcePath) => !fs.existsSync(path.join(sourcePath, 'SKILL.md')),
-    );
-    if (missingSourcePaths.length > 0) {
-      const existingSourcePaths = sourcePaths.filter(
-        (sourcePath) => !missingSourcePaths.includes(sourcePath),
-      );
-      const categories = new Set(rows.map(({ category }) => category));
-      const triggers = mergeTriggers(rows);
-      if (
-        categories.size === 1 &&
-        (
-          (
-            existingSourcePaths.length === 0 &&
-            matchesCommittedDestination(
-              destinationPath,
-              id,
-              rows[0].category,
-              triggers,
-            )
-          ) ||
-          matchesCommittedDestinationFromSources(
-            destinationPath,
-            existingSourcePaths,
-            id,
-            rows[0].category,
-            triggers,
-          )
-        )
-      ) {
-        return { ...base, code: 'ALREADY_MIGRATED' };
-      }
-      return { ...base, code: 'SOURCE_MISSING' };
-    }
-    const categories = new Set(rows.map(({ category }) => category));
-    const sourceSnapshots = sourcePaths.map(directorySnapshot);
-    if (
-      categories.size !== 1 ||
-      sourceSnapshots.some((snapshot) => !snapshotsEqual(snapshot, sourceSnapshots[0]))
-    ) {
-      return { ...base, code: 'DIVERGENT' };
-    }
-
-    const category = rows[0].category;
-    const triggers = mergeTriggers(rows);
-    const normalized = normalizeLegacyRecord(sourcePaths[0], id, category, triggers);
-    const framed = frameForMeasurement(normalized.content);
-    const exceedsPromptBudget =
-      normalized.content.length > 9_000 ||
-      !measurePayload('claude', framed).ok ||
-      !measurePayload('codex', framed).ok;
-    if (exceedsPromptBudget && !normalized.legacySpectreLearning) {
-      const grandfatheredClaudeNativeDiscovery = sourcePaths.some((sourcePath) =>
-        sourcePath.includes(`${path.sep}.claude${path.sep}`));
-      return {
-        ...base,
-        code: 'OVERSIZED',
-        grandfatheredClaudeNativeDiscovery,
-      };
-    }
-
-    const expected = expectedDestinationSnapshot(sourcePaths[0], normalized.content);
-    if (fs.existsSync(destinationPath)) {
-      return {
-        ...base,
-        code: snapshotsEqual(directorySnapshot(destinationPath), expected)
-          ? 'ALREADY_MIGRATED'
-          : 'CONFLICT',
-        canonical: normalized.canonical,
-        canonicalContent: normalized.content,
-      };
-    }
-    return {
-      ...base,
-      code: sourcePaths.length > 1 ? 'DEDUPLICATED' : 'MIGRATED',
-      canonical: normalized.canonical,
-      canonicalContent: normalized.content,
-      ...(exceedsPromptBudget ? { promptTruncationRequired: true } : {}),
-    };
-  } catch (error) {
-    if (error.code !== 'MALFORMED') throw error;
-    return { ...base, code: 'MALFORMED', message: error.message };
-  }
-}
-
-export function classifyLegacyKnowledge({ projectDir, storePath }) {
-  const rows = readRegistryRows(path.resolve(projectDir));
-  const grouped = new Map();
-  for (const row of rows) {
-    if (!grouped.has(row.id)) grouped.set(row.id, []);
-    grouped.get(row.id).push(row);
-  }
-  const entries = [...grouped.entries()]
-    .map(([id, groupedRows]) => classifyGroup(id, groupedRows, path.resolve(storePath)))
-    .sort((left, right) => left.id.localeCompare(right.id));
-  return {
-    schemaVersion: 1,
-    grandfatheredClaudeNativeDiscoveryIncomplete: entries.some(
-      ({ code, grandfatheredClaudeNativeDiscovery }) =>
-        code === 'OVERSIZED' && grandfatheredClaudeNativeDiscovery,
-    ),
-    entries,
-  };
-}
-
-function durableReport(classification) {
-  return {
-    schemaVersion: 1,
-    grandfatheredClaudeNativeDiscoveryIncomplete:
-      classification.grandfatheredClaudeNativeDiscoveryIncomplete,
-    entries: classification.entries.map((entry) => {
-      const {
-        canonical: _canonical,
-        canonicalContent: _canonicalContent,
-        ...durable
-      } = entry;
-      return durable;
-    }),
-  };
-}
-
-function stageClassifiedRecords(storePath, classification) {
-  const stageRoot = path.join(
-    storePath,
-    `.migration-stage-${process.pid}-${Date.now()}`,
-  );
-  const staged = [];
-  fs.mkdirSync(stageRoot, { recursive: true });
-  try {
-    for (const entry of classification.entries) {
-      if (!['MIGRATED', 'DEDUPLICATED'].includes(entry.code)) continue;
-      const stagePath = path.join(stageRoot, entry.id);
-      fs.cpSync(entry.sourcePaths[0], stagePath, { recursive: true });
-      fs.writeFileSync(path.join(stagePath, 'SKILL.md'), entry.canonicalContent);
-      parseKnowledgeRecord(path.join(stagePath, 'SKILL.md'));
-      staged.push({ entry, stagePath });
-    }
-    return { stageRoot, staged };
-  } catch (error) {
-    fs.rmSync(stageRoot, { recursive: true, force: true });
-    throw error;
-  }
-}
-
-function commitStagedRecords(storePath, staged) {
+function storeResidentLegacyRows(storePath) {
   const knowledgeDir = path.join(storePath, 'knowledge');
-  fs.mkdirSync(knowledgeDir, { recursive: true });
-  for (const { entry, stagePath } of staged) {
-    if (fs.existsSync(entry.destinationPath)) {
-      throw new Error(`Canonical migration target appeared during commit: ${entry.destinationPath}`);
-    }
-    fs.renameSync(stagePath, entry.destinationPath);
-  }
-  refreshKnowledgeIndex(storePath);
-}
-
-function registryRowId(line) {
-  if (!line.trim() || line.startsWith('#')) return null;
-  return line.split('|')[0]?.trim() || null;
-}
-
-function removeResolvedRegistryRows(projectDir, resolvedIds) {
-  if (resolvedIds.size === 0) return;
-  for (const root of LEGACY_ROOTS) {
-    const registryPath = path.join(
-      projectDir,
-      root.nativeRoot,
-      'skills',
-      root.recallName,
-      'references',
-      'registry.toon',
-    );
-    if (!fs.existsSync(registryPath)) continue;
-    const original = fs.readFileSync(registryPath, 'utf8');
-    const lines = original.split(/\r?\n/);
-    if (!lines.some((line) => resolvedIds.has(registryRowId(line)))) continue;
-    const retained = lines.filter((line) => {
-      const id = registryRowId(line);
-      return id === null || !resolvedIds.has(id);
+  if (!fs.existsSync(knowledgeDir)) return [];
+  const rows = [];
+  for (const entry of fs.readdirSync(knowledgeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const sourceDir = path.join(knowledgeDir, entry.name);
+    // A typed package is already authoritative even if it retains an old SKILL.md
+    // as an imported resource. Only packages without record.json are legacy sources.
+    if (
+      !fs.existsSync(path.join(sourceDir, 'SKILL.md'))
+      || fs.existsSync(path.join(sourceDir, 'record.json'))
+    ) continue;
+    rows.push({
+      id: entry.name,
+      category: '',
+      cues: '',
+      description: '',
+      sourceDir,
+      storeResident: true,
     });
-    atomicWriteFile(registryPath, retained.join('\n'));
+  }
+  return rows;
+}
+
+function parseLegacySource(sourceDir, expectedId, row) {
+  const sourcePath = path.join(sourceDir, 'SKILL.md');
+  let text;
+  try {
+    text = fs.readFileSync(sourcePath, 'utf8');
+  } catch {
+    throw recoverable(`${sourcePath}: missing legacy SKILL.md source`);
+  }
+  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
+  if (!match) throw recoverable(`${sourcePath}: legacy source is missing frontmatter`);
+  const fields = new Map();
+  for (const line of match[1].split(/\r?\n/)) {
+    if (!line.trim() || line.startsWith('#')) continue;
+    const separator = line.indexOf(':');
+    if (separator <= 0 || /^\s/.test(line)) continue;
+    fields.set(line.slice(0, separator).trim(), line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, ''));
+  }
+  const id = fields.get('name');
+  const description = fields.get('description');
+  if (id !== expectedId || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id || '')) {
+    throw recoverable(`${sourcePath}: legacy name must match its canonical directory ID`);
+  }
+  if (!description) throw recoverable(`${sourcePath}: legacy description is required`);
+  return {
+    title: id,
+    summary: description.replace(/\s+TRIGGER when:.*$/i, '').trim(),
+    body: text.slice(match[0].length),
+    useWhen: description.replace(/\s+TRIGGER when:.*$/i, '').trim(),
+    cues: row.cues.split(',').map((cue) => cue.trim()).filter(Boolean),
+    category: fields.get('spectre-category') || row.category || 'unknown — imported record',
+    status: fields.get('spectre-status') || 'unknown — imported record',
+    version: fields.get('spectre-version') || 'unknown — imported record',
+  };
+}
+
+function sourceArchivePath(storePath, sourceDigest) {
+  return path.join(storePath, 'knowledge-history', 'imported-sources', sourceDigest.replace(':', '-'));
+}
+
+function verifiedImportedSource(storePath, sourceDigest) {
+  const receipt = findImportReceipt(storePath, sourceDigest);
+  if (!receipt) return { ok: false, message: 'No migration receipt exists for this source package.' };
+  const archivePath = sourceArchivePath(storePath, sourceDigest);
+  try {
+    if (!fs.existsSync(archivePath) || sourcePackageDigest(archivePath) !== sourceDigest) {
+      return { ok: false, message: 'The byte-exact source archive is missing or no longer matches its digest.' };
+    }
+    const parsed = parseKnowledgeRecord(path.join(storePath, 'knowledge', receipt.recordId, 'record.json'));
+    if (
+      parsed.revisionToken !== receipt.revisionToken
+      || parsed.record.provenance.origin !== 'legacy-import'
+      || parsed.record.provenance.sourceFingerprint !== sourceDigest
+    ) {
+      return { ok: false, message: 'The receipted imported destination no longer matches this source package.' };
+    }
+    return { ok: true, receipt, parsed };
+  } catch {
+    return { ok: false, message: 'The receipted imported destination is missing or unreadable.' };
   }
 }
 
-function unresolvedRegistryRows(projectDir) {
-  let count = 0;
+function managedLegacyCopies(projectDir) {
+  const copies = [];
+  const visitedRoots = new Set();
   for (const root of LEGACY_ROOTS) {
-    const registryPath = path.join(
-      projectDir,
-      root.nativeRoot,
-      'skills',
-      root.recallName,
-      'references',
-      'registry.toon',
-    );
-    if (!fs.existsSync(registryPath)) continue;
-    count += fs.readFileSync(registryPath, 'utf8')
-      .split(/\r?\n/)
-      .filter((line) => line.trim() && !line.startsWith('#'))
-      .length;
-  }
-  return count;
-}
-
-function removeGeneratedRecallWhenResolved(projectDir) {
-  if (unresolvedRegistryRows(projectDir) !== 0) return;
-  for (const root of LEGACY_ROOTS) {
-    fs.rmSync(
-      path.join(projectDir, root.nativeRoot, 'skills', root.recallName),
-      { recursive: true, force: true },
-    );
-  }
-}
-
-function cleanResolvedSources(projectDir, classification, options = {}) {
-  const resolved = classification.entries.filter(({ code }) =>
-    ['MIGRATED', 'DEDUPLICATED', 'ALREADY_MIGRATED'].includes(code));
-  const resolvedIds = new Set(resolved.map(({ id }) => id));
-  for (const entry of resolved) {
-    for (const sourcePath of entry.sourcePaths) {
-      fs.rmSync(sourcePath, { recursive: true, force: true });
+    if (visitedRoots.has(root.nativeRoot)) continue;
+    visitedRoots.add(root.nativeRoot);
+    const skillsDir = path.join(projectDir, root.nativeRoot, 'skills');
+    if (!fs.existsSync(skillsDir)) continue;
+    for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name === root.recallName) continue;
+      const sourceDir = path.join(skillsDir, entry.name);
+      const skillPath = path.join(sourceDir, 'SKILL.md');
+      let source;
+      try {
+        source = fs.readFileSync(skillPath, 'utf8');
+      } catch {
+        continue;
+      }
+      const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source)?.[1];
+      if (!frontmatter) continue;
+      const marker = /^\s{2}spectre-migration-origin:\s*["']?([^"'\s]+)["']?\s*$/m.exec(frontmatter);
+      if (marker?.[1] === MANAGED_LEGACY_ORIGIN) {
+        copies.push({ id: entry.name, sourceDir });
+      }
     }
   }
-  removeResolvedRegistryRows(projectDir, resolvedIds);
-  if (options.afterRegistryCleanup) options.afterRegistryCleanup();
-  removeGeneratedRecallWhenResolved(projectDir);
+  return copies;
+}
+
+/** Remove only copies carrying the explicit managed migration marker after every durable proof exists. */
+export function retireManagedLegacyCopies({ projectDir, storePath }) {
+  const results = [];
+  for (const copy of managedLegacyCopies(path.resolve(projectDir))) {
+    let sourceDigest;
+    try {
+      sourceDigest = sourcePackageDigest(copy.sourceDir);
+    } catch (error) {
+      results.push({ id: copy.id, code: 'PRESERVED', message: `Could not verify source package: ${error.message}` });
+      continue;
+    }
+    const verification = verifiedImportedSource(storePath, sourceDigest);
+    if (!verification.ok) {
+      results.push({
+        id: copy.id,
+        code: 'PRESERVED',
+        message: 'Managed copy preserved: verified import, byte-exact archive, and receipt are required before retirement.',
+      });
+      continue;
+    }
+    fs.rmSync(copy.sourceDir, { recursive: true, force: true });
+    results.push({ id: copy.id, code: 'RETIRED', recordId: verification.receipt.recordId, sourceDigest });
+  }
+  return results;
+}
+
+function workRecord(id, source, sourceDigest, now) {
+  return {
+    schemaVersion: 1,
+    id,
+    kind: 'work',
+    title: source.title,
+    summary: source.summary,
+    tags: [],
+    applicability: { scope: 'project' },
+    provenance: {
+      origin: 'legacy-import',
+      capturedAt: new Date(typeof now === 'function' ? now() : Date.now()).toISOString(),
+      sourceFingerprint: sourceDigest,
+    },
+    relatedRecordIds: [],
+    work: {
+      requestedOutcome: 'unknown — imported record',
+      scope: 'unknown — imported record',
+      actualChanges: 'unknown — imported record',
+      reasons: 'unknown — imported record',
+      discoveries: 'unknown — imported record',
+      verification: 'unknown — imported record',
+      remainingWork: 'unknown — imported record',
+      relatedContext: 'unknown — imported record',
+      execution: { state: 'unknown' },
+      verificationState: { state: 'unknown' },
+      pullRequest: { state: 'unknown' },
+      associations: { sourceRunIds: [], pullRequestIds: [], candidates: [] },
+    },
+    importedSource: {
+      body: source.body,
+      useWhen: source.useWhen,
+      cues: source.cues,
+      category: source.category,
+      status: source.status,
+      version: source.version,
+    },
+  };
+}
+
+function destinationId(storePath, sourceId, sourceDigest, sourceDir) {
+  const primary = path.join(storePath, 'knowledge', sourceId);
+  if (!fs.existsSync(primary)) return sourceId;
+  if (
+    path.resolve(sourceDir) === path.resolve(primary)
+    && !fs.existsSync(path.join(primary, 'record.json'))
+  ) return sourceId;
+  try {
+    const parsed = parseKnowledgeRecord(path.join(primary, 'record.json'));
+    if (
+      parsed.record.provenance.origin === 'legacy-import'
+      && parsed.record.provenance.sourceFingerprint === sourceDigest
+    ) return sourceId;
+  } catch {
+    // An unreadable package is never an unsafe replacement target.
+  }
+  const suffix = `-imported-${sourceDigest.slice(7, 15)}`;
+  return `${sourceId.slice(0, 64 - suffix.length)}${suffix}`;
+}
+
+function receiptEntry(sourceDigest, recordId, revisionToken, now) {
+  return {
+    sourceDigest,
+    recordId,
+    revisionToken,
+    importedAt: new Date(typeof now === 'function' ? now() : Date.now()).toISOString(),
+  };
+}
+
+function removeRegistryRows(rows) {
+  const byPath = new Map();
+  for (const row of rows) {
+    if (!byPath.has(row.registryPath)) byPath.set(row.registryPath, new Set());
+    byPath.get(row.registryPath).add(row.id);
+  }
+  for (const [registryPath, ids] of byPath) {
+    const retained = fs.readFileSync(registryPath, 'utf8')
+      .split(/\r?\n/)
+      .filter((line) => !ids.has(line.split('|')[0]?.trim()))
+      .join('\n');
+    fs.writeFileSync(registryPath, retained);
+  }
+}
+
+function importOne(storePath, row, options) {
+  const sourceDigest = sourcePackageDigest(row.sourceDir);
+  const receipt = findImportReceipt(storePath, sourceDigest);
+  if (receipt) {
+    const verification = verifiedImportedSource(storePath, sourceDigest);
+    if (!verification.ok) {
+      return {
+        id: row.id,
+        code: 'RECOVERABLE_FAILURE',
+        sourceDigest,
+        message: `Stale receipt preserved for recovery: ${verification.message}`,
+      };
+    }
+    return { id: row.id, code: 'NOOP', sourceDigest, recordId: receipt.recordId };
+  }
+
+  const archivePath = sourceArchivePath(storePath, sourceDigest);
+  if (!fs.existsSync(archivePath)) {
+    const stage = `${archivePath}.stage-${process.pid}-${Date.now()}`;
+    copyPackage(row.sourceDir, stage);
+    fs.mkdirSync(path.dirname(archivePath), { recursive: true });
+    fs.renameSync(stage, archivePath);
+  }
+
+  let source;
+  try {
+    source = parseLegacySource(row.sourceDir, row.id, row);
+  } catch (error) {
+    return { id: row.id, code: 'RECOVERABLE_FAILURE', sourceDigest, message: error.message };
+  }
+  const id = destinationId(storePath, row.id, sourceDigest, row.sourceDir);
+  const destination = path.join(storePath, 'knowledge', id);
+  if (fs.existsSync(destination)) {
+    const canReplaceStoreResidentSource = (
+      row.storeResident
+      && path.resolve(row.sourceDir) === path.resolve(destination)
+      && !fs.existsSync(path.join(destination, 'record.json'))
+    );
+    if (!canReplaceStoreResidentSource) {
+      const parsed = parseKnowledgeRecord(path.join(destination, 'record.json'));
+      if (parsed.record.provenance.sourceFingerprint === sourceDigest) {
+        atomicWriteJson(path.join(storePath, 'import-receipts.json'), withImportReceipt(
+          readImportReceipts(storePath), receiptEntry(sourceDigest, id, parsed.revisionToken, options.now),
+        ));
+        return { id: row.id, code: 'NOOP', sourceDigest, recordId: id };
+      }
+      throw recoverable(`${destination}: import redirect collision is not recoverable automatically`);
+    }
+  }
+  const stageRoot = path.join(storePath, `.migration-stage-${process.pid}-${Date.now()}`);
+  const stage = path.join(stageRoot, id);
+  copyPackage(row.sourceDir, path.join(stage, 'imported-source'));
+  atomicWriteJson(path.join(stage, 'record.json'), workRecord(id, source, sourceDigest, options.now));
+  const parsed = parseKnowledgeRecord(path.join(stage, 'record.json'));
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  if (fs.existsSync(destination)) {
+    const sourceBackup = `${destination}.migration-source-${process.pid}-${Date.now()}`;
+    fs.renameSync(destination, sourceBackup);
+    try {
+      fs.renameSync(stage, destination);
+    } catch (error) {
+      fs.renameSync(sourceBackup, destination);
+      throw error;
+    }
+    fs.rmSync(sourceBackup, { recursive: true, force: true });
+  } else {
+    fs.renameSync(stage, destination);
+  }
+  fs.rmSync(stageRoot, { recursive: true, force: true });
+  atomicWriteJson(path.join(storePath, 'import-receipts.json'), withImportReceipt(
+    readImportReceipts(storePath), receiptEntry(sourceDigest, id, parsed.revisionToken, options.now),
+  ));
+  return { id: row.id, code: 'IMPORTED', sourceDigest, recordId: id };
 }
 
 export async function migrateLegacyKnowledge(options) {
   const projectDir = path.resolve(options.projectDir);
-  const legacyRows = readRegistryRows(projectDir);
-  if (legacyRows.length === 0) {
-    removeGeneratedRecallWhenResolved(projectDir);
-  }
+  const projectRows = legacyRows(projectDir);
   let storePath = options.storePath ? path.resolve(options.storePath) : null;
   if (!storePath) {
     const resolved = await resolveProjectStore(projectDir, {
       spectreHome: options.spectreHome,
       gitRunner: options.gitRunner,
-      readOnly: legacyRows.length === 0,
+      readOnly: projectRows.length === 0,
       allocationLockOptions: options.allocationLockOptions,
     });
     storePath = resolved.storePath;
   }
-  if (!storePath) {
-    return {
-      schemaVersion: 1,
-      grandfatheredClaudeNativeDiscoveryIncomplete: false,
-      entries: [],
-    };
-  }
-  const reportPath = path.join(storePath, 'migration-report.json');
-  const initialClassification = classifyLegacyKnowledge({ projectDir, storePath });
-  if (initialClassification.entries.length === 0) {
-    removeGeneratedRecallWhenResolved(projectDir);
-    return readExistingReport(reportPath) || durableReport(initialClassification);
-  }
+  if (!storePath) return { schemaVersion: 1, entries: [] };
+  const rows = [...projectRows, ...storeResidentLegacyRows(storePath)];
 
-  try {
-    return await withStoreLock(
-      storePath,
-      'migrate-legacy-knowledge',
-      async () => {
-        const classification = classifyLegacyKnowledge({ projectDir, storePath });
-        const { stageRoot, staged } = stageClassifiedRecords(storePath, classification);
-        try {
-          commitStagedRecords(storePath, staged);
-        } finally {
-          fs.rmSync(stageRoot, { recursive: true, force: true });
+  return withStoreLock(storePath, 'migrate-legacy-knowledge', async () => {
+    if (rows.length === 0) {
+      return {
+        schemaVersion: 1,
+        entries: readImportReceipts(storePath).receipts.map((receipt) => ({
+          id: receipt.recordId,
+          code: 'NOOP',
+          sourceDigest: receipt.sourceDigest,
+          recordId: receipt.recordId,
+        })),
+        retirement: retireManagedLegacyCopies({ projectDir, storePath }),
+      };
+    }
+    const groups = new Map();
+    for (const row of rows) {
+      if (!groups.has(row.id)) groups.set(row.id, []);
+      groups.get(row.id).push(row);
+    }
+    const entries = [];
+    for (const [id, sources] of [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      try {
+        const digests = sources.map((row) => sourcePackageDigest(row.sourceDir));
+        if (new Set(digests).size !== 1) {
+          entries.push({
+            id,
+            code: 'RECOVERABLE_FAILURE',
+            message: `Legacy sources for ${id} differ and require a deliberate recovery choice.`,
+          });
+          continue;
         }
-        if (options.afterCanonicalCommit) options.afterCanonicalCommit();
-        cleanResolvedSources(projectDir, classification, options);
-        const report = durableReport(classification);
-        atomicWriteJson(reportPath, report);
-        return report;
-      },
-      options.lockOptions,
-    );
-  } catch (error) {
-    if (error.code !== 'LOCK_TIMEOUT' || !options.failOpenOnLockTimeout) throw error;
+        entries.push(importOne(
+          storePath,
+          sources.find((source) => source.storeResident) || sources[0],
+          options,
+        ));
+      } catch (error) {
+        entries.push({ id, code: 'RECOVERABLE_FAILURE', message: error.message });
+      }
+    }
+    refreshKnowledgeIndex(storePath);
+    const verifiedRows = rows.filter((row) => {
+      try {
+        const sourceDigest = sourcePackageDigest(row.sourceDir);
+        const entry = entries.find((candidate) => candidate.id === row.id);
+        return (
+          (entry?.code === 'IMPORTED' || entry?.code === 'NOOP')
+          && entry.sourceDigest === sourceDigest
+          && verifiedImportedSource(storePath, sourceDigest).ok
+        );
+      } catch {
+        return false;
+      }
+    });
+    removeRegistryRows(verifiedRows.filter((row) => row.registryPath));
     return {
       schemaVersion: 1,
-      grandfatheredClaudeNativeDiscoveryIncomplete: false,
-      entries: [],
-      skipped: 'LOCK_TIMEOUT',
+      entries,
+      retirement: retireManagedLegacyCopies({ projectDir, storePath }),
     };
-  }
+  }, options.lockOptions);
 }
-
-export { buildCanonicalContent };

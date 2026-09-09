@@ -9,9 +9,16 @@ import {
   formatCanonicalKnowledgeSearch,
   formatCanonicalKnowledgeSearchWarnings,
   loadCanonicalKnowledge,
+  listCanonicalKnowledgeHistory,
+  inspectCanonicalKnowledgeRevision,
   migrateCanonicalKnowledge,
   previewCanonicalKnowledgeRegistry,
   registerCanonicalKnowledge,
+  searchCanonicalKnowledgeTags,
+  applyCanonicalKnowledgeTagOperation,
+  ensureCanonicalKnowledgeTags,
+  mergeCanonicalKnowledgeTags,
+  resolveCanonicalKnowledgeWork,
   searchCanonicalKnowledge,
   serializeCanonicalKnowledgeError,
   serializeCanonicalKnowledgeLoadError
@@ -19,9 +26,10 @@ import {
 import { projectCodexHome } from './lib/paths.js';
 
 class CliError extends Error {
-  constructor(code, message) {
+  constructor(code, message, details = {}) {
     super(message);
     this.code = code;
+    Object.assign(this, details);
   }
 }
 
@@ -37,7 +45,7 @@ function parseArgs(argv) {
         flags.set(value, true);
         continue;
       }
-      flags.set(value, next);
+      flags.set(value, [...(flags.get(value) || []), next]);
       index += 1;
       continue;
     }
@@ -45,7 +53,20 @@ function parseArgs(argv) {
     positional.push(value);
   }
 
-  return { positional, flags };
+  return {
+    positional,
+    flags: {
+      get(name) {
+        const value = flags.get(name);
+        return Array.isArray(value) ? value.at(-1) : value;
+      },
+      getAll(name) {
+        const value = flags.get(name);
+        return Array.isArray(value) ? [...value] : value === undefined ? [] : [value];
+      },
+      has(name) { return flags.has(name); }
+    }
+  };
 }
 
 function usage() {
@@ -55,7 +76,14 @@ function usage() {
   spectre update codex
   spectre doctor codex [--scope user|project] [--project-dir <path>] [--json]
   spectre knowledge search [query] [--project-dir <path>] [--json]
+  spectre knowledge tags search [query] [--cursor <token>] [--project-dir <path>] [--json]
+  spectre knowledge tags ensure --input <json> [--project-dir <path>] [--json]
+  spectre knowledge tags merge --input <json> [--project-dir <path>] [--json]
+  spectre knowledge tags apply --input <json> [--project-dir <path>] [--json]
   spectre knowledge load <id> [--project-dir <path>] [--json]
+  spectre knowledge history <id> [--cursor <token>] [--project-dir <path>] [--json]
+  spectre knowledge inspect <id> --revision <token> [--project-dir <path>] [--json]
+  spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--project-dir <path>] [--json]
   spectre knowledge registry [--host claude|codex] [--project-dir <path>] [--json]
   spectre knowledge register --record <path> [--project-dir <path>] [--json]
   spectre knowledge migrate [--project-dir <path>] [--json]
@@ -86,6 +114,15 @@ function codexPluginRequiredMessage(command) {
 function resolveProjectDir(flags) {
   const projectDir = flags.get('--project-dir');
   return path.resolve(projectDir || process.cwd());
+}
+
+function sourceRunId(flags) {
+  const sourceRunId = flags.get('--source-run-id');
+  const runId = flags.get('--run-id');
+  if (sourceRunId !== undefined && runId !== undefined && sourceRunId !== runId) {
+    throw new CliError('WORK_SOURCE_RUN_CONFLICT', '--source-run-id and --run-id must match when both are supplied.');
+  }
+  return sourceRunId ?? runId;
 }
 
 function detectInstalledScope(projectDir) {
@@ -162,120 +199,105 @@ export async function main(argv) {
   }
 
   if (command === 'knowledge') {
+    const knowledgeProjectDir = () => resolveKnowledgeProjectDir(flags.get('--project-dir') || flags.get('--project-root'));
+    const lockOptions = () => flags.get('--lock-timeout-ms')
+      ? { timeoutMs: Number(flags.get('--lock-timeout-ms')), retryDelayMs: 5 }
+      : undefined;
+    const numberFlag = name => flags.get(name) === undefined ? undefined : Number(flags.get(name));
+    const writeJson = result => process.stdout.write(`${JSON.stringify(result)}\n`);
+
     if (target === 'search') {
       const query = positional.slice(2).join(' ');
-      let result;
       try {
-        result = await searchCanonicalKnowledge({
-          projectDir: resolveKnowledgeProjectDir(flags.get('--project-dir')),
-          query
+        const result = await searchCanonicalKnowledge({
+          projectDir: knowledgeProjectDir(), query, tags: flags.getAll('--tag'), paths: flags.getAll('--path'),
+          workId: flags.get('--work-id'), runId: flags.get('--run-id'), kind: flags.get('--kind'),
+          limit: numberFlag('--limit'), cursor: flags.get('--cursor')
         });
-      } catch (error) {
-        throw new CliError(
-          'KNOWLEDGE_SEARCH_FAILED',
-          error instanceof Error ? error.message : String(error)
-        );
-      }
-      if (flags.get('--json')) {
-        process.stdout.write(`${JSON.stringify({ ok: true, query, ...result })}\n`);
-      } else {
-        process.stdout.write(formatCanonicalKnowledgeSearch(result, query));
-        process.stderr.write(formatCanonicalKnowledgeSearchWarnings(result.warnings));
-      }
+        const output = { ok: true, query, ...result };
+        if (flags.has('--json')) writeJson(output);
+        else { process.stdout.write(formatCanonicalKnowledgeSearch(result, query)); process.stderr.write(formatCanonicalKnowledgeSearchWarnings(result.warnings)); }
+      } catch (error) { throw new CliError('KNOWLEDGE_SEARCH_FAILED', error instanceof Error ? error.message : String(error)); }
+      return;
+    }
+
+    if (target === 'tags') {
+      try {
+        const operation = positional[2];
+        const result = operation === 'search'
+          ? await searchCanonicalKnowledgeTags({ projectDir: knowledgeProjectDir(), query: positional.slice(3).join(' '), limit: numberFlag('--limit'), cursor: flags.get('--cursor') })
+          : operation === 'ensure'
+            ? await ensureCanonicalKnowledgeTags({ projectDir: knowledgeProjectDir(), inputPath: flags.get('--input'), lockOptions: lockOptions() })
+            : operation === 'merge'
+              ? await mergeCanonicalKnowledgeTags({ projectDir: knowledgeProjectDir(), inputPath: flags.get('--input'), lockOptions: lockOptions() })
+              : operation === 'apply'
+                ? await applyCanonicalKnowledgeTagOperation({ projectDir: knowledgeProjectDir(), inputPath: flags.get('--input'), lockOptions: lockOptions() })
+            : null;
+        if (!result) throw new CliError('UNKNOWN_TAG_COMMAND', `Unknown tags command "${operation || ''}".`);
+        writeJson(result);
+      } catch (error) { throw new CliError(error?.code || 'TAG_OPERATION_FAILED', error instanceof Error ? error.message : String(error)); }
       return;
     }
 
     if (target === 'load') {
       try {
         const result = await loadCanonicalKnowledge({
-          projectDir: resolveKnowledgeProjectDir(flags.get('--project-dir')),
-          id: positional[2],
-          lockOptions: flags.get('--lock-timeout-ms')
-            ? { timeoutMs: Number(flags.get('--lock-timeout-ms')), retryDelayMs: 5 }
-            : undefined
+          projectDir: knowledgeProjectDir(), id: positional[2], lockOptions: lockOptions(),
+          workId: flags.get('--work-id'), runId: flags.get('--run-id'), allowanceTokens: numberFlag('--allowance-tokens'),
+          inspectHistorical: flags.has('--inspect-historical')
         });
-        if (flags.get('--json')) {
-          process.stdout.write(`${JSON.stringify(result)}\n`);
-        } else {
-          process.stdout.write(formatCanonicalKnowledgeLoad(result));
-        }
-      } catch (error) {
-        const payload = serializeCanonicalKnowledgeLoadError(error);
-        throw new CliError(payload.code, payload.message);
-      }
+        if (flags.has('--json')) writeJson(result);
+        else process.stdout.write(formatCanonicalKnowledgeLoad(result));
+      } catch (error) { const payload = serializeCanonicalKnowledgeLoadError(error); throw new CliError(payload.code, payload.message, payload); }
+      return;
+    }
+
+    if (target === 'history' || target === 'inspect') {
+      try {
+        const result = target === 'history'
+          ? await listCanonicalKnowledgeHistory({ projectDir: knowledgeProjectDir(), id: positional[2], cursor: flags.get('--cursor'), lockOptions: lockOptions() })
+          : await inspectCanonicalKnowledgeRevision({ projectDir: knowledgeProjectDir(), id: positional[2], revisionToken: flags.get('--revision'), lockOptions: lockOptions() });
+        writeJson(result);
+      } catch (error) { throw new CliError(error?.code || 'KNOWLEDGE_HISTORY_FAILED', error instanceof Error ? error.message : String(error)); }
+      return;
+    }
+
+    if (target === 'work' && positional[2] === 'resolve') {
+      try {
+        const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
+        writeJson(await resolveCanonicalKnowledgeWork({
+          projectDir: knowledgeProjectDir(), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
+          pullRequestId: flags.get('--pull-request-id'), candidate, lockOptions: lockOptions()
+        }));
+      } catch (error) { throw new CliError(error?.code || 'WORK_RESOLUTION_FAILED', error instanceof Error ? error.message : String(error)); }
       return;
     }
 
     if (target === 'registry') {
       let result;
-      try {
-        result = await previewCanonicalKnowledgeRegistry({
-          host: flags.get('--host') || 'claude',
-          projectDir: resolveKnowledgeProjectDir(flags.get('--project-dir')),
-        });
-      } catch (error) {
-        throw new CliError(
-          'KNOWLEDGE_REGISTRY_FAILED',
-          error instanceof Error ? error.message : String(error)
-        );
-      }
-      if (flags.get('--json')) {
-        process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
-      } else if (result.injected) {
-        process.stdout.write(`${result.payload.hookSpecificOutput.additionalContext}\n`);
-      } else {
-        process.stdout.write('No SessionStart knowledge payload would be injected.\n');
-      }
+      try { result = await previewCanonicalKnowledgeRegistry({ host: flags.get('--host') || 'claude', projectDir: knowledgeProjectDir() }); }
+      catch (error) { throw new CliError('KNOWLEDGE_REGISTRY_FAILED', error instanceof Error ? error.message : String(error)); }
+      if (flags.has('--json')) writeJson({ ok: true, ...result });
+      else process.stdout.write(result.injected ? `${result.payload.hookSpecificOutput.additionalContext}\n` : 'No SessionStart knowledge payload would be injected.\n');
       return;
     }
 
-    if (target === 'register' || target === 'migrate') {
-      if (target === 'register') {
-        try {
-          const result = await registerCanonicalKnowledge({
-            projectDir: resolveProjectDir(flags),
-            recordPath: flags.get('--record'),
-            lockOptions: flags.get('--lock-timeout-ms')
-              ? { timeoutMs: Number(flags.get('--lock-timeout-ms')), retryDelayMs: 5 }
-              : undefined
-          });
-          if (flags.get('--json')) {
-            process.stdout.write(`${JSON.stringify(result)}\n`);
-          } else {
-            process.stdout.write(`Registered knowledge record ${result.id}\n`);
-          }
-        } catch (error) {
-          const payload = serializeCanonicalKnowledgeError(error);
-          throw new CliError(payload.code, payload.message);
-        }
-        return;
-      }
-
+    if (target === 'register') {
       try {
-        const report = await migrateCanonicalKnowledge({
-          projectDir: resolveProjectDir(flags),
-          lockOptions: flags.get('--lock-timeout-ms')
-            ? { timeoutMs: Number(flags.get('--lock-timeout-ms')), retryDelayMs: 5 }
-            : undefined
-        });
-        if (flags.get('--json')) {
-          process.stdout.write(`${JSON.stringify({ ok: true, ...report })}\n`);
-        } else {
-          process.stdout.write(`Migrated ${report.entries.length} knowledge entries\n`);
-        }
-      } catch (error) {
-        throw new CliError(
-          error?.code || 'KNOWLEDGE_MIGRATION_FAILED',
-          error instanceof Error ? error.message : String(error)
-        );
-      }
+        const result = await registerCanonicalKnowledge({ projectDir: knowledgeProjectDir(), recordPath: flags.get('--record'), expectedRevision: flags.get('--expected-revision'), lockOptions: lockOptions() });
+        if (flags.has('--json')) writeJson(result); else process.stdout.write(`Registered knowledge record ${result.id}\n`);
+      } catch (error) { const payload = serializeCanonicalKnowledgeError(error); throw new CliError(payload.code, payload.message, payload); }
       return;
     }
 
-    throw new CliError(
-      'UNKNOWN_KNOWLEDGE_COMMAND',
-      `Unknown knowledge command "${target || ''}".`
-    );
+    if (target === 'migrate') {
+      try {
+        const report = await migrateCanonicalKnowledge({ projectDir: knowledgeProjectDir(), lockOptions: lockOptions() });
+        if (flags.has('--json')) writeJson({ ok: true, ...report }); else process.stdout.write(`Migrated ${report.entries.length} knowledge entries\n`);
+      } catch (error) { throw new CliError(error?.code || 'KNOWLEDGE_MIGRATION_FAILED', error instanceof Error ? error.message : String(error)); }
+      return;
+    }
+    throw new CliError('UNKNOWN_KNOWLEDGE_COMMAND', `Unknown knowledge command "${target || ''}".`);
   }
 
   if (command === 'workflow') {

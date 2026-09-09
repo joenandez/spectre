@@ -8,384 +8,257 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { refreshKnowledgeIndex } from './knowledge/records.mjs';
 import { resolveProjectStore } from './knowledge/store.mjs';
+import { resolveOrAllocateWorkIdentity } from './knowledge/work.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, '../../../..');
 const NPM_CLI = path.join(REPOSITORY_ROOT, 'bin', 'spectre.js');
 const BUNDLED_CLI = path.join(SCRIPT_DIR, 'knowledge-cli.mjs');
+const REGISTER_WRAPPER = path.join(SCRIPT_DIR, 'register_learning.mjs');
+const MIGRATE_WRAPPER = path.join(SCRIPT_DIR, 'migrate_knowledge.mjs');
 
-function makeTmp(t) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-knowledge-cli-'));
-  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
-  return tmp;
-}
-
-function skillContent(id) {
-  return [
-    '---',
-    `name: ${id}`,
-    'description: Use when testing neutral knowledge retrieval.',
-    'metadata:',
-    '  spectre-category: "feature"',
-    '  spectre-triggers: \'["neutral knowledge retrieval","knowledge-cli.mjs"]\'',
-    '  spectre-status: "active"',
-    '  spectre-version: "2"',
-    '---',
-    '',
-    '# Neutral retrieval',
-    '',
-    'Exact CLI content sentinel.',
-    '',
-  ].join('\n');
-}
-
-async function fixture(t) {
-  const root = makeTmp(t);
-  const projectDir = path.join(root, 'project');
-  const spectreHome = path.join(root, 'spectre-home');
-  const isolatedPath = path.join(root, 'isolated-path');
-  fs.mkdirSync(projectDir, { recursive: true });
-  fs.mkdirSync(isolatedPath);
-  fs.symlinkSync(process.execPath, path.join(isolatedPath, 'node'));
-  const { storePath } = await resolveProjectStore(projectDir, { spectreHome });
-  const id = 'feature-neutral-cli';
-  const recordDirectory = path.join(storePath, 'knowledge', id);
-  fs.mkdirSync(path.join(recordDirectory, 'references'), { recursive: true });
-  const content = skillContent(id);
-  fs.writeFileSync(path.join(recordDirectory, 'SKILL.md'), content);
-  fs.writeFileSync(path.join(recordDirectory, 'references', 'guide.md'), 'guide\n');
+function typedRecord(id, tags = ['cli-test']) {
   return {
-    root,
-    projectDir,
-    spectreHome,
-    storePath,
-    isolatedPath,
-    id,
-    content,
-    recordDirectory,
+    schemaVersion: 1, id, kind: 'knowledge', title: 'Public CLI record',
+    summary: 'Typed fixture for public CLI parity.', tags, applicability: { scope: 'project' },
+    provenance: { origin: 'captured', capturedAt: '2026-09-06T00:00:00.000Z' },
+    relatedRecordIds: [], category: 'pattern', useWhen: 'Testing public knowledge callers.',
+    content: 'SPECTRE_TYPED_CLI_SENTINEL', evidence: 'A typed CLI test fixture.', status: 'active',
   };
 }
 
-function run(kind, args, fixtureValue) {
-  const script = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
+async function fixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-knowledge-cli-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const projectDir = path.join(root, 'project');
+  const spectreHome = path.join(root, 'spectre-home');
+  fs.mkdirSync(projectDir, { recursive: true });
+  const { storePath } = await resolveProjectStore(projectDir, { spectreHome });
+  const id = 'typed-cli-record';
+  const recordPath = path.join(storePath, 'knowledge', id, 'record.json');
+  fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+  fs.writeFileSync(recordPath, `${JSON.stringify(typedRecord(id), null, 2)}\n`);
+  fs.writeFileSync(path.join(storePath, 'tags.json'), JSON.stringify({
+    schemaVersion: 1,
+    tags: { 'cli-test': { description: 'Public CLI test coverage.', aliases: ['cli'] } },
+    redirects: {},
+  }, null, 2));
+  refreshKnowledgeIndex(storePath);
+  return { root, projectDir, spectreHome, storePath, id };
+}
+
+function run(kind, args, value, { json = true } = {}) {
+  const command = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
   const prefix = kind === 'npm' ? ['knowledge'] : [];
-  const executable = kind === 'npm' ? process.execPath : script;
-  const executableArgs = kind === 'npm' ? [script, ...prefix, ...args] : args;
-  return spawnSync(executable, executableArgs, {
-    cwd: fixtureValue.projectDir,
-    env: {
-      ...process.env,
-      SPECTRE_HOME: fixtureValue.spectreHome,
-      PATH: fixtureValue.isolatedPath,
-    },
-    encoding: 'utf8',
+  return spawnSync(process.execPath, [command, ...prefix, ...args, '--project-dir', value.projectDir, ...(json ? ['--json'] : [])], {
+    cwd: value.projectDir, env: { ...process.env, SPECTRE_HOME: value.spectreHome }, encoding: 'utf8',
   });
 }
 
-function json(result) {
-  assert.notEqual(result.stdout, '', result.stderr);
+function runHelp(kind) {
+  const command = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
+  const prefix = kind === 'npm' ? [] : [];
+  return spawnSync(process.execPath, [command, ...prefix, 'help'], { encoding: 'utf8' });
+}
+
+function writeInput(value, name, input) {
+  const inputPath = path.join(value.root, name);
+  fs.writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
+  return inputPath;
+}
+
+function runWrapper(script, args, value) {
+  return spawnSync(process.execPath, [script, ...args, '--project-dir', value.projectDir, '--json'], {
+    cwd: value.projectDir, env: { ...process.env, SPECTRE_HOME: value.spectreHome }, encoding: 'utf8',
+  });
+}
+
+function output(result) {
+  assert.notEqual(result.stdout.trim(), '', result.stderr);
   return JSON.parse(result.stdout);
 }
 
-function snapshotTree(root) {
-  const snapshot = [];
-  function walk(current) {
-    if (!fs.existsSync(current)) return;
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })
-      .sort((left, right) => left.name.localeCompare(right.name))) {
-      const fullPath = path.join(current, entry.name);
-      if (entry.isDirectory()) walk(fullPath);
-      else if (entry.isFile()) {
-        snapshot.push([
-          path.relative(root, fullPath),
-          fs.readFileSync(fullPath).toString('base64'),
-          fs.statSync(fullPath).mtimeMs,
-        ]);
-      }
-    }
-  }
-  walk(root);
-  return snapshot;
-}
-
-function withoutVolatileLoadFields(result) {
-  const { activity, ...stable } = result;
-  return stable;
-}
-
-describe('neutral bundled and npm knowledge CLI', () => {
-  it('previews the exact host payload and diagnostics without writing through either CLI', async (t) => {
+describe('typed public knowledge CLI parity', () => {
+  it('sends repeated tags and paths to equivalent search callers, then exact-loads the typed package', async (t) => {
     const value = await fixture(t);
-    const before = snapshotTree(value.storePath);
+    const args = ['search', 'public CLI', '--tag', 'cli', '--tag', 'cli-test', '--path', 'src', '--path', 'plugins'];
+    const bundled = run('bundled', args, value);
+    const npm = run('npm', args, value);
+    assert.equal(bundled.status, 0, bundled.stderr);
+    assert.equal(npm.status, 0, npm.stderr);
+    assert.deepEqual(output(bundled), output(npm));
+    assert.deepEqual(output(npm).results.map(result => result.id), [value.id]);
 
-    for (const host of ['claude', 'codex']) {
-      const npm = run('npm', [
-        'registry',
-        '--host',
-        host,
-        '--project-dir',
-        value.projectDir,
-        '--json',
-      ], value);
-      const bundled = run('bundled', [
-        'registry',
-        '--host',
-        host,
-        '--project-dir',
-        value.projectDir,
-        '--json',
-      ], value);
-      assert.equal(npm.status, 0, npm.stderr);
-      assert.equal(bundled.status, 0, bundled.stderr);
-      assert.deepEqual(json(bundled), json(npm));
-      const preview = json(npm);
-      assert.equal(preview.ok, true);
-      assert.equal(preview.host, host);
-      assert.equal(preview.injected, true);
-      assert.equal(preview.measurement.ok, true);
-      assert.equal(preview.includedCount, 1);
-      assert.equal(preview.omittedCount, 0);
-      assert.deepEqual(preview.includedRecords, [{ id: value.id, version: 2 }]);
-      assert.deepEqual(preview.omittedRecords, []);
-      assert.match(
-        preview.payload.hookSpecificOutput.additionalContext,
-        /## Before You Work[\s\S]*## Available Knowledge/,
-      );
-      assert.match(preview.payload.hookSpecificOutput.additionalContext, new RegExp(value.id));
-      assert.equal(preview.payload.hookSpecificOutput.additionalContext.includes('Exact CLI content sentinel'), false);
-      assert.deepEqual(snapshotTree(value.storePath), before);
+    for (const kind of ['bundled', 'npm']) {
+      const loaded = run(kind, ['load', value.id, '--work-id', 'work-cli', '--run-id', 'run-cli', '--allowance-tokens', '1500'], value);
+      assert.equal(loaded.status, 0, loaded.stderr);
+      assert.equal(output(loaded).record.content, 'SPECTRE_TYPED_CLI_SENTINEL');
     }
   });
 
-  it('rejects an unsupported preview host without changing the knowledge store', async (t) => {
+  it('labels historical previews and routes inactive exact loads to deliberate inspection', async (t) => {
     const value = await fixture(t);
-    const before = snapshotTree(value.storePath);
+    const inactiveId = 'notification-batch-history';
+    const inactive = typedRecord(inactiveId);
+    inactive.summary = 'Archived notification batch history.';
+    inactive.useWhen = 'Use when investigating notification batch history.';
+    inactive.content = 'SPECTRE_ARCHIVED_NOTIFICATION_BODY';
+    inactive.status = 'archived';
+    const inactivePath = path.join(value.storePath, 'knowledge', inactiveId, 'record.json');
+    fs.mkdirSync(path.dirname(inactivePath), { recursive: true });
+    fs.writeFileSync(inactivePath, `${JSON.stringify(inactive, null, 2)}\n`);
+    refreshKnowledgeIndex(value.storePath);
 
-    for (const kind of ['npm', 'bundled']) {
-      const result = run(kind, [
-        'registry',
-        '--host',
-        'unknown',
-        '--project-dir',
-        value.projectDir,
-        '--json',
-      ], value);
-      assert.notEqual(result.status, 0);
-      assert.deepEqual(json(result), {
-        ok: false,
-        code: 'KNOWLEDGE_REGISTRY_FAILED',
-        message: 'Unsupported registry host: unknown',
-      });
-      assert.deepEqual(snapshotTree(value.storePath), before);
+    const human = run('bundled', ['search', 'notification batch history'], value, { json: false });
+    assert.equal(human.status, 0, human.stderr);
+    assert.match(human.stdout, /notification-batch-history \[knowledge\] \[historical: inactive-history\]/);
+    assert.match(human.stdout, /load notification-batch-history --inspect-historical --project-dir <project-dir>/);
+
+    const json = run('bundled', ['search', 'notification batch history'], value);
+    assert.equal(json.status, 0, json.stderr);
+    const preview = output(json).results.find(result => result.id === inactiveId);
+    assert.equal(preview.activation, 'inactive-history');
+    assert.match(preview.loadCommand, /load notification-batch-history --inspect-historical --project-dir <project-dir>/);
+
+    const blocked = run('bundled', ['load', inactiveId], value);
+    assert.equal(blocked.status, 1);
+    assert.equal(output(blocked).code, 'KNOWLEDGE_NOT_ACTIVE');
+    assert.match(output(blocked).inspectionCommand, /load notification-batch-history --inspect-historical --project-dir <project-dir>/);
+
+    const inspected = run('bundled', ['load', inactiveId, '--inspect-historical'], value);
+    assert.equal(inspected.status, 0, inspected.stderr);
+    assert.equal(output(inspected).historical, true);
+    assert.equal(output(inspected).record.content, 'SPECTRE_ARCHIVED_NOTIFICATION_BODY');
+  });
+
+  it('has matching safe JSON failures and forwards guarded registration revision', async (t) => {
+    const value = await fixture(t);
+    for (const kind of ['bundled', 'npm']) {
+      const missing = run(kind, ['inspect', value.id], value);
+      assert.equal(missing.status, 1);
+      assert.equal(output(missing).code, 'KNOWLEDGE_INVALID');
+    }
+    const proposal = path.join(value.root, 'proposal', 'typed-cli-record');
+    fs.mkdirSync(proposal, { recursive: true });
+    fs.writeFileSync(path.join(proposal, 'record.json'), JSON.stringify(typedRecord(value.id, ['replacement'])));
+    for (const kind of ['bundled', 'npm']) {
+      const rejected = run(kind, ['register', '--record', proposal, '--expected-revision', 'sha256:0000000000000000000000000000000000000000000000000000000000000000'], value);
+      assert.equal(rejected.status, 1);
+      assert.equal(output(rejected).code, 'KNOWLEDGE_REVISION_CONFLICT');
     }
   });
 
-  it('routes register and migrate through the same neutral bundled entry point', async (t) => {
-    const value = await fixture(t);
-    const proposalId = 'feature-neutral-registration';
-    const proposalDir = path.join(value.root, 'proposal', proposalId);
-    fs.mkdirSync(proposalDir, { recursive: true });
-    fs.writeFileSync(path.join(proposalDir, 'SKILL.md'), skillContent(proposalId));
-
-    const registration = run('bundled', [
-      'register',
-      '--record',
-      proposalDir,
-      '--project-dir',
-      value.projectDir,
-      '--json',
-    ], value);
-    assert.equal(registration.status, 0, registration.stderr);
-    assert.equal(json(registration).id, proposalId);
-
-    const migration = run('bundled', [
-      'migrate',
-      '--project-dir',
-      value.projectDir,
-      '--json',
-    ], value);
-    assert.equal(migration.status, 0, migration.stderr);
-    const migrated = json(migration);
-    assert.equal(migrated.ok, true);
-    assert.deepEqual(migrated.entries, []);
-  });
-
-  it('works without a global spectre binary or recall skill and has JSON search/load parity', async (t) => {
-    const value = await fixture(t);
-    assert.deepEqual(fs.readdirSync(value.isolatedPath), ['node']);
-    assert.equal(
-      fs.existsSync(path.join(value.projectDir, '.agents', 'skills', 'spectre-recall')),
-      false,
-    );
-
-    const npmSearch = run('npm', [
-      'search',
-      'neutral retrieval',
-      '--project-dir',
-      value.projectDir,
-      '--json',
-    ], value);
-    const bundledSearch = run('bundled', [
-      'search',
-      'neutral retrieval',
-      '--project-dir',
-      value.projectDir,
-      '--json',
-    ], value);
-    assert.equal(npmSearch.status, 0, npmSearch.stderr);
-    assert.equal(bundledSearch.status, 0, bundledSearch.stderr);
-    assert.deepEqual(json(bundledSearch), json(npmSearch));
-
-    const npmLoad = run('npm', [
-      'load',
-      value.id,
-      '--project-dir',
-      value.projectDir,
-      '--json',
-    ], value);
-    const bundledLoad = run('bundled', [
-      'load',
-      value.id,
-      '--project-dir',
-      value.projectDir,
-      '--json',
-    ], value);
-    assert.equal(npmLoad.status, 0, npmLoad.stderr);
-    assert.equal(bundledLoad.status, 0, bundledLoad.stderr);
-    const npmLoaded = json(npmLoad);
-    const bundledLoaded = json(bundledLoad);
-    assert.deepEqual(
-      withoutVolatileLoadFields(bundledLoaded),
-      withoutVolatileLoadFields(npmLoaded),
-    );
-    assert.equal(npmLoaded.content, value.content);
-    assert.equal(npmLoaded.activity.successfulLoads, 1);
-    assert.equal(bundledLoaded.activity.successfulLoads, 2);
-    assert.deepEqual(npmLoaded.resources, [{
-      relativePath: 'references/guide.md',
-      absolutePath: path.join(value.recordDirectory, 'references', 'guide.md'),
-    }]);
-  });
-
-  it('has equivalent human search/load output and stable error exits', async (t) => {
-    const value = await fixture(t);
-    for (const command of [
-      ['search', 'neutral retrieval', '--project-dir', value.projectDir],
-      ['load', value.id, '--project-dir', value.projectDir],
-    ]) {
-      const npm = run('npm', command, value);
-      const bundled = run('bundled', command, value);
-      assert.equal(npm.status, 0, npm.stderr);
-      assert.equal(bundled.status, 0, bundled.stderr);
-      assert.equal(bundled.stdout, npm.stdout);
-      assert.equal(bundled.stderr, npm.stderr);
-      if (command[0] === 'load') {
-        assert.equal(npm.stdout.startsWith(value.content), true);
-        const footer = npm.stdout
-          .split('\n')
-          .find((line) => line.startsWith('SPECTRE_KNOWLEDGE_RESOURCE_LOCATIONS='));
-        assert.ok(footer);
-        const locations = JSON.parse(footer.slice(footer.indexOf('=') + 1));
-        assert.equal(locations.recordDirectory, value.recordDirectory);
-        assert.deepEqual(locations.resources.map(({ relativePath }) => relativePath), [
-          'references/guide.md',
-        ]);
-      }
-    }
-
-    const command = [
-      'load',
-      'feature-missing-record',
-      '--project-dir',
-      value.projectDir,
-      '--json',
-    ];
-    const npmError = run('npm', command, value);
-    const bundledError = run('bundled', command, value);
-    assert.notEqual(npmError.status, 0);
-    assert.equal(bundledError.status, npmError.status);
-    assert.deepEqual(json(bundledError), json(npmError));
-    assert.deepEqual(json(npmError), {
-      ok: false,
-      code: 'KNOWLEDGE_NOT_FOUND',
-      message: 'Knowledge record not found: feature-missing-record',
-    });
-    assert.equal(npmError.stderr, '');
-    assert.equal(bundledError.stderr, '');
-
-    const humanCommand = command.filter((value) => value !== '--json');
-    const npmHumanError = run('npm', humanCommand, value);
-    const bundledHumanError = run('bundled', humanCommand, value);
-    assert.notEqual(npmHumanError.status, 0);
-    assert.equal(bundledHumanError.status, npmHumanError.status);
-    assert.equal(bundledHumanError.stdout, npmHumanError.stdout);
-    assert.equal(bundledHumanError.stderr, npmHumanError.stderr);
-    assert.match(npmHumanError.stderr, /Knowledge record not found/);
-  });
-
-  it('preserves search results and exit zero when diagnostic activity cannot be written', async (t) => {
-    for (const kind of ['npm', 'bundled']) {
+  it('exposes structured tag ensure and merge commands in both public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);
-      fs.mkdirSync(path.join(value.storePath, 'activity.json'));
+      const ensured = run(kind, ['tags', 'ensure', '--input', writeInput(value, `${kind}-ensure.json`, {
+        operation: 'ensure',
+        tags: [{ id: 'cli-extra', description: 'An additional public CLI tag.', aliases: ['extra-cli'] }],
+      })], value);
+      assert.equal(ensured.status, 0, ensured.stderr);
+      assert.equal(output(ensured).tags[0].id, 'cli-extra');
 
-      const result = run(kind, [
-        'search',
-        'neutral retrieval',
-        '--project-dir',
-        value.projectDir,
-        '--json',
-      ], value);
-      assert.equal(result.status, 0, result.stderr);
-      const parsed = json(result);
-      assert.deepEqual(parsed.results.map(({ id }) => id), [value.id]);
-      assert.deepEqual(
-        parsed.warnings.map(({ code }) => code),
-        ['KNOWLEDGE_SEARCH_DIAGNOSTIC_WRITE_FAILED'],
-      );
-      assert.equal(typeof parsed.warnings[0].message, 'string');
-      assert.match(parsed.warnings[0].message, /activity\.json/);
+      const merged = run(kind, ['tags', 'merge', '--input', writeInput(value, `${kind}-merge.json`, {
+        operation: 'merge', from: ['cli-extra'], into: 'cli-test', revision: 'ignored',
+        expectedRevision: output(ensured).revision,
+      })], value);
+      assert.equal(merged.status, 0, merged.stderr);
+      assert.deepEqual(output(merged).retired, ['cli-extra']);
+      assert.equal(output(merged).redirects['cli-extra'], 'cli-test');
 
-      const human = run(kind, [
-        'search',
-        'neutral retrieval',
-        '--project-dir',
-        value.projectDir,
-      ], value);
-      assert.equal(human.status, 0, human.stderr);
-      assert.match(human.stdout, new RegExp(value.id));
-      assert.match(human.stderr, /KNOWLEDGE_SEARCH_DIAGNOSTIC_WRITE_FAILED/);
+      const help = runHelp(kind);
+      assert.equal(help.status, 0, help.stderr);
+      assert.match(help.stdout, /tags ensure --input <json>/);
+      assert.match(help.stdout, /tags merge --input <json>/);
     }
   });
 
-  it('normalizes a value-less project-dir flag across JSON and human search/load errors', async (t) => {
-    const value = await fixture(t);
-    for (const [command, expectedCode] of [
-      ['search', 'KNOWLEDGE_SEARCH_FAILED'],
-      ['load', 'KNOWLEDGE_LOAD_FAILED'],
-    ]) {
-      const jsonArgs = [command, value.id, '--project-dir', '--json'];
-      const npmJson = run('npm', jsonArgs, value);
-      const bundledJson = run('bundled', jsonArgs, value);
-      assert.notEqual(npmJson.status, 0);
-      assert.equal(bundledJson.status, npmJson.status);
-      assert.deepEqual(json(bundledJson), json(npmJson));
-      assert.deepEqual(json(npmJson), {
-        ok: false,
-        code: expectedCode,
-        message: 'Missing value for --project-dir.',
+  it('resolves an exact source run through either supported public flag', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const work = await resolveOrAllocateWorkIdentity({
+        projectDir: value.projectDir, spectreHome: value.spectreHome, sourceRunId: 'run-cli-alias',
       });
-      assert.equal(npmJson.stderr, '');
-      assert.equal(bundledJson.stderr, '');
+      const sourceRun = run(kind, ['work', 'resolve', '--source-run-id', 'run-cli-alias'], value);
+      const runAlias = run(kind, ['work', 'resolve', '--run-id', 'run-cli-alias'], value);
+      assert.equal(sourceRun.status, 0, sourceRun.stderr);
+      assert.equal(runAlias.status, 0, runAlias.stderr);
+      assert.deepEqual(output(runAlias), output(sourceRun));
+      assert.equal(output(runAlias).workId, work.workId);
 
-      const humanArgs = [command, value.id, '--project-dir'];
-      const npmHuman = run('npm', humanArgs, value);
-      const bundledHuman = run('bundled', humanArgs, value);
-      assert.notEqual(npmHuman.status, 0);
-      assert.equal(bundledHuman.status, npmHuman.status);
-      assert.equal(bundledHuman.stdout, npmHuman.stdout);
-      assert.equal(bundledHuman.stderr, npmHuman.stderr);
-      assert.equal(npmHuman.stderr, 'Missing value for --project-dir.\n');
+      const conflict = run(kind, ['work', 'resolve', '--source-run-id', 'run-cli-alias', '--run-id', 'run-other'], value);
+      assert.equal(conflict.status, 1);
+      assert.equal(output(conflict).code, 'WORK_SOURCE_RUN_CONFLICT');
     }
+  });
+
+  it('preserves create, noop, and typed registration precondition errors across public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const proposal = path.join(value.root, 'proposals', `${kind}-created`);
+      fs.mkdirSync(proposal, { recursive: true });
+      fs.writeFileSync(path.join(proposal, 'record.json'), JSON.stringify(typedRecord(`${kind}-created`)));
+      const created = run(kind, ['register', '--record', proposal], value);
+      assert.equal(created.status, 0, created.stderr);
+      assert.equal(output(created).status, 'created');
+      const noop = run(kind, ['register', '--record', proposal], value);
+      assert.equal(noop.status, 0, noop.stderr);
+      assert.equal(output(noop).status, 'noop');
+
+      const replacement = path.join(value.root, 'replacement', value.id);
+      fs.mkdirSync(replacement, { recursive: true });
+      fs.writeFileSync(path.join(replacement, 'record.json'), JSON.stringify(typedRecord(value.id, ['replacement'])));
+      const missingExpected = run(kind, ['register', '--record', replacement], value);
+      assert.equal(missingExpected.status, 1);
+      const missing = output(missingExpected);
+      assert.deepEqual(Object.keys(missing).sort(), ['code', 'currentRevision', 'message', 'ok', 'status']);
+      assert.equal(missing.code, 'KNOWLEDGE_REVISION_REQUIRED');
+      assert.equal(missing.status, 'conflict');
+      assert.match(missing.currentRevision, /^sha256:[a-f0-9]{64}$/);
+
+      const staleRevision = `sha256:${'0'.repeat(64)}`;
+      const staleExpected = run(kind, ['register', '--record', replacement, '--expected-revision', staleRevision], value);
+      assert.equal(staleExpected.status, 1);
+      const stale = output(staleExpected);
+      assert.deepEqual(Object.keys(stale).sort(), ['code', 'currentRevision', 'expectedRevision', 'message', 'ok', 'status']);
+      assert.equal(stale.code, 'KNOWLEDGE_REVISION_CONFLICT');
+      assert.equal(stale.status, 'conflict');
+      assert.equal(stale.expectedRevision, staleRevision);
+      assert.equal(stale.currentRevision, missing.currentRevision);
+    }
+  });
+
+  it('keeps register and migrate wrapper results aligned with the canonical typed CLI', async (t) => {
+    const value = await fixture(t);
+    const proposalId = 'wrapper-typed-record';
+    const proposal = path.join(value.root, 'proposal', proposalId);
+    fs.mkdirSync(proposal, { recursive: true });
+    fs.writeFileSync(path.join(proposal, 'record.json'), JSON.stringify(typedRecord(proposalId)));
+
+    const registered = runWrapper(REGISTER_WRAPPER, ['--record', proposal], value);
+    assert.equal(registered.status, 0, registered.stderr);
+    assert.equal(output(registered).status, 'created');
+    const noop = run('bundled', ['register', '--record', proposal], value);
+    assert.equal(noop.status, 0, noop.stderr);
+    assert.equal(output(noop).status, 'noop');
+
+    const wrappedMigration = runWrapper(MIGRATE_WRAPPER, [], value);
+    const canonicalMigration = run('bundled', ['migrate'], value);
+    assert.equal(wrappedMigration.status, 0, wrappedMigration.stderr);
+    assert.equal(canonicalMigration.status, 0, canonicalMigration.stderr);
+    assert.deepEqual(output(wrappedMigration), output(canonicalMigration));
+
+    const invalid = path.join(value.root, 'invalid-proposal');
+    fs.mkdirSync(invalid, { recursive: true });
+    fs.writeFileSync(path.join(invalid, 'record.json'), '{"schemaVersion":1}\n');
+    const wrapperFailure = runWrapper(REGISTER_WRAPPER, ['--record', invalid], value);
+    const canonicalFailure = run('bundled', ['register', '--record', invalid], value);
+    assert.equal(wrapperFailure.status, 1);
+    assert.equal(canonicalFailure.status, 1);
+    assert.equal(output(wrapperFailure).code, output(canonicalFailure).code);
+    assert.match(output(wrapperFailure).message, /<exact-id>\/record\.json/);
+    assert.match(output(canonicalFailure).message, /<exact-id>\/record\.json/);
   });
 });

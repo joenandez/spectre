@@ -120,22 +120,14 @@ function writeRegistryRuntime(fixture, {
   }
 }
 
-function canonicalSkill(id) {
-  return [
-    '---',
-    `name: ${JSON.stringify(id)}`,
-    `description: ${JSON.stringify(`Use when applying ${id}`)}`,
-    'metadata:',
-    '  spectre-category: "feature"',
-    `  spectre-triggers: ${JSON.stringify(JSON.stringify([id]))}`,
-    '  spectre-status: "active"',
-    '  spectre-version: "1"',
-    '---',
-    `# ${id}`,
-    '',
-    'Canonical user data.',
-    '',
-  ].join('\n');
+function canonicalRecord(id) {
+  return JSON.stringify({
+    schemaVersion: 1, id, kind: 'knowledge', title: id,
+    summary: `Use when applying ${id}`, tags: [id], applicability: { scope: 'project' },
+    provenance: { origin: 'captured', capturedAt: '2026-09-06T00:00:00.000Z' },
+    relatedRecordIds: [], category: 'pattern', useWhen: `Use when applying ${id}`,
+    content: 'Canonical user data.', evidence: 'Doctor fixture.', status: 'active',
+  }, null, 2);
 }
 
 async function createStore(fixture) {
@@ -144,11 +136,11 @@ async function createStore(fixture) {
   });
 }
 
-function writeCanonicalRecord(storePath, id, content = canonicalSkill(id)) {
-  const skillPath = path.join(storePath, 'knowledge', id, 'SKILL.md');
-  fs.mkdirSync(path.dirname(skillPath), { recursive: true });
-  fs.writeFileSync(skillPath, content);
-  return skillPath;
+function writeCanonicalRecord(storePath, id, content = canonicalRecord(id)) {
+  const recordPath = path.join(storePath, 'knowledge', id, 'record.json');
+  fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+  fs.writeFileSync(recordPath, content);
+  return recordPath;
 }
 
 function configEntry(skillPath, extra = '') {
@@ -338,10 +330,10 @@ test('doctor reports malformed indexes and invalid canonical records without rep
   const fixture = makeFixture(t);
   writeRegistryRuntime(fixture);
   const resolved = await createStore(fixture);
-  const invalidSkillPath = writeCanonicalRecord(
+  const invalidRecordPath = writeCanonicalRecord(
     resolved.storePath,
     'feature-invalid',
-    '---\nname: feature-invalid\n---\n# Invalid\n',
+    '{"schemaVersion":1}',
   );
   const indexPath = path.join(resolved.storePath, 'index.json');
   fs.writeFileSync(indexPath, '{malformed');
@@ -351,8 +343,8 @@ test('doctor reports malformed indexes and invalid canonical records without rep
   assert.equal(doctor.knowledge.store.status, 'invalid');
   assert.equal(doctor.knowledge.store.index.status, 'malformed');
   assert.equal(doctor.knowledge.store.invalidRecords.length, 1);
-  assert.equal(doctor.knowledge.store.invalidRecords[0].path, invalidSkillPath);
-  assert.match(doctor.knowledge.store.invalidRecords[0].message, /description/);
+  assert.equal(doctor.knowledge.store.invalidRecords[0].path, invalidRecordPath);
+  assert.match(doctor.knowledge.store.invalidRecords[0].message, /id/);
   assert.deepEqual(fs.readFileSync(indexPath), indexBytes);
 });
 

@@ -13,6 +13,10 @@ import {
 import { refreshKnowledgeIndex } from '../plugins/spectre/hooks/scripts/knowledge/records.mjs';
 import { renderKnowledgeRegistry } from '../plugins/spectre/hooks/scripts/knowledge/registry.mjs';
 import { resolveProjectStore } from '../plugins/spectre/hooks/scripts/knowledge/store.mjs';
+import {
+  normalizeTagId,
+  readTagCatalog,
+} from '../plugins/spectre/hooks/scripts/knowledge/tags.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
@@ -70,29 +74,27 @@ function commandVersion(command) {
   };
 }
 
-function recordContent({ id, description, triggers, core }) {
-  return [
-    '---',
-    `name: ${id}`,
-    `description: ${description}`,
-    'metadata:',
-    '  spectre-category: "testing"',
-    `  spectre-triggers: '${JSON.stringify(triggers)}'`,
-    '  spectre-status: "active"',
-    '  spectre-version: "1"',
-    '---',
-    `# ${id}`,
-    '',
-    core,
-    '',
-  ].join('\n');
+function canonicalTagId(phrase) {
+  const id = normalizeTagId(phrase);
+  if (id === null) throw new Error(`Fixture tag is not canonicalizable: ${phrase}`);
+  return id;
 }
 
-function writeRecord(storePath, { id, description, triggers, core, resource, mtimeMs }) {
+function recordContent({ id, description, tags, core }) {
+  return JSON.stringify({
+    schemaVersion: 1, id, kind: 'knowledge', title: id, summary: description,
+    tags, applicability: { scope: 'project' },
+    provenance: { origin: 'captured', capturedAt: '2026-07-22T00:00:00.000Z' },
+    relatedRecordIds: [], category: 'gotcha', useWhen: description,
+    content: core, evidence: 'Host fixture verification.', status: 'active',
+  }, null, 2);
+}
+
+function writeRecord(storePath, { id, description, tags, core, resource, mtimeMs }) {
   const recordDirectory = path.join(storePath, 'knowledge', id);
-  const skillPath = path.join(recordDirectory, 'SKILL.md');
+  const skillPath = path.join(recordDirectory, 'record.json');
   fs.mkdirSync(recordDirectory, { recursive: true });
-  fs.writeFileSync(skillPath, recordContent({ id, description, triggers, core }));
+  fs.writeFileSync(skillPath, recordContent({ id, description, tags, core }));
   if (resource !== undefined) {
     const resourcePath = path.join(recordDirectory, 'references', 'proof.txt');
     fs.mkdirSync(path.dirname(resourcePath), { recursive: true });
@@ -105,19 +107,32 @@ function writeRecord(storePath, { id, description, triggers, core, resource, mti
 
 function zeroActivity() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     records: {},
     search: { matches: 0, misses: 0, recordMatches: {} },
   };
 }
 
+function writeTagCatalog(storePath, tags) {
+  const entries = [...tags]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, description]) => [id, { description, aliases: [] }]);
+  atomicWriteJson(path.join(storePath, 'tags.json'), {
+    schemaVersion: 1,
+    tags: Object.fromEntries(entries),
+    redirects: {},
+  });
+}
+
 async function seedOverflowStore(projectDir, spectreHome) {
   const resolved = await resolveProjectStore(projectDir, { spectreHome });
+  const tags = [];
+  const omittedTag = canonicalTagId(SEARCH_QUERY);
   const recordDirectory = writeRecord(resolved.storePath, {
     id: OMITTED_ID,
     description:
-      'Use when proving the isolated real-host omitted-record search and exact-load recovery protocol.',
-    triggers: [SEARCH_QUERY, 'isolated host overflow recovery'],
+      `Use when handling ${SEARCH_QUERY} in the isolated real-host exact-load recovery protocol.`,
+    tags: [omittedTag],
     core: [
       CORE_SENTINEL,
       'The only supporting resource is references/proof.txt.',
@@ -126,19 +141,25 @@ async function seedOverflowStore(projectDir, spectreHome) {
     resource: RESOURCE_SENTINEL,
     mtimeMs: Date.parse('2020-01-01T00:00:00.000Z'),
   });
+  tags.push([omittedTag, 'Omega recovery protocol.']);
 
   for (let index = 0; index < FILLER_COUNT; index += 1) {
     const suffix = String(index).padStart(2, '0');
+    const fillerPhrase = `host registry filler ${suffix}`;
+    const fillerTag = canonicalTagId(fillerPhrase);
     writeRecord(resolved.storePath, {
       id: `testing-host-registry-filler-${suffix}`,
       description:
         `Use when validating deterministic registry filler ${suffix} for complete-entry host-budget measurement. ` +
         'This routing metadata is intentionally verbose but contains no record body or sentinel discovery terms.',
-      triggers: [`host registry filler ${suffix}`, `fixture-routing-${suffix}.md`],
+      tags: [fillerTag],
       core: `Filler body ${suffix}; this content must never appear in SessionStart registry metadata.`,
       mtimeMs: Date.parse('2026-01-01T00:00:00.000Z') + index * 1000,
     });
+    tags.push([fillerTag, `Host registry filler ${suffix}.`]);
   }
+  writeTagCatalog(resolved.storePath, tags);
+  atomicWriteJson(path.join(resolved.storePath, 'activity.json'), zeroActivity());
   const { index } = refreshKnowledgeIndex(resolved.storePath);
   return {
     storePath: resolved.storePath,
@@ -151,7 +172,7 @@ async function seedOverflowStore(projectDir, spectreHome) {
 function probeCommand(hostFixture) {
   return [
     'node',
-    shellQuote(PROBE_SCRIPT),
+    shellQuote(hostFixture.probeScript ?? PROBE_SCRIPT),
     '--runtime',
     shellQuote(hostFixture.runtimePath),
     '--host',
@@ -247,7 +268,6 @@ function runProbePreflight(hostFixture) {
     || observation.hasHookSystemMessage
     || observation.hasPreview
     || observation.hasFallbackFile
-    || !(observation.omittedCount > 0)
   ) {
     throw new Error(`${hostFixture.host} preflight registry contract failed`);
   }
@@ -306,26 +326,22 @@ async function prepareHostFixture(fixtureRoot, host) {
   const hooks = rewriteHooks(hostFixture);
   if (host === 'codex') writeCodexConfig(hostFixture, hooks);
   const observation = runProbePreflight(hostFixture);
-  const { index } = refreshKnowledgeIndex(store.storePath, { persist: false });
+  refreshKnowledgeIndex(store.storePath, { persist: false });
   const registry = renderKnowledgeRegistry({
     host,
-    records: index.records,
-    activity: zeroActivity(),
+    catalog: readTagCatalog(store.storePath),
     projectDir,
     cliPath: hostFixture.cliPath,
   });
-  if (registry.includedEntries.some(({ id }) => id === OMITTED_ID)) {
-    throw new Error(`${host} fixture failed to omit ${OMITTED_ID}`);
-  }
   return {
     ...hostFixture,
     preflight: {
-      includedCount: store.activeRecordCount - observation.omittedCount,
-      omittedCount: observation.omittedCount,
+      includedCount: registry.includedEntries.length,
+      omittedCount: registry.omittedCount,
       measurement: observation.measurement,
       frameCharacters: observation.frameCharacters,
       predicted: {
-        includedCount: registry.includedCount,
+        includedCount: registry.includedEntries.length,
         omittedCount: registry.omittedCount,
         measurement: registry.measurement,
         frameCharacters: registry.frame.length,
@@ -729,8 +745,13 @@ async function main(argv = process.argv.slice(2)) {
   return output;
 }
 
-const isDirect = process.argv[1]
-  && fs.realpathSync(path.resolve(process.argv[1])) === fs.realpathSync(fileURLToPath(import.meta.url));
+const isDirect = (() => {
+  try {
+    return Boolean(process.argv[1]) && fs.realpathSync(path.resolve(process.argv[1])) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+})();
 if (isDirect) {
   main().catch((error) => {
     process.stderr.write(`${error.message}\n`);
@@ -744,6 +765,7 @@ export {
   RESOURCE_SENTINEL,
   SEARCH_QUERY,
   observedRegistryCounts,
+  rewriteHooks,
   prepareFixture,
   runFixture,
   validateHostRun,

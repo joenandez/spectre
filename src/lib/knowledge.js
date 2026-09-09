@@ -24,6 +24,20 @@ import {
 import {
   previewKnowledgeRegistry
 } from '../../plugins/spectre/hooks/scripts/knowledge/preview.mjs';
+import {
+  inspectKnowledgeRevision,
+  listKnowledgeHistory
+} from '../../plugins/spectre/hooks/scripts/knowledge/history.mjs';
+import {
+  applyTagOperationFile,
+  ensureTags,
+  mergeTags,
+  readTagOperationFile,
+  searchTags
+} from '../../plugins/spectre/hooks/scripts/knowledge/tags.mjs';
+import {
+  resolveWorkIdentity
+} from '../../plugins/spectre/hooks/scripts/knowledge/work.mjs';
 
 export async function searchCanonicalKnowledge(options) {
   return searchKnowledge(options);
@@ -43,6 +57,46 @@ export async function loadCanonicalKnowledge(options) {
 
 export async function previewCanonicalKnowledgeRegistry(options) {
   return previewKnowledgeRegistry(options);
+}
+
+export async function listCanonicalKnowledgeHistory(options) {
+  return listKnowledgeHistory(options);
+}
+
+export async function inspectCanonicalKnowledgeRevision(options) {
+  return inspectKnowledgeRevision(options);
+}
+
+export async function searchCanonicalKnowledgeTags(options) {
+  return searchTags(options);
+}
+
+export async function applyCanonicalKnowledgeTagOperation(options) {
+  return applyTagOperationFile(options);
+}
+
+async function runCanonicalKnowledgeTagOperation(operation, options) {
+  const { operation: inputOperation, ...request } = readTagOperationFile(options.inputPath);
+  if (inputOperation !== operation) {
+    const error = new Error(`Input operation ${inputOperation} cannot run as tags ${operation}.`);
+    error.code = 'TAG_INPUT_INVALID';
+    throw error;
+  }
+  return operation === 'ensure'
+    ? ensureTags({ ...options, ...request })
+    : mergeTags({ ...options, ...request });
+}
+
+export async function ensureCanonicalKnowledgeTags(options) {
+  return runCanonicalKnowledgeTagOperation('ensure', options);
+}
+
+export async function mergeCanonicalKnowledgeTags(options) {
+  return runCanonicalKnowledgeTagOperation('merge', options);
+}
+
+export async function resolveCanonicalKnowledgeWork(options) {
+  return resolveWorkIdentity(options);
 }
 
 export function formatCanonicalKnowledgeLoad(result) {

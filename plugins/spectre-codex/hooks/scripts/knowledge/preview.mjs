@@ -1,27 +1,14 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readKnowledgeActivity } from './activity.mjs';
-import { refreshKnowledgeIndex } from './records.mjs';
 import { renderKnowledgeRegistry } from './registry.mjs';
 import { resolveProjectStore } from './store.mjs';
+import { readTagCatalog } from './tags.mjs';
 
 const HOSTS = new Set(['claude', 'codex']);
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 export const BUNDLED_CLI_PATH = path.resolve(SCRIPT_DIR, '..', 'knowledge-cli.mjs');
-
-function zeroKnowledgeActivity() {
-  return {
-    schemaVersion: 1,
-    records: {},
-    search: { matches: 0, misses: 0, recordMatches: {} },
-  };
-}
-
-function recordIdentity({ id, version }) {
-  return { id, version };
-}
 
 function emptyPreview({ host, projectDir, storePath = null, warnings = [] }) {
   return {
@@ -49,28 +36,21 @@ export async function previewKnowledgeRegistry(options) {
   });
   if (!resolved.storePath) return emptyPreview({ host, projectDir });
 
-  const { index } = refreshKnowledgeIndex(resolved.storePath, { persist: false });
-  if (index.records.length === 0) {
-    return emptyPreview({ host, projectDir, storePath: resolved.storePath });
-  }
-
   const warnings = [];
-  let activity;
+  let catalog;
   try {
-    activity = readKnowledgeActivity(resolved.storePath);
+    catalog = readTagCatalog(resolved.storePath);
   } catch (error) {
     warnings.push({
-      code: error.code || 'KNOWLEDGE_ACTIVITY_UNAVAILABLE',
-      message: error.message,
+      code: error.code || 'TAG_CATALOG_UNAVAILABLE',
+      message: 'SessionStart tag catalog was unavailable.',
     });
-    activity = zeroKnowledgeActivity();
+    catalog = { tags: {} };
   }
 
   const registry = renderKnowledgeRegistry({
     host,
-    records: index.records,
-    activity,
-    projectDir,
+    catalog,
     cliPath: options.cliPath || BUNDLED_CLI_PATH,
   });
   return {
@@ -80,12 +60,10 @@ export async function previewKnowledgeRegistry(options) {
     injected: true,
     payload: JSON.parse(registry.frame),
     measurement: registry.measurement,
-    includedCount: registry.includedCount,
+    includedCount: registry.includedEntries.length,
     omittedCount: registry.omittedCount,
-    includedRecords: registry.includedEntries.map(recordIdentity),
-    omittedRecords: registry.rankedEntries
-      .slice(registry.includedCount)
-      .map(recordIdentity),
+    includedRecords: [],
+    omittedRecords: [],
     warnings,
   };
 }

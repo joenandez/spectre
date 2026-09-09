@@ -177,25 +177,31 @@ test('packed npm artifact contains portable Claude and Codex knowledge runtimes 
     const recordId = 'feature-packed-neutral-cli';
     const recordDirectory = path.join(storePath, 'knowledge', recordId);
     fs.mkdirSync(path.join(recordDirectory, 'references'), { recursive: true });
-    fs.writeFileSync(path.join(recordDirectory, 'SKILL.md'), [
-      '---',
-      `name: ${recordId}`,
-      'description: Use when proving packed neutral knowledge retrieval.',
-      'metadata:',
-      '  spectre-category: "feature"',
-      '  spectre-triggers: \'["packed neutral retrieval","knowledge-cli.mjs"]\'',
-      '  spectre-status: "active"',
-      '  spectre-version: "1"',
-      '---',
-      `# ${recordId}`,
-      '',
-      'SPECTRE_PACKED_CORE_SENTINEL',
-      '',
-    ].join('\n'));
+    fs.writeFileSync(path.join(recordDirectory, 'record.json'), JSON.stringify({
+      schemaVersion: 1,
+      id: recordId,
+      kind: 'knowledge',
+      title: 'Packed neutral retrieval',
+      summary: 'Use when proving packed neutral knowledge retrieval.',
+      tags: ['packed-retrieval'],
+      applicability: { scope: 'project' },
+      provenance: { origin: 'captured', capturedAt: '2026-09-06T00:00:00.000Z' },
+      relatedRecordIds: [],
+      category: 'pattern',
+      useWhen: 'Proving packed neutral knowledge retrieval.',
+      content: 'SPECTRE_PACKED_CORE_SENTINEL',
+      evidence: 'Packed artifact fixture.',
+      status: 'active',
+    }, null, 2));
     fs.writeFileSync(
       path.join(recordDirectory, 'references', 'proof.md'),
       'SPECTRE_PACKED_RESOURCE_SENTINEL\n',
     );
+    fs.writeFileSync(path.join(storePath, 'tags.json'), JSON.stringify({
+      schemaVersion: 1,
+      tags: { 'packed-retrieval': { description: 'Packed retrieval checks.', aliases: [] } },
+      redirects: {},
+    }, null, 2));
     refreshKnowledgeIndex(storePath);
 
     const isolatedPath = path.join(homeDir, 'isolated-path');
@@ -208,7 +214,7 @@ test('packed npm artifact contains portable Claude and Codex knowledge runtimes 
     let expectedLoads = 0;
     for (const root of [claudePluginRoot, pluginRoot]) {
       const bundledCli = path.join(root, 'hooks', 'scripts', 'knowledge-cli.mjs');
-      const runBundled = (args) => spawnSync(bundledCli, args, {
+      const runBundled = (args) => spawnSync(process.execPath, [bundledCli, ...args], {
         cwd: retrievalProject,
         env: { ...process.env, SPECTRE_HOME: spectreHome, PATH: isolatedPath },
         encoding: 'utf8',
@@ -227,14 +233,16 @@ test('packed npm artifact contains portable Claude and Codex knowledge runtimes 
         '--json',
       ]);
       assert.equal(preview.status, 0, preview.stderr);
+      assert.match(preview.stdout, /\S/, `${host} registry returned no JSON: ${preview.stderr}`);
       const previewed = JSON.parse(preview.stdout);
       assert.equal(previewed.host, host);
       assert.equal(previewed.injected, true);
       assert.equal(previewed.measurement.ok, true);
-      assert.deepEqual(previewed.includedRecords, [{ id: recordId, version: 1 }]);
+      assert.deepEqual(previewed.includedRecords, []);
+      assert.equal(previewed.includedCount, 1);
       assert.match(
         previewed.payload.hookSpecificOutput.additionalContext,
-        /## Before You Work[\s\S]*## Available Knowledge/,
+        /## Project knowledge[\s\S]*packed-retrieval/,
       );
       assert.doesNotMatch(
         previewed.payload.hookSpecificOutput.additionalContext,
@@ -264,7 +272,7 @@ test('packed npm artifact contains portable Claude and Codex knowledge runtimes 
       assert.equal(load.status, 0, load.stderr);
       const loaded = JSON.parse(load.stdout);
       expectedLoads += 1;
-      assert.match(loaded.content, /SPECTRE_PACKED_CORE_SENTINEL/);
+      assert.match(loaded.rendered, /SPECTRE_PACKED_CORE_SENTINEL/);
       assert.equal(loaded.recordDirectory, recordDirectory);
       assert.deepEqual(loaded.resources, [{
         relativePath: 'references/proof.md',

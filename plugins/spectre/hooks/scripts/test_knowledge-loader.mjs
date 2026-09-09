@@ -2,7 +2,6 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const LOADER_MODULE = path.join(SCRIPT_DIR, 'knowledge', 'loader.mjs');
+const RECORD_MODULE = path.join(SCRIPT_DIR, 'knowledge', 'records.mjs');
+const SEARCH_MODULE = path.join(SCRIPT_DIR, 'knowledge', 'search.mjs');
 const STORE_MODULE = path.join(SCRIPT_DIR, 'knowledge', 'store.mjs');
 const execFileAsync = promisify(execFile);
 
@@ -22,28 +23,69 @@ function makeTmp(t) {
 }
 
 async function loadModules() {
-  const [loader, store] = await Promise.all([
+  const [loader, records, search, store] = await Promise.all([
     import(pathToFileURL(LOADER_MODULE).href),
+    import(pathToFileURL(RECORD_MODULE).href),
+    import(pathToFileURL(SEARCH_MODULE).href),
     import(pathToFileURL(STORE_MODULE).href),
   ]);
-  return { ...loader, ...store };
+  return { ...loader, ...records, ...search, ...store };
 }
 
-function skillContent(id, options = {}) {
-  return [
-    '---',
-    `name: ${id}`,
-    `description: ${options.description || `Use when working with ${id}.`}`,
-    'metadata:',
-    `  spectre-category: "${options.category || 'feature'}"`,
-    `  spectre-triggers: '${JSON.stringify(options.triggers || [`${id} workflow`])}'`,
-    `  spectre-status: "${options.status || 'active'}"`,
-    `  spectre-version: "${options.version || 1}"`,
-    '---',
-    '',
-    options.body || `# ${id}\n\nExact canonical body.`,
-    '',
-  ].join('\n');
+function knowledgeRecord(id, overrides = {}) {
+  return {
+    schemaVersion: 1,
+    id,
+    kind: 'knowledge',
+    title: `Guidance for ${id}`,
+    summary: `Use when working with ${id}.`,
+    tags: ['auth'],
+    applicability: { scope: 'project' },
+    provenance: { origin: 'captured', capturedAt: '2026-07-19T00:00:00.000Z' },
+    relatedRecordIds: [],
+    category: 'pattern',
+    useWhen: `Changing ${id} behavior.`,
+    content: 'Exact canonical guidance.',
+    evidence: 'Verified by rerunning the failing command.',
+    status: 'active',
+    ...overrides,
+  };
+}
+
+function workRecord(id) {
+  return {
+    schemaVersion: 1,
+    id,
+    kind: 'work',
+    title: `Work account for ${id}`,
+    summary: 'Historical account of the imported work.',
+    tags: [],
+    applicability: { scope: 'work', workId: id },
+    provenance: { origin: 'legacy-import', capturedAt: '2026-07-19T00:00:00.000Z' },
+    relatedRecordIds: [],
+    work: {
+      requestedOutcome: 'Unknown from the imported source.',
+      scope: 'Unknown from the imported source.',
+      actualChanges: 'Unknown from the imported source.',
+      reasons: 'Unknown from the imported source.',
+      discoveries: 'Unknown from the imported source.',
+      verification: 'Unknown from the imported source.',
+      remainingWork: 'Unknown from the imported source.',
+      relatedContext: 'Unknown from the imported source.',
+      execution: { state: 'unknown' },
+      verificationState: { state: 'unknown' },
+      pullRequest: { state: 'unknown' },
+      associations: { sourceRunIds: ['legacy-run'], pullRequestIds: ['legacy-pr'], candidates: [] },
+    },
+    importedSource: {
+      body: 'Imported historical source.',
+      useWhen: 'Reviewing the imported work.',
+      cues: ['imported work'],
+      category: 'historical',
+      status: 'unreviewed',
+      version: '1',
+    },
+  };
 }
 
 async function fixture(t) {
@@ -56,19 +98,20 @@ async function fixture(t) {
   return { tmp, projectDir, spectreHome, storePath };
 }
 
-function writeRecord(storePath, id, content = skillContent(id)) {
+function writeRecord(storePath, id, record = knowledgeRecord(id), options = {}) {
   const recordDirectory = path.join(storePath, 'knowledge', id);
   fs.mkdirSync(recordDirectory, { recursive: true });
-  const recordPath = path.join(recordDirectory, 'SKILL.md');
-  fs.writeFileSync(recordPath, content);
-  return { content, recordDirectory, recordPath };
+  const recordPath = path.join(recordDirectory, options.fileName ?? 'record.json');
+  fs.writeFileSync(recordPath, options.raw ?? `${JSON.stringify(record, null, 2)}\n`);
+  return { record, recordDirectory, recordPath };
 }
 
 function assertLoadError(code) {
   return (error) => {
     assert.equal(error?.code, code);
-    assert.equal(Object.hasOwn(error || {}, 'content'), false);
-    assert.equal(Object.hasOwn(error || {}, 'body'), false);
+    for (const leaked of ['content', 'body', 'record', 'rendered']) {
+      assert.equal(Object.hasOwn(error || {}, leaked), false, leaked);
+    }
     return true;
   };
 }
@@ -80,28 +123,108 @@ function readActivity(storePath) {
     : null;
 }
 
-describe('verified exact-ID knowledge loader', () => {
-  it('returns exact current metadata, full content, safe resources, and one committed load', async (t) => {
-    const { projectDir, spectreHome, storePath, tmp } = await fixture(t);
-    const id = 'feature-exact-loader';
-    const record = writeRecord(storePath, id, skillContent(id, {
-      description: 'Use when validating the exact knowledge loader.',
-      triggers: ['exact knowledge loader', 'knowledge load <id>'],
-      version: 3,
-      body: '# Exact loader\n\nFull canonical content sentinel.',
+describe('verified exact-ID typed knowledge loader', () => {
+  it('requires an explicit expansion for a complete body over the routine allowance', async (t) => {
+    const { projectDir, spectreHome, storePath } = await fixture(t);
+    const id = 'expansion-record';
+    writeRecord(storePath, id, knowledgeRecord(id, { content: 'verified guidance '.repeat(800) }));
+    const { loadKnowledgeById } = await loadModules();
+
+    const result = await loadKnowledgeById({ projectDir, spectreHome, id, allowanceTokens: 10 });
+
+    assert.deepEqual(result, {
+      ok: true,
+      status: 'expansion-needed',
+      id,
+      kind: 'knowledge',
+      applicability: { scope: 'project' },
+      revisionToken: result.revisionToken,
+      estimatedTokens: result.estimatedTokens,
+      historical: false,
+      activation: 'current-guidance',
+      allowanceTokens: 10,
+      reason: 'complete-record-exceeds-allowance',
+    });
+    assert.match(result.revisionToken, /^sha256:[a-f0-9]{64}$/);
+    assert.ok(result.estimatedTokens > result.allowanceTokens);
+    for (const bodyField of ['record', 'rendered', 'resources', 'recordPath', 'recordDirectory']) {
+      assert.equal(Object.hasOwn(result, bodyField), false, bodyField);
+    }
+    assert.equal(readActivity(storePath), null);
+  });
+
+  it('keeps unrelated work-scoped guidance historical and out of current activation', async (t) => {
+    const { projectDir, spectreHome, storePath } = await fixture(t);
+    const id = 'other-work-guidance';
+    writeRecord(storePath, id, knowledgeRecord(id, {
+      applicability: { scope: 'work', workId: 'originating-work' },
     }));
-    fs.mkdirSync(path.join(record.recordDirectory, 'references', 'nested'), { recursive: true });
-    fs.writeFileSync(path.join(record.recordDirectory, 'references', 'guide.md'), 'guide\n');
+    const { loadKnowledgeById } = await loadModules();
+
+    const result = await loadKnowledgeById({
+      projectDir,
+      spectreHome,
+      id,
+      workId: 'unrelated-work',
+    });
+
+    assert.equal(result.historical, true);
+    assert.equal(result.activation, 'historical');
+    assert.deepEqual(result.applicability, { scope: 'work', workId: 'originating-work' });
+    assert.equal(readActivity(storePath), null);
+  });
+
+  it('rejects an on-disk tamper after a search refresh without releasing a body', async (t) => {
+    const { projectDir, spectreHome, storePath } = await fixture(t);
+    const id = 'persisted-integrity-record';
+    const written = writeRecord(storePath, id);
+    const { loadKnowledgeById, refreshKnowledgeIndex } = await loadModules();
+    refreshKnowledgeIndex(storePath);
+    fs.writeFileSync(written.recordPath, JSON.stringify({
+      ...written.record,
+      content: 'Tampered after the registered revision was indexed.',
+    }, null, 2));
+
+    refreshKnowledgeIndex(storePath);
+    await assert.rejects(
+      loadKnowledgeById({ projectDir, spectreHome, id }),
+      assertLoadError('KNOWLEDGE_CHANGED_DURING_READ'),
+    );
+    assert.equal(readActivity(storePath), null);
+  });
+
+  it('recovers an interrupted replacement before verifying a load', async (t) => {
+    const { projectDir, spectreHome, storePath } = await fixture(t);
+    const id = 'recoverable-load-record';
+    const written = writeRecord(storePath, id);
+    fs.renameSync(
+      written.recordDirectory,
+      `${written.recordDirectory}.previous-${process.pid}-${Date.now()}`,
+    );
+    const { loadKnowledgeById } = await loadModules();
+
+    const result = await loadKnowledgeById({ projectDir, spectreHome, id });
+
+    assert.equal(result.record.content, 'Exact canonical guidance.');
+    assert.equal(fs.existsSync(written.recordDirectory), true);
+  });
+
+  it('returns the rendered typed record, safe resources, and one committed load', async (t) => {
+    const { projectDir, spectreHome, storePath, tmp } = await fixture(t);
+    const id = 'exact-loader-record';
+    const written = writeRecord(storePath, id);
+    fs.mkdirSync(path.join(written.recordDirectory, 'references', 'nested'), { recursive: true });
+    fs.writeFileSync(path.join(written.recordDirectory, 'references', 'guide.md'), 'guide\n');
     fs.writeFileSync(
-      path.join(record.recordDirectory, 'references', 'nested', 'raw.bin'),
+      path.join(written.recordDirectory, 'references', 'nested', 'raw.bin'),
       Buffer.from([0, 10, 13, 255, 42]),
     );
     const outside = path.join(tmp, 'outside-secret.txt');
     fs.writeFileSync(outside, 'outside\n');
-    fs.symlinkSync(outside, path.join(record.recordDirectory, 'references', 'escape.txt'));
+    fs.symlinkSync(outside, path.join(written.recordDirectory, 'references', 'escape.txt'));
     fs.symlinkSync(
-      path.join(record.recordDirectory, 'references', 'guide.md'),
-      path.join(record.recordDirectory, 'references', 'guide-link.md'),
+      path.join(written.recordDirectory, 'references', 'guide.md'),
+      path.join(written.recordDirectory, 'references', 'guide-link.md'),
     );
 
     const { loadKnowledgeById } = await loadModules();
@@ -112,26 +235,28 @@ describe('verified exact-ID knowledge loader', () => {
       now: () => Date.parse('2026-07-22T20:00:00.000Z'),
     });
 
-    assert.deepEqual(result, {
+    const { rendered, ...rest } = result;
+    assert.deepEqual(rest, {
       ok: true,
+      status: 'loaded',
       id,
-      category: 'feature',
-      description: 'Use when validating the exact knowledge loader.',
-      triggers: ['exact knowledge loader', 'knowledge load <id>'],
-      status: 'active',
-      version: 3,
-      sourceFingerprint: `sha256:${createHash('sha256').update(record.content).digest('hex')}`,
-      content: record.content,
-      recordPath: record.recordPath,
-      recordDirectory: record.recordDirectory,
+      kind: 'knowledge',
+      applicability: { scope: 'project' },
+      revisionToken: rest.revisionToken,
+      estimatedTokens: rest.estimatedTokens,
+      historical: false,
+      activation: 'current-guidance',
+      record: written.record,
+      recordPath: written.recordPath,
+      recordDirectory: written.recordDirectory,
       resources: [
         {
           relativePath: 'references/guide.md',
-          absolutePath: path.join(record.recordDirectory, 'references', 'guide.md'),
+          absolutePath: path.join(written.recordDirectory, 'references', 'guide.md'),
         },
         {
           relativePath: path.join('references', 'nested', 'raw.bin'),
-          absolutePath: path.join(record.recordDirectory, 'references', 'nested', 'raw.bin'),
+          absolutePath: path.join(written.recordDirectory, 'references', 'nested', 'raw.bin'),
         },
       ],
       activity: {
@@ -139,30 +264,73 @@ describe('verified exact-ID knowledge loader', () => {
         lastLoadedAt: '2026-07-22T20:00:00.000Z',
       },
     });
+    assert.match(rendered, /^# Guidance for exact-loader-record\n/);
+    assert.match(rendered, /Exact canonical guidance\./);
+    assert.match(rendered, /## Use when/);
+    assert.equal(rendered.includes('"schemaVersion"'), false);
     assert.equal(result.resources.some(({ absolutePath }) => absolutePath === outside), false);
-    assert.equal(result.resources.some(({ relativePath }) => relativePath === 'SKILL.md'), false);
-
-    const activity = readActivity(storePath);
-    assert.equal(activity.records[id].versions['3'].successfulLoads, 1);
+    assert.equal(
+      result.resources.some(({ relativePath }) => relativePath === 'record.json'),
+      false,
+    );
+    assert.equal(readActivity(storePath).records[id].revisions[result.revisionToken].successfulLoads, 1);
   });
 
-  it('increments the exact id@version exactly once per invocation', async (t) => {
+  it('loads a work record as labeled historical evidence', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
-    const id = 'procedures-repeat-load';
-    writeRecord(storePath, id, skillContent(id, { category: 'procedures', version: 4 }));
+    const id = 'work-imported-account';
+    writeRecord(storePath, id, workRecord(id));
+    const { loadKnowledgeById } = await loadModules();
+
+    const result = await loadKnowledgeById({ projectDir, spectreHome, id });
+
+    assert.equal(result.kind, 'work');
+    assert.match(result.rendered, /historical evidence/i);
+    assert.equal(result.historical, true);
+    assert.equal(readActivity(storePath), null);
+  });
+
+  it('keeps project and matching-work work records historical evidence', async (t) => {
+    const { projectDir, spectreHome, storePath } = await fixture(t);
+    const projectId = 'project-work-account';
+    const matchingId = 'matching-work-account';
+    writeRecord(storePath, projectId, {
+      ...workRecord(projectId),
+      applicability: { scope: 'project' },
+    });
+    writeRecord(storePath, matchingId, workRecord(matchingId));
+    const { loadKnowledgeById } = await loadModules();
+
+    const [projectWork, matchingWork] = await Promise.all([
+      loadKnowledgeById({ projectDir, spectreHome, id: projectId }),
+      loadKnowledgeById({ projectDir, spectreHome, id: matchingId, workId: matchingId }),
+    ]);
+
+    for (const result of [projectWork, matchingWork]) {
+      assert.equal(result.historical, true);
+      assert.equal(result.activation, 'historical');
+      assert.match(result.rendered, /Historical work record: historical evidence only/);
+    }
+    assert.equal(readActivity(storePath), null);
+  });
+
+  it('increments the exact record activity exactly once per invocation', async (t) => {
+    const { projectDir, spectreHome, storePath } = await fixture(t);
+    const id = 'repeat-load-record';
+    writeRecord(storePath, id, knowledgeRecord(id, { category: 'decision' }));
     const { loadKnowledgeById } = await loadModules();
 
     await loadKnowledgeById({ projectDir, spectreHome, id });
     const second = await loadKnowledgeById({ projectDir, spectreHome, id });
 
     assert.equal(second.activity.successfulLoads, 2);
-    assert.equal(readActivity(storePath).records[id].versions['4'].successfulLoads, 2);
+    assert.equal(readActivity(storePath).records[id].revisions[second.revisionToken].successfulLoads, 2);
   });
 
   it('serializes concurrent exact loads without losing increments', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
-    const id = 'procedures-concurrent-load';
-    writeRecord(storePath, id, skillContent(id, { category: 'procedures', version: 2 }));
+    const id = 'concurrent-load-record';
+    writeRecord(storePath, id, knowledgeRecord(id, { category: 'gotcha' }));
     const loaderUrl = pathToFileURL(LOADER_MODULE).href;
     const worker = [
       `import { loadKnowledgeById } from ${JSON.stringify(loaderUrl)};`,
@@ -178,45 +346,68 @@ describe('verified exact-ID knowledge loader', () => {
     )));
 
     assert.equal(
-      readActivity(storePath).records[id].versions['2'].successfulLoads,
+      Object.values(readActivity(storePath).records[id].revisions)[0].successfulLoads,
       invocations,
     );
   });
 
-  it('distinguishes unknown, inactive, and invalid exact records without content or activity', async (t) => {
+  it('distinguishes unknown, inactive, retired, and invalid records without content', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
     writeRecord(
       storePath,
-      'feature-inactive-record',
-      skillContent('feature-inactive-record', { status: 'archived' }),
+      'inactive-record',
+      knowledgeRecord('inactive-record', { status: 'archived' }),
     );
-    writeRecord(storePath, 'feature-invalid-record', '---\nname: feature-invalid-record\n---\ninvalid\n');
+    writeRecord(storePath, 'invalid-record', null, {
+      raw: JSON.stringify({ schemaVersion: 3, id: 'invalid-record' }),
+    });
+    writeRecord(storePath, 'retired-skill-record', null, {
+      fileName: 'SKILL.md',
+      raw: '---\nname: retired-skill-record\n---\nretired\n',
+    });
     const { loadKnowledgeById } = await loadModules();
 
     await assert.rejects(
-      loadKnowledgeById({ projectDir, spectreHome, id: 'feature-missing-record' }),
+      loadKnowledgeById({ projectDir, spectreHome, id: 'missing-record' }),
       assertLoadError('KNOWLEDGE_NOT_FOUND'),
     );
     await assert.rejects(
-      loadKnowledgeById({ projectDir, spectreHome, id: 'feature-inactive-record' }),
+      loadKnowledgeById({ projectDir, spectreHome, id: 'inactive-record' }),
       assertLoadError('KNOWLEDGE_NOT_ACTIVE'),
     );
+    const inspected = await loadKnowledgeById({
+      projectDir,
+      spectreHome,
+      id: 'inactive-record',
+      inspectHistorical: true,
+    });
+    assert.equal(inspected.historical, true);
+    assert.equal(inspected.activation, 'historical');
+    assert.equal(readActivity(storePath), null);
     await assert.rejects(
-      loadKnowledgeById({ projectDir, spectreHome, id: 'feature-invalid-record' }),
+      loadKnowledgeById({ projectDir, spectreHome, id: 'invalid-record' }),
       assertLoadError('KNOWLEDGE_INVALID'),
     );
     await assert.rejects(
-      loadKnowledgeById({ projectDir, spectreHome, id: '../feature-escape' }),
+      loadKnowledgeById({ projectDir, spectreHome, id: 'retired-skill-record' }),
+      (error) => assertLoadError('KNOWLEDGE_INVALID')(error) && /migrat/i.test(error.message),
+    );
+    await assert.rejects(
+      loadKnowledgeById({ projectDir, spectreHome, id: '../record-escape' }),
       assertLoadError('KNOWLEDGE_INVALID'),
     );
     assert.equal(readActivity(storePath), null);
   });
 
-  it('returns no body and no activity when the source fingerprint races', async (t) => {
+  it('returns no body and no activity when the typed package is tampered with', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
-    const id = 'gotchas-fingerprint-race';
-    const record = writeRecord(storePath, id, skillContent(id, { category: 'gotchas' }));
-    const changed = record.content.replace('Exact canonical body.', 'Changed canonical body.');
+    const id = 'tampered-record';
+    const written = writeRecord(storePath, id);
+    const tampered = JSON.stringify(
+      { ...written.record, content: 'Tampered guidance.' },
+      null,
+      2,
+    );
     const { loadKnowledgeById } = await loadModules();
 
     await assert.rejects(
@@ -224,7 +415,7 @@ describe('verified exact-ID knowledge loader', () => {
         projectDir,
         spectreHome,
         id,
-        recordReadOptions: { readFile: () => changed },
+        recordReadOptions: { readFile: () => tampered },
       }),
       assertLoadError('KNOWLEDGE_CHANGED_DURING_READ'),
     );
@@ -233,9 +424,9 @@ describe('verified exact-ID knowledge loader', () => {
 
   it('rejects a queued resource directory swapped to an external symlink before traversal', async (t) => {
     const { projectDir, spectreHome, storePath, tmp } = await fixture(t);
-    const id = 'gotchas-resource-directory-swap';
-    const record = writeRecord(storePath, id, skillContent(id, { category: 'gotchas' }));
-    const referencesDirectory = path.join(record.recordDirectory, 'references');
+    const id = 'resource-directory-swap';
+    const written = writeRecord(storePath, id);
+    const referencesDirectory = path.join(written.recordDirectory, 'references');
     fs.mkdirSync(referencesDirectory, { recursive: true });
     fs.writeFileSync(path.join(referencesDirectory, 'inside.md'), 'inside\n');
     const outsideDirectory = path.join(tmp, 'outside-resources');
@@ -245,7 +436,7 @@ describe('verified exact-ID knowledge loader', () => {
     let recordDirectoryReads = 0;
     fs.readdirSync = function injectedDirectorySwap(currentPath, options) {
       const entries = originalReaddirSync.call(this, currentPath, options);
-      if (path.resolve(currentPath) === record.recordDirectory) {
+      if (path.resolve(currentPath) === written.recordDirectory) {
         recordDirectoryReads += 1;
         if (recordDirectoryReads === 2) {
           fs.rmSync(referencesDirectory, { recursive: true, force: true });
@@ -272,7 +463,7 @@ describe('verified exact-ID knowledge loader', () => {
 
   it('preserves corrupt activity bytes and returns no body', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
-    const id = 'feature-corrupt-activity';
+    const id = 'corrupt-activity-record';
     writeRecord(storePath, id);
     const activityPath = path.join(storePath, 'activity.json');
     const corrupt = '{not valid activity}\n';
@@ -288,7 +479,7 @@ describe('verified exact-ID knowledge loader', () => {
 
   it('maps store lock timeout without returning content or changing activity', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
-    const id = 'feature-locked-load';
+    const id = 'locked-load-record';
     writeRecord(storePath, id);
     fs.writeFileSync(path.join(storePath, '.spectre.lock'), JSON.stringify({
       pid: process.pid,
@@ -311,7 +502,7 @@ describe('verified exact-ID knowledge loader', () => {
 
   it('maps atomic activity write failure and never releases prepared content', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
-    const id = 'feature-write-failure';
+    const id = 'write-failure-record';
     writeRecord(storePath, id);
     const { loadKnowledgeById } = await loadModules();
     await loadKnowledgeById({ projectDir, spectreHome, id });
@@ -331,6 +522,24 @@ describe('verified exact-ID knowledge loader', () => {
       }),
       assertLoadError('KNOWLEDGE_ACTIVITY_WRITE_FAILED'),
     );
-    assert.equal(readActivity(storePath).records[id].versions['1'].successfulLoads, 1);
+    const activity = readActivity(storePath).records[id].revisions;
+    assert.equal(Object.values(activity)[0].successfulLoads, 1);
+  });
+
+  it('renders the human load output from the typed record', async (t) => {
+    const { projectDir, spectreHome, storePath } = await fixture(t);
+    const id = 'human-output-record';
+    const written = writeRecord(storePath, id);
+    fs.writeFileSync(path.join(written.recordDirectory, 'guide.md'), 'guide\n');
+    const { formatKnowledgeLoadHuman, loadKnowledgeById } = await loadModules();
+
+    const output = formatKnowledgeLoadHuman(
+      await loadKnowledgeById({ projectDir, spectreHome, id }),
+    );
+
+    assert.match(output, /^# Guidance for human-output-record\n/);
+    assert.match(output, /Exact canonical guidance\./);
+    assert.match(output, /SPECTRE_KNOWLEDGE_RESOURCE_LOCATIONS=\{/);
+    assert.equal(output.includes('"schemaVersion"'), false);
   });
 });

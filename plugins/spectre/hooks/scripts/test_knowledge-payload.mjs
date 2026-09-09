@@ -1,13 +1,9 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { measurePayload, PAYLOAD_BOUNDARIES } from './knowledge/payload.mjs';
-import { parseKnowledgeRecord } from './knowledge/records.mjs';
 
 function repeatToLength(unit, length) {
   return unit.repeat(Math.ceil(length / unit.length)).slice(0, length);
@@ -81,19 +77,12 @@ describe('knowledge registry payload estimator', () => {
     assert.equal(measurePayload('codex', frameCore(probe)).ok, true);
   });
 
-  it('rejects aggregate short numeric tables below the long-run threshold', (t) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-payload-table-'));
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  it('rejects aggregate short numeric tables below the long-run threshold', () => {
     const content = numericTableRecord(
       'feature-numeric-table',
       PAYLOAD_BOUNDARIES.numericTableUnsafeChars,
       '1234567890123456789012345678901 \n',
     );
-    const recordDir = path.join(root, 'feature-numeric-table');
-    fs.mkdirSync(recordDir);
-    const skillPath = path.join(recordDir, 'SKILL.md');
-    fs.writeFileSync(skillPath, content);
-    assert.equal(parseKnowledgeRecord(skillPath).record.id, 'feature-numeric-table');
     assert.equal(Math.max(...[...content.matchAll(/\d+/g)].map(([run]) => run.length)), 31);
     assert.equal(/[A-Za-z0-9]{32,}/.test(content), false);
     assert.equal(measurePayload('codex', frameCore(content)).ok, false);

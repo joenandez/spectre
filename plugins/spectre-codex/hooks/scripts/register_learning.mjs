@@ -4,76 +4,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  registerCanonicalKnowledge,
-  serializeKnowledgeError,
-} from './knowledge/registration.mjs';
+import { main as knowledgeCliMain, parseArgs, writeCliError } from './knowledge-cli.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 
-function parseArgs(argv) {
-  const args = { json: false };
-  for (let index = 0; index < argv.length; index += 1) {
-    const value = argv[index];
-    if (value === '--json') {
-      args.json = true;
-      continue;
-    }
-    if (value === '--project-root' || value === '--project-dir') {
-      args.projectRoot = argv[index + 1];
-      index += 1;
-      continue;
-    }
-    if (value === '--record') {
-      args.recordPath = argv[index + 1];
-      index += 1;
-      continue;
-    }
-    if (value === '--lock-timeout-ms') {
-      args.lockTimeoutMs = Number(argv[index + 1]);
-      index += 1;
-      continue;
-    }
-  }
-  return args;
+/** Legacy executable name only; command behavior lives in the canonical public CLI. */
+export async function main(argv = process.argv.slice(2)) {
+  return knowledgeCliMain(['register', ...argv]);
 }
 
-function writeSuccess(result, json) {
-  if (json) {
-    process.stdout.write(`${JSON.stringify(result)}\n`);
-    return;
-  }
-  process.stdout.write(`Registered knowledge record ${result.id}\n`);
-}
-
-function writeFailure(error, json) {
-  const payload = serializeKnowledgeError(error);
-  if (json) {
-    process.stdout.write(`${JSON.stringify(payload)}\n`);
-  } else {
-    process.stderr.write(`${payload.message}\n`);
-  }
-}
-
-async function main(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv);
-  try {
-    const result = await registerCanonicalKnowledge({
-      projectDir: args.projectRoot,
-      recordPath: args.recordPath,
-      lockOptions: Number.isFinite(args.lockTimeoutMs)
-        ? { timeoutMs: args.lockTimeoutMs, retryDelayMs: 5 }
-        : undefined,
-    });
-    writeSuccess(result, args.json);
-  } catch (error) {
-    writeFailure(error, args.json);
-    process.exitCode = 1;
-  }
-}
-
-export { main, parseArgs };
+export { parseArgs };
 
 if (process.argv[1] && fs.realpathSync(path.resolve(process.argv[1])) === fs.realpathSync(__filename)) {
-  main();
+  main().catch((error) => writeCliError(error));
 }

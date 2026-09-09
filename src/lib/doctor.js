@@ -18,7 +18,8 @@ import {
   resolveCodexHome
 } from './paths.js';
 import {
-  parseKnowledgeRecord
+  parseKnowledgeRecord,
+  RECORD_FILE_NAME
 } from '../../plugins/spectre/hooks/scripts/knowledge/records.mjs';
 import {
   resolveProjectStore
@@ -432,13 +433,13 @@ function readIndexStatus(indexPath) {
     const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
     if (
       !index
-      || index.schemaVersion !== 1
+      || index.schemaVersion !== 2
       || !Array.isArray(index.records)
     ) {
       return {
         status: 'malformed',
         recordCount: 0,
-        error: 'Expected schemaVersion 1 with a records array.'
+        error: 'Expected schemaVersion 2 with a records array.'
       };
     }
     return { status: 'valid', recordCount: index.records.length };
@@ -462,19 +463,19 @@ function inspectRecords(storePath) {
   for (const entry of fs.readdirSync(knowledgeDir, { withFileTypes: true })
     .filter(candidate => candidate.isDirectory() && !candidate.isSymbolicLink())
     .sort((left, right) => left.name.localeCompare(right.name))) {
-    const skillPath = path.join(knowledgeDir, entry.name, 'SKILL.md');
-    if (!fs.existsSync(skillPath)) continue;
+    const recordPath = path.join(knowledgeDir, entry.name, RECORD_FILE_NAME);
+    if (!fs.existsSync(recordPath)) continue;
     try {
-      const parsed = parseKnowledgeRecord(skillPath);
+      const parsed = parseKnowledgeRecord(recordPath);
       validRecords.push({
         id: parsed.record.id,
         status: parsed.record.status,
-        version: parsed.record.version,
-        path: skillPath
+        revisionToken: parsed.revisionToken,
+        path: recordPath
       });
     } catch (error) {
       invalidRecords.push({
-        path: skillPath,
+        path: recordPath,
         message: error instanceof Error ? error.message : String(error)
       });
     }

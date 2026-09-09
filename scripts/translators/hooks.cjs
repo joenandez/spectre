@@ -60,7 +60,7 @@ function rewriteHookCommand(command) {
 function rewriteRuntimeScript(source) {
   return source
     .replace(
-      /\bspectre knowledge (search|load|register|migrate)\b/g,
+      /\bspectre knowledge (search|tags|load|register|work|history|inspect|registry|migrate)\b/g,
       (_match, operation) =>
         `node "\${PLUGIN_ROOT}/hooks/scripts/knowledge-cli.mjs" ${operation}`,
     );
