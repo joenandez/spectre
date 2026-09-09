@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "feature": "learn-v3",
+  "evaluation": "knowledge-v15",
+  "status": "intentionally-partial",
+  "decision": {
+    "authority": "user",
+    "decision": "Stop the expensive native matrix, report the evidence already collected, and finish the feature.",
+    "effect": "No provider/model cells were started, resumed, or retried while producing this report."
+  },
+  "acceptance": {
+    "fullMatrix": {
+      "requiredCells": 144,
+      "completedCells": 98,
+      "status": "waived-by-user",
+      "passed": false,
+      "reason": "A complete, reconciled 144-cell matrix is required before the comparative acceptance thresholds can be evaluated."
+    },
+    "proof": {
+      "status": "skipped-by-user",
+      "passed": false,
+      "reason": "The user explicitly requested that the full proof run be skipped."
+    }
+  },
+  "frozenInput": {
+    "freezePath": "/var/folders/qm/xyc9f8dj52v72q7bk63q5w9w0000gn/T/learnv3-knowledge-eval-OvzAoq/freeze-v15.json",
+    "freezeFileSha256": "sha256:66ee2c0f020f807532be28a1f7b101cc5d28252dcfe568194ba2cb5570591013",
+    "judgmentsPath": "/var/folders/qm/xyc9f8dj52v72q7bk63q5w9w0000gn/T/learnv3-knowledge-eval-OvzAoq/primary-judgments-v15.json",
+    "judgmentsFileSha256": "sha256:3ceb6326a0da37147c8638f665c3b83db41732d180fda71d865827a6a1002b84",
+    "baselineCommit": "1cd1f035a253e9d7ef5086693ab9f1d0b11d360b",
+    "hashes": {
+      "fixtures": "sha256:99f2dab7369d25131ff1cc6c94a04187daa1486e1d9434c69ab4fe9d3b70b078",
+      "oracle": "sha256:f126daf7599a1af01427e7890b7eae57011c13a0183ea4ab9d519570d30b5308",
+      "configuration": "sha256:ccfea1e247dcfbdc22626330acf85b1b93d7b698a63797c6804d773abeffdb6b",
+      "candidate": "sha256:e262f4fb62f6d0231339f9bea936af57ca97e7859bd9ad7d45fc3cf6a55ffa40",
+      "nativePipelineInputs": "sha256:b221e0839887cc43c9dfd5e1acb8c34e94d7cc0625825aba6681225905bc248e"
+    }
+  },
+  "matrix": {
+    "caseFamilies": [
+      "accepted-decision",
+      "alias-tag-reuse",
+      "blocker-resolution",
+      "critical-old-constraint",
+      "deliberate-history",
+      "imported-work",
+      "irrelevant-task",
+      "lifecycle-identity",
+      "longitudinal-correction",
+      "pattern-speculation",
+      "verified-gotcha",
+      "worktree-applicability"
+    ],
+    "conditions": ["no-knowledge", "baseline", "candidate"],
+    "hosts": ["claude", "codex"],
+    "repeats": [1, 2],
+    "plannedCells": 144
+  },
+  "observed": {
+    "cachedCells": 98,
+    "cachedStatusCounts": {"pending": 84, "invalid": 13, "failed": 1},
+    "exactHashJudgments": 93,
+    "semanticJudgments": {
+      "correct": 53,
+      "incorrect": 40,
+      "requiredRecallBeforeDecision": {"true": 86, "false": 7},
+      "tokenMetricsPresent": 75,
+      "unnecessaryHistoryLoadsInPresentMetrics": 14,
+      "justifiedExpansions": 3
+    },
+    "interpretation": "These are descriptive counts over the cached and manually judged cells only. They are not a comparison result, a threshold result, or an estimate for the unrun cells."
+  },
+  "cachedInvalid": [
+    {"id": "accepted-decision:candidate:claude:1", "reason": "candidate evaluation trace is unavailable"},
+    {"id": "blocker-resolution:candidate:claude:1", "reason": "successful capture trace evidence is missing"},
+    {"id": "deliberate-history:baseline:claude:1", "reason": "native load-before-artifact evidence is missing"},
+    {"id": "deliberate-history:baseline:claude:2", "reason": "native load-before-artifact evidence is missing"},
+    {"id": "deliberate-history:baseline:codex:1", "reason": "direct knowledge-store bypass detected"},
+    {"id": "deliberate-history:baseline:codex:2", "reason": "direct knowledge-store bypass detected"},
+    {"id": "imported-work:candidate:codex:1", "reason": "candidate evaluation trace is unavailable"},
+    {"id": "imported-work:candidate:codex:2", "reason": "candidate evaluation trace is unavailable"},
+    {"id": "lifecycle-identity:candidate:claude:1", "reason": "direct knowledge-store bypass detected"},
+    {"id": "lifecycle-identity:candidate:codex:1", "reason": "candidate evaluation trace is unavailable"},
+    {"id": "pattern-speculation:baseline:claude:1", "reason": "direct knowledge-store bypass detected"},
+    {"id": "pattern-speculation:candidate:claude:1", "reason": "candidate evaluation trace is unavailable"},
+    {"id": "pattern-speculation:candidate:claude:2", "reason": "candidate evaluation trace is unavailable"}
+  ],
+  "cachedFailed": [
+    {
+      "id": "verified-gotcha:candidate:claude:2",
+      "status": "failed",
+      "exitCode": 1,
+      "deliverable": null,
+      "reason": "host status is failed"
+    }
+  ],
+  "cachedUnjudged": [
+    "blocker-resolution:baseline:claude:2",
+    "blocker-resolution:candidate:claude:1",
+    "verified-gotcha:candidate:claude:2",
+    "worktree-applicability:candidate:codex:1",
+    "worktree-applicability:candidate:codex:2"
+  ],
+  "notRun": [
+    "accepted-decision:baseline:codex:1",
+    "accepted-decision:baseline:codex:2",
+    "accepted-decision:candidate:codex:1",
+    "accepted-decision:candidate:codex:2",
+    "accepted-decision:no-knowledge:codex:1",
+    "blocker-resolution:baseline:codex:1",
+    "blocker-resolution:baseline:codex:2",
+    "blocker-resolution:candidate:claude:2",
+    "blocker-resolution:candidate:codex:1",
+    "blocker-resolution:candidate:codex:2",
+    "blocker-resolution:no-knowledge:codex:1",
+    "blocker-resolution:no-knowledge:codex:2",
+    "lifecycle-identity:baseline:claude:1",
+    "lifecycle-identity:baseline:claude:2",
+    "lifecycle-identity:baseline:codex:1",
+    "lifecycle-identity:baseline:codex:2",
+    "lifecycle-identity:candidate:claude:2",
+    "lifecycle-identity:candidate:codex:2",
+    "lifecycle-identity:no-knowledge:claude:1",
+    "lifecycle-identity:no-knowledge:claude:2",
+    "lifecycle-identity:no-knowledge:codex:1",
+    "lifecycle-identity:no-knowledge:codex:2",
+    "longitudinal-correction:baseline:claude:1",
+    "longitudinal-correction:baseline:claude:2",
+    "longitudinal-correction:baseline:codex:1",
+    "longitudinal-correction:baseline:codex:2",
+    "longitudinal-correction:candidate:claude:1",
+    "longitudinal-correction:candidate:claude:2",
+    "longitudinal-correction:candidate:codex:1",
+    "longitudinal-correction:candidate:codex:2",
+    "longitudinal-correction:no-knowledge:claude:1",
+    "longitudinal-correction:no-knowledge:claude:2",
+    "longitudinal-correction:no-knowledge:codex:1",
+    "longitudinal-correction:no-knowledge:codex:2",
+    "pattern-speculation:baseline:codex:1",
+    "pattern-speculation:baseline:codex:2",
+    "pattern-speculation:candidate:codex:1",
+    "pattern-speculation:candidate:codex:2",
+    "pattern-speculation:no-knowledge:codex:1",
+    "pattern-speculation:no-knowledge:codex:2",
+    "verified-gotcha:baseline:codex:1",
+    "verified-gotcha:baseline:codex:2",
+    "verified-gotcha:candidate:codex:1",
+    "verified-gotcha:candidate:codex:2",
+    "verified-gotcha:no-knowledge:codex:1",
+    "verified-gotcha:no-knowledge:codex:2"
+  ]
+}

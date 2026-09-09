@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "classification": {
+    "value": "INCONCLUSIVE",
+    "decidingRule": "host-split valid irrelevant-task pairs, missing Codex full-cycle usage, and four integrity-invalid candidate correction cells prevent a terminal classification",
+    "evidence": [
+      "irrelevant-task:codex:1: candidate noncritical-elaboration versus grounded no-knowledge control",
+      "irrelevant-task:codex:2: candidate noncritical-elaboration versus grounded no-knowledge control"
+    ],
+    "precedence": "The repeated valid Codex irrelevant-task losses are a negative signal, but they do not override the predeclared INCONCLUSIVE triggers: valid pair directions split by host, Codex full-cycle usage is missing, and every candidate correction cell is integrity-invalid.",
+    "negativeSignal": "irrelevant-task:codex:1 and irrelevant-task:codex:2 are repeated candidate grounding losses against grounded no-knowledge controls",
+    "correctionBenefit": "INCONCLUSIVE",
+    "correctionReason": "All four candidate longitudinal-correction cells failed the required trace-integrity gate, and their artifact-only directions split by host: two Claude losses and two Codex wins."
+  },
+  "provenance": {
+    "planSha256": "05639d749829b9f8daccac6825acbab73c349c49b66158143c1408dc42c98778",
+    "contractPath": ".spectre/features/learn-v3-targeted-eval/validation/targeted-contract.json",
+    "freezeSha256": "36f2a88d0d3e3d2c3465f0e338507521297e63b7b982d3a6070fe3048c8f4e78",
+    "candidateSourceHead": "d2932ebec28cb61d37ac061edab7afd9a146d746",
+    "localEvidenceRoot": "/tmp/learnv3-targeted-eval.zeg03j",
+    "unjudgedReportSha256": "ec842f6aad895fbdb6e9d2f93b9295c8f5666df4c42671c0d9282f4a111d114e",
+    "reviewedReportSha256": "900ce218544299782aa0d8e093f3b61d14f3aebb348a0c7ec6fbb28322fbe3ae",
+    "primaryJudgmentsSha256": "745df16e8a686538ee9d91644de934e80fb99d5b06a5e4b841156dc222727dbf",
+    "blindJudgmentsSha256": "a552596515c1555d70ef0eba4d5b15b3a83fe2e8e3965b82ae579e45bcc0fa07",
+    "rawLogTreeSha256": "sha256:89b22275158da2673835156cac9a3a9357f9c5c11ede095022a432a58f11bf88",
+    "rawLogFiles": 80,
+    "stdoutLogs": 40,
+    "stderrLogs": 40
+  },
+  "counts": {
+    "cells": 16,
+    "nativeSessions": 40,
+    "runtimeCompleted": 16,
+    "integrityValid": 12,
+    "integrityInvalid": 4,
+    "taskOutcome": {
+      "correct-complete": 13,
+      "safe-deferral": 1,
+      "incorrect": 2
+    },
+    "usageCoverage": {
+      "complete": 8,
+      "unknown": 8
+    },
+    "automaticRetries": 0
+  },
+  "cells": [
+    { "id": "irrelevant-task:candidate:claude:1", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "grounded", "knowledgeRelevance": "irrelevant", "artifactHash": "sha256:182fc46274aba9e72d9e08a6eebb6a9b89ab661019895ee1eca87b53f1d9b78b", "loadedBodyTokens": 0, "sessionStartTokens": 185, "nativeFullCycleTokens": 181147, "elapsedMs": null },
+    { "id": "irrelevant-task:candidate:claude:2", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "grounded", "knowledgeRelevance": "irrelevant", "artifactHash": "sha256:4c28db9587d8e25318eacddf9e1095a15c61a8564171a863a1957720c9ee4490", "loadedBodyTokens": 0, "sessionStartTokens": 185, "nativeFullCycleTokens": 178518, "elapsedMs": null },
+    { "id": "irrelevant-task:candidate:codex:1", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "noncritical-elaboration", "knowledgeRelevance": "irrelevant", "artifactHash": "sha256:b9e6dc5b8ea550602da064ff760e0af030b239a002ffc45293be406e48128ec6", "loadedBodyTokens": 0, "sessionStartTokens": 199, "nativeFullCycleTokens": null, "elapsedMs": null },
+    { "id": "irrelevant-task:candidate:codex:2", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "noncritical-elaboration", "knowledgeRelevance": "irrelevant", "artifactHash": "sha256:43022a8eabb85be8e211349735cf7107154f0f0f41093cad7c993e174fa173e5", "loadedBodyTokens": 0, "sessionStartTokens": 200, "nativeFullCycleTokens": null, "elapsedMs": null },
+    { "id": "irrelevant-task:no-knowledge:claude:1", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "grounded", "knowledgeRelevance": "none", "artifactHash": "sha256:037d8d29592adb81ee8670a6618170da50b308e7da2ee92137e3c12991ac59a0", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": 197735, "elapsedMs": null },
+    { "id": "irrelevant-task:no-knowledge:claude:2", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "noncritical-elaboration", "knowledgeRelevance": "none", "artifactHash": "sha256:adf38428064950fa2293d39e4627e4a67a1584b27ad8e747186a6579a981358f", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": 182588, "elapsedMs": null },
+    { "id": "irrelevant-task:no-knowledge:codex:1", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "grounded", "knowledgeRelevance": "none", "artifactHash": "sha256:4b6d4f686dd07c697a816f5fc4ff3252f90a734ab68b8f25af292f33f65cf17c", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": null, "elapsedMs": null },
+    { "id": "irrelevant-task:no-knowledge:codex:2", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "not-applicable", "staleValueUsed": false, "grounding": "grounded", "knowledgeRelevance": "none", "artifactHash": "sha256:1aadcb0f885fef148b3113b3d1b32bb1e9e6d38d9bac6ce4210fab2b3182fb8f", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": null, "elapsedMs": null },
+    { "id": "longitudinal-correction:candidate:claude:1", "integrity": "INVALID", "integrityReason": "trace lacks native history-read evidence; one bypass finding", "taskOutcome": "safe-deferral", "currentConstraint": "missing", "staleValueUsed": false, "grounding": "critical-unsupported-claim", "knowledgeRelevance": "relevant", "artifactHash": "sha256:ef01790376f34265a6183e81bcc0c6341a092ee7e9fbc68a5d73ca5bd3e7edc1", "bypassCount": 1, "sessionStartTokens": 804, "nativeFullCycleTokens": 1714202, "elapsedMs": null },
+    { "id": "longitudinal-correction:candidate:claude:2", "integrity": "INVALID", "integrityReason": "trace lacks native history-read evidence; two bypass findings", "taskOutcome": "incorrect", "currentConstraint": "five", "staleValueUsed": true, "grounding": "critical-unsupported-claim", "knowledgeRelevance": "relevant", "artifactHash": "sha256:f5f8de1a9569873c436f5a0487da44dc456dc222b5a0ab59749a0931e221d87b", "bypassCount": 2, "sessionStartTokens": 817, "nativeFullCycleTokens": 1364390, "elapsedMs": null },
+    { "id": "longitudinal-correction:candidate:codex:1", "integrity": "INVALID", "integrityReason": "trace lacks native history-read evidence", "taskOutcome": "correct-complete", "currentConstraint": "three", "staleValueUsed": false, "grounding": "grounded", "knowledgeRelevance": "relevant", "artifactHash": "sha256:10b1c23e29b8d801545826274bb7965e3e0897c9aa566007432007d1e684e62e", "bypassCount": 0, "sessionStartTokens": 792, "nativeFullCycleTokens": null, "elapsedMs": null },
+    { "id": "longitudinal-correction:candidate:codex:2", "integrity": "INVALID", "integrityReason": "trace lacks native history-read evidence; one bypass finding", "taskOutcome": "correct-complete", "currentConstraint": "three", "staleValueUsed": false, "grounding": "noncritical-elaboration", "knowledgeRelevance": "relevant", "artifactHash": "sha256:2a8609f1ac123e82279eecacd64cf43e346edf793a057624b8294eac08493a97", "bypassCount": 1, "sessionStartTokens": 796, "nativeFullCycleTokens": null, "elapsedMs": null },
+    { "id": "longitudinal-correction:no-knowledge:claude:1", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "three", "staleValueUsed": false, "grounding": "noncritical-elaboration", "knowledgeRelevance": "none", "artifactHash": "sha256:f13b4fe1c4899fbaa09f48e674e718155c21ba19dd626ad3c9f63e6d48efbe46", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": 477340, "elapsedMs": null },
+    { "id": "longitudinal-correction:no-knowledge:claude:2", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "three", "staleValueUsed": false, "grounding": "noncritical-elaboration", "knowledgeRelevance": "none", "artifactHash": "sha256:b2d3e943ef2665dd4bf2476e61e7f33134c8eaa0c7dfaf79c70ab5fc225ee674", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": 530593, "elapsedMs": null },
+    { "id": "longitudinal-correction:no-knowledge:codex:1", "integrity": "VALID", "taskOutcome": "incorrect", "currentConstraint": "missing", "staleValueUsed": false, "grounding": "critical-unsupported-claim", "knowledgeRelevance": "none", "artifactHash": "sha256:e13349ea8d620ead9a321abd713c7ca1ca1f43df2e144663f2d65e2e059e7945", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": null, "elapsedMs": null },
+    { "id": "longitudinal-correction:no-knowledge:codex:2", "integrity": "VALID", "taskOutcome": "correct-complete", "currentConstraint": "three", "staleValueUsed": false, "grounding": "critical-unsupported-claim", "knowledgeRelevance": "none", "artifactHash": "sha256:19001bc6db89748887d5c5107f31d8fbd086a5b3107c44e63493b5590821da8f", "loadedBodyTokens": 0, "sessionStartTokens": 0, "nativeFullCycleTokens": null, "elapsedMs": null }
+  ],
+  "pairs": [
+    { "id": "longitudinal-correction:claude:1", "validForDecision": false, "artifactDirection": "candidate-loss", "candidateOutcome": "safe-deferral", "noKnowledgeOutcome": "correct-complete", "nativeTokenDelta": 1236862 },
+    { "id": "longitudinal-correction:claude:2", "validForDecision": false, "artifactDirection": "candidate-loss", "candidateOutcome": "incorrect-stale-five", "noKnowledgeOutcome": "correct-complete", "nativeTokenDelta": 833797 },
+    { "id": "longitudinal-correction:codex:1", "validForDecision": false, "artifactDirection": "candidate-win", "candidateOutcome": "correct-complete-grounded", "noKnowledgeOutcome": "incorrect-missing", "nativeTokenDelta": null },
+    { "id": "longitudinal-correction:codex:2", "validForDecision": false, "artifactDirection": "candidate-win", "candidateOutcome": "correct-complete-noncritical-elaboration", "noKnowledgeOutcome": "correct-complete-critical-unsupported-claim", "nativeTokenDelta": null },
+    { "id": "irrelevant-task:claude:1", "validForDecision": true, "semanticDirection": "tie", "candidateGrounding": "grounded", "noKnowledgeGrounding": "grounded", "nativeTokenDelta": -16588 },
+    { "id": "irrelevant-task:claude:2", "validForDecision": true, "semanticDirection": "candidate-win", "candidateGrounding": "grounded", "noKnowledgeGrounding": "noncritical-elaboration", "nativeTokenDelta": -4070 },
+    { "id": "irrelevant-task:codex:1", "validForDecision": true, "semanticDirection": "candidate-loss", "candidateGrounding": "noncritical-elaboration", "noKnowledgeGrounding": "grounded", "nativeTokenDelta": null },
+    { "id": "irrelevant-task:codex:2", "validForDecision": true, "semanticDirection": "candidate-loss", "candidateGrounding": "noncritical-elaboration", "noKnowledgeGrounding": "grounded", "nativeTokenDelta": null }
+  ],
+  "caveats": [
+    "The aggregate result is INCONCLUSIVE under the predeclared host-split, missing-usage, and integrity-gap rules; the repeated Codex irrelevant-task losses remain a negative signal, not a terminal conclusion.",
+    "The core durable-correction benefit remains unproven because all four candidate correction cells were integrity-invalid.",
+    "Artifact-only correction direction split by host and is non-authoritative: Claude 0-2, Codex 2-0.",
+    "Codex did not expose complete native full-cycle token totals, so cost comparison is complete only for Claude.",
+    "Full-cycle elapsed time was not preserved in the native evidence; all compact rows carry elapsedMs: null rather than fabricating a value.",
+    "No retry or replacement cell was run. Before any separately authorized fresh evaluation, diagnose whether traceWithOperationCrosscheck or candidate behavior produced the candidate correction trace mismatch."
+  ]
+}

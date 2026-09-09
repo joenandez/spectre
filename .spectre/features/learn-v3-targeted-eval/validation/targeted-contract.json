@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "plan": {
+    "path": ".spectre/features/learn-v3-targeted-eval/specs/plan.md",
+    "sha256": "05639d749829b9f8daccac6825acbab73c349c49b66158143c1408dc42c98778"
+  },
+  "candidateSourceHead": "d2932ebec28cb61d37ac061edab7afd9a146d746",
+  "freeze": {
+    "path": ".spectre/features/learn-v3-targeted-eval/validation/targeted-freeze.json",
+    "sha256": "36f2a88d0d3e3d2c3465f0e338507521297e63b7b982d3a6070fe3048c8f4e78",
+    "bytes": 73017,
+    "hashes": {
+      "fixtures": "sha256:99f2dab7369d25131ff1cc6c94a04187daa1486e1d9434c69ab4fe9d3b70b078",
+      "oracle": "sha256:f126daf7599a1af01427e7890b7eae57011c13a0183ea4ab9d519570d30b5308",
+      "configuration": "sha256:ccfea1e247dcfbdc22626330acf85b1b93d7b698a63797c6804d773abeffdb6b",
+      "candidate": "sha256:5132ab2129eab0b787d33df3435378edee71a996cb5eca612956346679469e72",
+      "nativePipelineInputs": "sha256:fc52549775da49edb3fcf8d46c0deadedb102acff7d0c312a77a1e65e361f11a"
+    }
+  },
+  "models": {
+    "claude": { "model": "claude-opus-5", "effort": "high" },
+    "codex": { "model": "gpt-5.6-sol", "effort": "high" }
+  },
+  "limits": {
+    "cells": 16,
+    "nativeSessions": 40,
+    "totalConcurrency": 4,
+    "perHostConcurrency": 2,
+    "automaticRetries": 0
+  },
+  "selectedCells": [
+    { "id": "irrelevant-task:no-knowledge:claude:1", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "irrelevant-task:no-knowledge:claude:2", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "irrelevant-task:no-knowledge:codex:1", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "irrelevant-task:no-knowledge:codex:2", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "irrelevant-task:candidate:claude:1", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "irrelevant-task:candidate:claude:2", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "irrelevant-task:candidate:codex:1", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "irrelevant-task:candidate:codex:2", "sessions": 1, "promptHash": "sha256:86490741e5113033fbd20cfce05be198f5c503f7aed3cf0c241039b7bca9ab0e" },
+    { "id": "longitudinal-correction:no-knowledge:claude:1", "sessions": 4, "promptHash": "sha256:a3a9ea5856a1ffd65c21eef9cf6aaa9f8482ccd6bfbb6722111214991c5e0aa2" },
+    { "id": "longitudinal-correction:no-knowledge:claude:2", "sessions": 4, "promptHash": "sha256:a3a9ea5856a1ffd65c21eef9cf6aaa9f8482ccd6bfbb6722111214991c5e0aa2" },
+    { "id": "longitudinal-correction:no-knowledge:codex:1", "sessions": 4, "promptHash": "sha256:a3a9ea5856a1ffd65c21eef9cf6aaa9f8482ccd6bfbb6722111214991c5e0aa2" },
+    { "id": "longitudinal-correction:no-knowledge:codex:2", "sessions": 4, "promptHash": "sha256:a3a9ea5856a1ffd65c21eef9cf6aaa9f8482ccd6bfbb6722111214991c5e0aa2" },
+    { "id": "longitudinal-correction:candidate:claude:1", "sessions": 4, "promptHash": "sha256:6426c135c8702cf0113fdd28d20dde5f544cf32c7851e7aa58845aaa3140ce1e" },
+    { "id": "longitudinal-correction:candidate:claude:2", "sessions": 4, "promptHash": "sha256:6426c135c8702cf0113fdd28d20dde5f544cf32c7851e7aa58845aaa3140ce1e" },
+    { "id": "longitudinal-correction:candidate:codex:1", "sessions": 4, "promptHash": "sha256:a4e5cf472713a2f519fc2cf94cd8159ae1726e6472a551702ab9ba6f42b23a8e" },
+    { "id": "longitudinal-correction:candidate:codex:2", "sessions": 4, "promptHash": "sha256:a4e5cf472713a2f519fc2cf94cd8159ae1726e6472a551702ab9ba6f42b23a8e" }
+  ],
+  "judgmentFields": [
+    "cellId",
+    "artifactHash",
+    "artifactEvidence",
+    "correct",
+    "relevant",
+    "requiredRecallBeforeDecision",
+    "taskOutcome",
+    "currentConstraint",
+    "staleValueUsed",
+    "grounding",
+    "knowledgeRelevance",
+    "structuralDisposition",
+    "nativeFullCycleTokens",
+    "elapsedMs"
+  ],
+  "knowledgeRelevance": {
+    "relevant": "Persisted candidate knowledge directly applicable to the evaluated task was available or used.",
+    "irrelevant": "Persisted candidate knowledge was unrelated to the evaluated task.",
+    "none": "No persisted knowledge was available in the no-knowledge control."
+  },
+  "pairOrder": [
+    "taskOutcome: correct-complete > safe-deferral > incorrect",
+    "staleSafety: using five as current loses",
+    "grounding: grounded > noncritical-elaboration > critical-unsupported-claim",
+    "when semantic outcomes tie, lower complete native full-cycle tokens wins"
+  ],
+  "classificationRules": {
+    "POSITIVE": "All four candidate longitudinal cells are valid, use three, avoid stale five, and candidate is never worse with at least three strict longitudinal wins or tied semantics with lower paired median full-cycle token cost; all candidate irrelevant cells match control correctness, load no knowledge/history body, and remain within the 300-token SessionStart cap.",
+    "NEGATIVE": "Candidate uses stale five in any valid final artifact, loses at least two longitudinal semantic pairs, introduces a repeated irrelevant correctness/grounding regression, or has no semantic benefit while complete paired cost is consistently higher on both hosts and repeats.",
+    "NEUTRAL": "Every required cell is valid, longitudinal semantic outcomes tie, no stale or irrelevant regression occurs, and token results show neither consistent advantage nor disadvantage.",
+    "INCONCLUSIVE": "An integrity gap, missing judgment or usage, host split, single unmatched regression, mixed result, or failure of every other rule prevents a decision without adding runs."
+  }
+}
