@@ -25,6 +25,7 @@ function renderContent(entries, omittedCount, cliPath) {
     'For a substantive task, search the actual task, assess applicability, then exact-load only the needed record. For unrelated general conversation, load nothing.',
     'Search can find untagged imported work and tags omitted here; previews and history are not active guidance.',
     `Run ${shellQuote(cliPath)} search '<task>' --project-dir .; then replace search '<task>' with load '<id>'. Apply only a verified load.`,
+    "A standalone #tag in user input is an explicit lookup: strip #, search --tag '<tag>', then exact-load applicable matches; never create tags from lookup text.",
     'Tags:',
     ...(entries.length > 0 ? entries.map(renderTagEntry) : ['- No tagged records yet; imported work remains searchable.']),
     `Omitted tags: ${omittedCount}; omitted tags remain searchable.`,

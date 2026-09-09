@@ -23,6 +23,8 @@ describe('bounded SessionStart tag registry', () => {
     assert.ok(result.omittedCount > 0);
     assert.match(result.content, /Omitted tags: \d+; omitted tags remain searchable/);
     assert.match(result.content, /untagged imported work/i);
+    assert.match(result.content, /standalone #tag[\s\S]*search --tag '<tag>'[\s\S]*exact-load/i);
+    assert.match(result.content, /never create tags from lookup text/i);
     assert.doesNotMatch(result.content, /recordPath|revisionToken|successfulLoads|PRIVATE_BODY|ID: /);
     for (const id of result.includedEntries) {
       assert.match(result.content, new RegExp(`^- ${id}:`, 'm'));
