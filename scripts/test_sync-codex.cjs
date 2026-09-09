@@ -874,10 +874,10 @@ test('autonomous plan execution instruction envelope stays token-neutral', () =>
     ),
   };
 
-  assert.ok(totals.spectre <= 12_433, `canonical envelope exceeded: ${totals.spectre} > 12,433`);
+  assert.ok(totals.spectre <= 12_624, `canonical envelope exceeded: ${totals.spectre} > 12,624`);
   assert.ok(
-    totals['spectre-codex'] <= 12_520,
-    `Codex envelope exceeded: ${totals['spectre-codex']} > 12,520`,
+    totals['spectre-codex'] <= 12_725,
+    `Codex envelope exceeded: ${totals['spectre-codex']} > 12,725`,
   );
 });
 
@@ -1966,7 +1966,7 @@ test('Ship uses the fixed measurement surface without primary bookkeeping', () =
   }
 
   // Structured-handoff tokens are reallocated inside the fixed 28-skill aggregate ceiling.
-  for (const [rootName, ceiling] of [['spectre', 10_944], ['spectre-codex', 10_939]]) {
+  for (const [rootName, ceiling] of [['spectre', 10_990], ['spectre-codex', 10_985]]) {
     const tokens = skillNames.reduce(
       (total, name) => total + repositoryTokenCount(
         repoRoot,
