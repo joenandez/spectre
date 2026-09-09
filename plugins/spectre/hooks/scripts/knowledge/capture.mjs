@@ -181,7 +181,9 @@ function constructKnowledge(input, current, tags, options) {
     content: input.content,
     evidence: input.evidence,
     status: input.status || current?.status || 'active',
-    ...(input.category === 'blocker' ? { blocker: input.blocker || current?.blocker } : {}),
+    ...(input.blocker !== undefined || input.category === 'blocker'
+      ? { blocker: input.blocker || current?.blocker }
+      : {}),
   };
 }
 
@@ -223,6 +225,24 @@ function constructWork(input, current, workId, tags, associations, options) {
       associations: mergedAssociations,
     },
   };
+}
+
+/**
+ * Exercise the existing typed validator before any tag or identity writer. The temporary
+ * identity and tag are only schema-valid stand-ins; registration constructs the final record.
+ */
+function prevalidateSemanticRecord(input, kind, current, requested, options) {
+  const id = kind === 'knowledge'
+    ? input.id
+    : current?.id || options.workId || 'semantic-capture-validation';
+  const record = kind === 'knowledge'
+    ? constructKnowledge(input, current, current?.tags || ['semantic-capture-validation'], options)
+    : constructWork(input, current, id, current?.tags || ['semantic-capture-validation'], requested, options);
+  try {
+    validateKnowledgeRecord(record, path.join('<semantic-input>', id, 'record.json'), { expectedId: id });
+  } catch (error) {
+    throw codedError('CAPTURE_INPUT_INVALID', error instanceof Error ? error.message : String(error));
+  }
 }
 
 function proposalPath(record) {
@@ -272,6 +292,10 @@ export async function captureCanonicalKnowledge(options) {
   if (!current && input.tags === undefined) {
     throw codedError('CAPTURE_INPUT_INVALID', 'New captures require a non-empty tags array.');
   }
+  if (current && current.record.kind !== kind) {
+    throw codedError('CAPTURE_KIND_CONFLICT', `${current.record.id} is not a ${kind} record.`);
+  }
+  prevalidateSemanticRecord(input, kind, current?.record, requested, options);
   try {
     tagResult = await canonicalTags({
       projectDir: options.projectDir, tags: input.tags, existingTags: current?.record.tags || [], lockOptions: options.lockOptions,
@@ -285,11 +309,6 @@ export async function captureCanonicalKnowledge(options) {
         pullRequestId: options.pullRequestId, candidate: options.candidate, lockOptions: options.lockOptions,
       });
       current = existingRecord(resolved.storePath, workIdentity.workId);
-      if (current && current.record.kind !== 'work') {
-        throw codedError('CAPTURE_KIND_CONFLICT', `${workIdentity.workId} is not a work record.`);
-      }
-    } else if (current && current.record.kind !== 'knowledge') {
-      throw codedError('CAPTURE_KIND_CONFLICT', `${input.id} is not a knowledge record.`);
     }
     record = kind === 'knowledge'
       ? constructKnowledge(input, current?.record, tagResult.tags, options)

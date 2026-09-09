@@ -174,4 +174,34 @@ describe('semantic knowledge capture', () => {
     assert.equal(output(result).code, 'CAPTURE_INPUT_INVALID');
     assert.equal(fs.existsSync(path.join(value.storePath, 'knowledge', 'capture-auth-guidance')), false);
   });
+
+  it('rejects invalid nested lifecycle state before ensuring a new tag or allocating work identity', async (t) => {
+    const value = await fixture(t);
+    const tagsPath = path.join(value.storePath, 'tags.json');
+    const beforeTags = fs.readFileSync(tagsPath, 'utf8');
+    const source = inputPath(value, 'invalid-lifecycle.json', filledTemplate('work', {
+      tags: [{ id: 'new-capture-tag', description: 'New capture tag.' }],
+      execution: { state: 'definitely-invalid' },
+    }));
+    const result = run('bundled', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-invalid-lifecycle'], value);
+    assert.equal(result.status, 1);
+    assert.equal(output(result).code, 'CAPTURE_INPUT_INVALID');
+    assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
+    assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
+  });
+
+  it('rejects nested lifecycle objects with unknown fields before store mutation', async (t) => {
+    const value = await fixture(t);
+    const tagsPath = path.join(value.storePath, 'tags.json');
+    const beforeTags = fs.readFileSync(tagsPath, 'utf8');
+    const source = inputPath(value, 'invalid-lifecycle-shape.json', filledTemplate('work', {
+      tags: [{ id: 'another-new-capture-tag', description: 'Another new capture tag.' }],
+      verificationState: { state: 'unknown', unexpected: 'field' },
+    }));
+    const result = run('npm', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-invalid-shape'], value);
+    assert.equal(result.status, 1);
+    assert.equal(output(result).code, 'CAPTURE_INPUT_INVALID');
+    assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
+    assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
+  });
 });
