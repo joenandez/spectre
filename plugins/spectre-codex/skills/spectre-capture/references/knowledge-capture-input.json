@@ -1,0 +1,16 @@
+{
+  "inputVersion": 1,
+  "id": "<canonical-record-id>",
+  "title": "<durable knowledge title>",
+  "summary": "<short durable summary>",
+  "category": "pattern",
+  "useWhen": "<when this guidance applies>",
+  "content": "<maintained guidance>",
+  "evidence": "<accepted evidence or authority>",
+  "tags": [
+    {
+      "id": "<canonical-or-new-tag>",
+      "description": "<required only when this is a genuinely new tag>"
+    }
+  ]
+}

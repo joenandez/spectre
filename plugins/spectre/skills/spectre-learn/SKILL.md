@@ -32,7 +32,7 @@ Turn an explicit user capture request into a qualified knowledge or work-record 
 
 1. Identify intent from the request. A bare request scans the conversation for accepted consequential decisions, verified reusable constraints, corrections, or confirmed blockers/resolutions. An explicit user correction is already-authorized evidence, not an unsupported hypothesis; routine progress and model-generated hypotheses are no-ops.
 2. For an insight or correction, provide Capture the evidence, its authority, and the maintained-knowledge target. For an explicit user correction, cite that direction as the evidence, revise the current record, and retain disagreeing repository statements only as stale or historical context; absence of repository corroboration is not missing evidence. For work summary intent, provide the exact run/PR/candidate association and only truthful lifecycle facts.
-3. Delegate search, exact loads, applicability, tags, deduplication, revisions, saving, conflict repair, and save outcomes to `Skill(spectre-capture)`. Already-authorized facts need no new proposal or approval loop.
+3. Tell `Skill(spectre-capture)` which kind applies, the evidence, exact identity, and tag intent. Capture reads `references/knowledge-capture-input.json` or `references/work-capture-input.json`, searches/reuses tags, and owns construction, revisions, saving, and recovery. Learn does not duplicate that SOP or write records. Already-authorized facts need no new proposal or approval loop.
 
 ## Handoff
 | Handoff | Details |

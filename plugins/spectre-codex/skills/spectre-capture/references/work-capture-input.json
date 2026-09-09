@@ -1,0 +1,19 @@
+{
+  "inputVersion": 1,
+  "title": "<durable work title>",
+  "summary": "<short work summary>",
+  "requestedOutcome": "<requested outcome>",
+  "scope": "<scope and boundaries>",
+  "actualChanges": "<actual changes and components>",
+  "reasons": "<decisions and reasons>",
+  "discoveries": "<discoveries and approaches>",
+  "verification": "<verification and evidence>",
+  "remainingWork": "<remaining work and unknowns>",
+  "relatedContext": "<related knowledge and source context>",
+  "tags": [
+    {
+      "id": "<canonical-or-new-tag>",
+      "description": "<required only when this is a genuinely new tag>"
+    }
+  ]
+}

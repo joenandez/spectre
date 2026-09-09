@@ -38,6 +38,10 @@ import {
 import {
   resolveWorkIdentity
 } from '../../plugins/spectre/hooks/scripts/knowledge/work.mjs';
+import {
+  captureCanonicalKnowledge as captureKnowledge,
+  serializeCaptureError,
+} from '../../plugins/spectre/hooks/scripts/knowledge/capture.mjs';
 
 export async function searchCanonicalKnowledge(options) {
   return searchKnowledge(options);
@@ -97,6 +101,14 @@ export async function mergeCanonicalKnowledgeTags(options) {
 
 export async function resolveCanonicalKnowledgeWork(options) {
   return resolveWorkIdentity(options);
+}
+
+export async function captureCanonicalKnowledge(options) {
+  return captureKnowledge(options);
+}
+
+export function serializeCanonicalKnowledgeCaptureError(error) {
+  return serializeCaptureError(error);
 }
 
 export function formatCanonicalKnowledgeLoad(result) {

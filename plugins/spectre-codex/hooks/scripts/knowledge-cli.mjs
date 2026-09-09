@@ -8,6 +8,7 @@ import { resolveKnowledgeProjectDir } from './knowledge/cli-arguments.mjs';
 import { runtimeEvaluationTrace } from './knowledge/evaluation-trace.mjs';
 import { estimatePayloadTokens } from './knowledge/payload.mjs';
 import { inspectKnowledgeRevision, listKnowledgeHistory } from './knowledge/history.mjs';
+import { captureCanonicalKnowledge, serializeCaptureError } from './knowledge/capture.mjs';
 import { formatKnowledgeLoadHuman, loadKnowledgeById, ROUTINE_LOAD_ALLOWANCE_TOKENS, serializeKnowledgeLoadError } from './knowledge/loader.mjs';
 import { migrateLegacyKnowledge } from './knowledge/migration.mjs';
 import { previewKnowledgeRegistry } from './knowledge/preview.mjs';
@@ -76,6 +77,7 @@ function usage() {
     '  knowledge-cli.mjs inspect <id> --revision <token> --project-dir <path> [--json]',
     '  knowledge-cli.mjs work resolve [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs registry [--host claude|codex] --project-dir <path> [--json]',
+    '  knowledge-cli.mjs capture --kind knowledge|work --input <json> [--record-id <id>] [--work-id <id>] [--source-run-id <id>|--run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs register --record <path> [--expected-revision <token>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs migrate --project-dir <path> [--json]',
     '',
@@ -192,7 +194,14 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === 'work' && subcommand === 'resolve') {
     try {
       const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
-      writeResult(await resolveWorkIdentity({ projectDir: projectDir(flags), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags), pullRequestId: flags.get('--pull-request-id'), candidate, lockOptions: lockOptions(flags) }), flags);
+      const result = await resolveWorkIdentity({ projectDir: projectDir(flags), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags), pullRequestId: flags.get('--pull-request-id'), candidate, lockOptions: lockOptions(flags) });
+      writeResult(result.status === 'unresolved' ? {
+        ...result,
+        nextAction: {
+          template: 'skills/spectre-capture/references/work-capture-input.json',
+          command: 'knowledge-cli.mjs capture --kind work --input <filled-work-capture-input.json> --source-run-id <exact-run-id> --project-dir <project-dir> --json',
+        },
+      } : result, flags);
     } catch (error) { throw codedError(error?.code || 'WORK_RESOLUTION_FAILED', error instanceof Error ? error.message : String(error)); }
     return;
   }
@@ -202,6 +211,20 @@ export async function main(argv = process.argv.slice(2)) {
       if (flags.has('--json')) process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
       else process.stdout.write(result.injected ? `${result.payload.hookSpecificOutput.additionalContext}\n` : 'No SessionStart knowledge payload would be injected.\n');
     } catch (error) { throw codedError('KNOWLEDGE_REGISTRY_FAILED', error instanceof Error ? error.message : String(error)); }
+    return;
+  }
+  if (command === 'capture') {
+    try {
+      const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
+      const result = await captureCanonicalKnowledge({
+        projectDir: projectDir(flags), kind: flags.get('--kind'), inputPath: flags.get('--input'),
+        recordId: flags.get('--record-id'), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
+        pullRequestId: flags.get('--pull-request-id'), candidate, expectedRevision: flags.get('--expected-revision'),
+        lockOptions: lockOptions(flags),
+      });
+      recordTrace(trace, { type: 'capture', id: result.id, revisionToken: result.revisionToken, outcome: result.status });
+      writeResult(result, flags, (value) => `Captured ${value.kind} record ${value.id} (${value.status})\n`);
+    } catch (error) { recordTrace(trace, { type: 'capture', outcome: 'failed' }); const payload = serializeCaptureError(error); throw codedError(payload.code, payload.message, payload); }
     return;
   }
   if (command === 'register') {
@@ -226,7 +249,7 @@ export function writeCliError(error, argv = process.argv.slice(2)) {
   const message = error instanceof Error ? error.message : String(error);
   if (argv.includes('--json') && error?.code) {
     const payload = { ok: false, code: error.code, message };
-    for (const field of ['status', 'expectedRevision', 'currentRevision', 'inspectionCommand']) {
+    for (const field of ['status', 'expectedRevision', 'currentRevision', 'inspectionCommand', 'tags', 'tagOutcomes', 'workId', 'association', 'recoveryInput']) {
       if (error[field] !== undefined) payload[field] = error[field];
     }
     process.stdout.write(`${JSON.stringify(payload)}\n`);

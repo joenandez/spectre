@@ -16,10 +16,12 @@ import {
   registerCanonicalKnowledge,
   searchCanonicalKnowledgeTags,
   applyCanonicalKnowledgeTagOperation,
+  captureCanonicalKnowledge,
   ensureCanonicalKnowledgeTags,
   mergeCanonicalKnowledgeTags,
   resolveCanonicalKnowledgeWork,
   searchCanonicalKnowledge,
+  serializeCanonicalKnowledgeCaptureError,
   serializeCanonicalKnowledgeError,
   serializeCanonicalKnowledgeLoadError
 } from './lib/knowledge.js';
@@ -85,6 +87,7 @@ function usage() {
   spectre knowledge inspect <id> --revision <token> [--project-dir <path>] [--json]
   spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--project-dir <path>] [--json]
   spectre knowledge registry [--host claude|codex] [--project-dir <path>] [--json]
+  spectre knowledge capture --kind knowledge|work --input <json> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] [--project-dir <path>] [--json]
   spectre knowledge register --record <path> [--project-dir <path>] [--json]
   spectre knowledge migrate [--project-dir <path>] [--json]
   spectre workflow <run|stage|phase|wave|agent|task|gate|human-input|plan|cleanup|purge> ... [--json]
@@ -265,11 +268,32 @@ export async function main(argv) {
     if (target === 'work' && positional[2] === 'resolve') {
       try {
         const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
-        writeJson(await resolveCanonicalKnowledgeWork({
+        const result = await resolveCanonicalKnowledgeWork({
           projectDir: knowledgeProjectDir(), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
           pullRequestId: flags.get('--pull-request-id'), candidate, lockOptions: lockOptions()
-        }));
+        });
+        writeJson(result.status === 'unresolved' ? {
+          ...result,
+          nextAction: {
+            template: 'skills/spectre-capture/references/work-capture-input.json',
+            command: 'spectre knowledge capture --kind work --input <filled-work-capture-input.json> --source-run-id <exact-run-id> --project-dir <project-dir> --json',
+          },
+        } : result);
       } catch (error) { throw new CliError(error?.code || 'WORK_RESOLUTION_FAILED', error instanceof Error ? error.message : String(error)); }
+      return;
+    }
+
+    if (target === 'capture') {
+      try {
+        const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
+        const result = await captureCanonicalKnowledge({
+          projectDir: knowledgeProjectDir(), kind: flags.get('--kind'), inputPath: flags.get('--input'),
+          recordId: flags.get('--record-id'), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
+          pullRequestId: flags.get('--pull-request-id'), candidate, expectedRevision: flags.get('--expected-revision'),
+          lockOptions: lockOptions(),
+        });
+        if (flags.has('--json')) writeJson(result); else process.stdout.write(`Captured ${result.kind} record ${result.id} (${result.status})\n`);
+      } catch (error) { const payload = serializeCanonicalKnowledgeCaptureError(error); throw new CliError(payload.code, payload.message, payload); }
       return;
     }
 

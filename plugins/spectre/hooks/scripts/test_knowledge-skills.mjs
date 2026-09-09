@@ -45,6 +45,12 @@ test('workflow skills make capture primary-owned and preserve delivery lifecycle
   assert.match(capture, /outside[\s\S]*knowledge store[\s\S]*expected-revision/i);
   assert.match(capture, /never[\s\S]*canonical[\s\S]*index\.json[\s\S]*history/i);
   assert.match(capture, /pullRequest\.state[\s\S]*draft-open/i);
+  assert.match(capture, /knowledge-capture-input\.json/);
+  assert.match(capture, /work-capture-input\.json/);
+  assert.match(capture, /eight[\s\S]*seven/i);
+  assert.match(capture, /capture --kind knowledge\|work/);
+  assert.match(capture, /aliases?[\s\S]*canonical/i);
+  assert.match(capture, /omitted[\s\S]*tags[\s\S]*preserve/i);
 });
 
 test('Learn delegates capture and planning retains only loaded knowledge provenance', () => {
@@ -65,6 +71,8 @@ test('Learn delegates capture and planning retains only loaded knowledge provena
   assert.match(learn, /User-invoked front door for durable capture/);
   assert.match(learn, /Learn owns user intent and routing[\s\S]*owns persistence/i);
   assert.match(learn, /Spectre feature root is not required/i);
+  assert.match(learn, /knowledge-capture-input\.json/);
+  assert.match(learn, /work-capture-input\.json/);
   assert.match(learn, /disable-model-invocation: true/);
   assert.match(learn, /explicit user statement[\s\S]*accepted authoritative evidence/i);
   assert.match(learn, /do not seek independent corroboration or reconfirmation/i);
