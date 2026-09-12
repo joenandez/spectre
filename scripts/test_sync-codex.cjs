@@ -1731,7 +1731,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    '9a979fbb1b3a914a0539c4d4b6bf6cfa3d609c9213a194f56362c56ccdc5735c',
+    'c9fb5b7f8e3b95f86799240dc8dd96e5cff5710379a940857438e58031d11673',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
