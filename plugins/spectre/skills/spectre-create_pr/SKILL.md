@@ -31,7 +31,7 @@ The target-to-HEAD diff and commit log, issue reference, and any GitHub PR templ
 2. **Scale:** trivial What/Why/Closes; standard Summary/Changes/Testing/Closes; complex adds visible trade-offs, breaking/rollback, UI/CLI evidence, and reviewer focus. Derive type/scope from change; add found issue links only.
 3. **Verify before side effects:** map every claim to diff/commit/issue, drop unsupported claims/secrets, verify tuple and clean candidate, then push.
 4. **Work-record ownership:** in orchestrated mode return PR evidence to Ship without writing a work record. In standalone mode, when no Execute or Ship parent owns the history, invoke `Skill(spectre-work-record)` once at the terminal boundary after the draft exists; report capture failure/recovery input without blocking draft. Refresh a stale parent candidate; a draft is not merged.
-5. **Draft lifecycle:** pending grounds `RUNNING`, pushes, creates the draft, attaches PR to work ID, and returns URL/body. Final-update rechecks its tuple/clean candidate; if repairs changed the tuple, refresh candidate-sensitive claims under freshness, grounding, secret gates, verify clean repaired HEAD, pushes, re-resolves/rechecks live tuple, then `gh pr edit` only Testing from `FINAL_VERIFICATION_SUMMARY`; never mark ready.
+5. **Draft lifecycle:** pending grounds `RUNNING`, pushes, creates the draft, and returns its PR identity/URL against the supplied work ID for Ship to associate. Final-update rechecks its tuple/clean candidate; if repairs changed the tuple, refresh candidate-sensitive claims under freshness, grounding, secret gates, verify clean repaired HEAD, pushes, re-resolves/rechecks live tuple, then `gh pr edit` only Testing from `FINAL_VERIFICATION_SUMMARY`; never mark ready.
 
 ## Handoff
 

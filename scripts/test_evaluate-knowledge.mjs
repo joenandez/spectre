@@ -187,6 +187,39 @@ test('lifecycle fixture routes only historical work boundaries and excludes prog
   assert.match(oracle['lifecycle-identity'].manualRubric, /routine progress[\s\S]*never/i);
 });
 
+test('lifecycle work-boundary oracle rejects knowledge captures, duplicate Execute revisions, and Ship writes before the draft', () => {
+  const expected = { requiredRecordHashes: [], requiredStates: ['execute-start', 'execute-completion', 'ship-post-pr'] };
+  const runtime = {
+    status: 'completed', deliverablePath: 'artifacts/decision.md', deliverable: { exists: true, bytes: 1 }, bypass: [],
+    toolOperations: [{ name: 'Write', status: 'completed', sessionOrdinal: 2, eventOrdinal: 1, input: { file_path: 'artifacts/decision.md' } }],
+    sessionSnapshots: [{ contextHash: 'execute' }, {}, {
+      contextHash: 'ship',
+      gh: {
+        before: { pullRequests: [] },
+        after: { pullRequests: [{ number: 1, state: 'OPEN', isDraft: true }] },
+      },
+    }],
+    workflowEvidence: { ghCommands: ['pr create --draft'] },
+    trace: { availability: 'available', events: [
+      { type: 'capture', kind: 'work', outcome: 'created', contextHash: 'execute', workLifecycle: { execution: 'in-progress', pullRequest: 'none' } },
+      { type: 'capture', kind: 'work', outcome: 'updated', contextHash: 'execute', workLifecycle: { execution: 'implementation-ready', pullRequest: 'none' } },
+      { type: 'capture', kind: 'work', outcome: 'updated', contextHash: 'ship', workLifecycle: { execution: 'implementation-ready', pullRequest: 'draft-open' } },
+    ] },
+  };
+  assert.equal(judgeCell({ caseId: 'lifecycle', condition: 'candidate' }, runtime, { lifecycle: expected }).valid, true);
+  assert.equal(judgeCell({ caseId: 'lifecycle', condition: 'candidate' }, {
+    ...runtime, trace: { ...runtime.trace, events: [{ ...runtime.trace.events[0], kind: 'knowledge' }, ...runtime.trace.events.slice(1)] },
+  }, { lifecycle: expected }).reason, 'work-boundary capture evidence is missing');
+  assert.equal(judgeCell({ caseId: 'lifecycle', condition: 'candidate' }, {
+    ...runtime, trace: { ...runtime.trace, events: [...runtime.trace.events, { ...runtime.trace.events[1] }] },
+  }, { lifecycle: expected }).reason, 'work-boundary capture evidence is missing');
+  assert.equal(judgeCell({ caseId: 'lifecycle', condition: 'candidate' }, {
+    ...runtime, sessionSnapshots: [...runtime.sessionSnapshots.slice(0, 2), {
+      ...runtime.sessionSnapshots[2], gh: { before: { pullRequests: [] }, after: { pullRequests: [] } },
+    }],
+  }, { lifecycle: expected }).reason, 'work-boundary capture evidence is missing');
+});
+
 test('longitudinal correction table keeps ordinary evidence identical while only candidates invoke Learn', () => {
   const fixtures = JSON.parse(fs.readFileSync('scripts/knowledge-evaluation-fixtures/manifest.json', 'utf8'));
   const correction = fixtures.cases.find((entry) => entry.id === 'longitudinal-correction');

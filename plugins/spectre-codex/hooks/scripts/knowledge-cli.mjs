@@ -198,7 +198,7 @@ export async function main(argv = process.argv.slice(2)) {
       writeResult(result.status === 'unresolved' ? {
         ...result,
         nextAction: {
-          template: 'skills/spectre-capture/references/work-capture-input.json',
+          template: 'skills/spectre-work-record/references/work-capture-input.json',
           command: 'knowledge-cli.mjs capture --kind work --input <filled-work-capture-input.json> --source-run-id <exact-run-id> --project-dir <project-dir> --json',
         },
       } : result, flags);
@@ -222,7 +222,8 @@ export async function main(argv = process.argv.slice(2)) {
         pullRequestId: flags.get('--pull-request-id'), candidate, expectedRevision: flags.get('--expected-revision'),
         lockOptions: lockOptions(flags),
       });
-      recordTrace(trace, { type: 'capture', id: result.id, revisionToken: result.revisionToken, outcome: result.status });
+      recordTrace(trace, { type: 'capture', id: result.id, revisionToken: result.revisionToken, outcome: result.status, kind: result.kind,
+        ...(result.workLifecycle ? { workLifecycle: result.workLifecycle } : {}) });
       writeResult(result, flags, (value) => `Captured ${value.kind} record ${value.id} (${value.status})\n`);
     } catch (error) { recordTrace(trace, { type: 'capture', outcome: 'failed' }); const payload = serializeCaptureError(error); throw codedError(payload.code, payload.message, payload); }
     return;

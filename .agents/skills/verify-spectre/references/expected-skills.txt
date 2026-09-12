@@ -1,9 +1,9 @@
 # Skills expected in plugins/spectre/skills/.
 # Gate 1 fails if any is missing, or if an unlisted one appears.
 # Skills are added and removed deliberately — update this file in the same commit.
-# Current tree (33 skills):
+# Current tree (34 skills):
 # +capture, +create_pr, +delegate, +feature-root, +fix-core, +goal, +prove, +prune, +ship,
-# +task_review,
+# +task_review, +work-record,
 # -guide, -evaluate, -architecture_review, -quick_dev, -release.
 # Delegate replaces the retired align-and-deliver and deliver workflows.
 # release removed: releasing Spectre itself is the `release` project skill
@@ -42,3 +42,4 @@ spectre-tdd
 spectre-test
 spectre-ux
 spectre-validate
+spectre-work-record

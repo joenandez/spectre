@@ -41,6 +41,7 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(description(workRecord), /Ship[\s\S]*Create PR[\s\S]*snapshot[\s\S]*correction/i);
   assert.match(description(workRecord), /not[\s\S]*routine progress[\s\S]*check[\s\S]*commit/i);
   assert.match(workRecord, /work-capture-input\.json/);
+  assert.match(workRecord, /Execute start[\s\S]*None yet\.[\s\S]*never use[\s\S]*TODO[\s\S]*REPLACE_ME/i);
   assert.match(workRecord, /capture --kind work/);
   assert.match(workRecord, /2,000[\s\S]*non-blocking/i);
 
@@ -55,10 +56,13 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(ship, /PR[\s\S]*first[\s\S]*Skill\(spectre-work-record\)/i);
   assert.match(ship, /failure[\s\S]*does not block/i);
   assert.match(createPr, /orchestrated[\s\S]*does not[\s\S]*work record/i);
+  assert.doesNotMatch(createPr, /pending[\s\S]*attaches PR to work ID/i);
+  assert.match(createPr, /pending[\s\S]*returns its PR identity\/URL[\s\S]*Ship to associate/i);
   assert.match(createPr, /standalone[\s\S]*Skill\(spectre-work-record\)[\s\S]*terminal/i);
   assert.match(learn, /maintained knowledge[\s\S]*Skill\(spectre-capture\)/i);
   assert.match(learn, /work summar|snapshot|historical correction/i);
   assert.match(learn, /Skill\(spectre-work-record\)/);
+  assert.match(learn, /spectre-work-record\/references\/work-capture-input\.json/);
 });
 
 test('Learn delegates capture and planning retains only loaded knowledge provenance', () => {

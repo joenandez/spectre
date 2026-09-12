@@ -275,7 +275,7 @@ export async function main(argv) {
         writeJson(result.status === 'unresolved' ? {
           ...result,
           nextAction: {
-            template: 'skills/spectre-capture/references/work-capture-input.json',
+            template: 'skills/spectre-work-record/references/work-capture-input.json',
             command: 'spectre knowledge capture --kind work --input <filled-work-capture-input.json> --source-run-id <exact-run-id> --project-dir <project-dir> --json',
           },
         } : result);

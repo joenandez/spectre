@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { refreshKnowledgeIndex } from './knowledge/records.mjs';
+import { estimateRenderedRecordTokens, refreshKnowledgeIndex } from './knowledge/records.mjs';
 import { registerCanonicalKnowledge } from './knowledge/registration.mjs';
 import { captureCanonicalKnowledge } from './knowledge/capture.mjs';
 import { resolveProjectStore } from './knowledge/store.mjs';
@@ -89,9 +89,26 @@ function workInput(overrides = {}) {
   };
 }
 
+function renderedWorkRecord(input, id, tags) {
+  return {
+    schemaVersion: 1, id, kind: 'work', title: input.title, summary: input.summary,
+    tags, applicability: { scope: 'work', workId: id },
+    provenance: { origin: 'captured', capturedAt: '2026-09-09T00:00:00.000Z' }, relatedRecordIds: [],
+    work: {
+      requestedOutcome: input.requestedOutcome, scope: input.scope, actualChanges: input.actualChanges,
+      reasons: input.reasons, discoveries: input.discoveries, verification: input.verification,
+      remainingWork: input.remainingWork, relatedContext: input.relatedContext,
+      execution: input.execution || { state: 'unknown' },
+      verificationState: input.verificationState || { state: 'unknown' },
+      pullRequest: input.pullRequest || { state: 'unknown' },
+      associations: { sourceRunIds: ['run-canonical-ceiling'], pullRequestIds: [], candidates: [] },
+    },
+  };
+}
+
 function filledTemplate(kind, overrides = {}) {
   const template = JSON.parse(fs.readFileSync(path.join(
-    PLUGIN_ROOT, 'skills', 'spectre-capture', 'references', `${kind}-capture-input.json`,
+    PLUGIN_ROOT, 'skills', kind === 'work' ? 'spectre-work-record' : 'spectre-capture', 'references', `${kind}-capture-input.json`,
   ), 'utf8'));
   return { ...template, ...(kind === 'knowledge' ? knowledgeInput() : workInput()), ...overrides };
 }
@@ -114,13 +131,13 @@ async function registerResourceRecord(value, input) {
   return registerCanonicalKnowledge({ projectDir: value.projectDir, spectreHome: value.spectreHome, recordPath: directory });
 }
 
-async function registerResourceWork(value, id, input) {
+async function registerResourceWork(value, id, input, { legacyImport = false, expectedRevision } = {}) {
   const directory = path.join(value.root, 'work-proposal', id);
   fs.mkdirSync(path.join(directory, 'references'), { recursive: true });
   fs.writeFileSync(path.join(directory, 'record.json'), `${JSON.stringify({
     schemaVersion: 1, id, kind: 'work', title: input.title, summary: input.summary,
     tags: ['authentication'], applicability: { scope: 'work', workId: id, runIds: ['run-a'] },
-    provenance: { origin: 'captured', capturedAt: '2026-09-09T00:00:00.000Z', sourceRunIds: ['run-a'] }, relatedRecordIds: [],
+    provenance: { origin: legacyImport ? 'legacy-import' : 'captured', capturedAt: '2026-09-09T00:00:00.000Z', sourceRunIds: ['run-a'] }, relatedRecordIds: [],
     work: {
       requestedOutcome: input.requestedOutcome, scope: input.scope, actualChanges: input.actualChanges,
       reasons: input.reasons, discoveries: input.discoveries, verification: input.verification,
@@ -128,9 +145,12 @@ async function registerResourceWork(value, id, input) {
       execution: { state: 'unknown' }, verificationState: { state: 'unknown' }, pullRequest: { state: 'unknown' },
       associations: { sourceRunIds: ['run-a'], pullRequestIds: [], candidates: [] },
     },
+    ...(legacyImport ? { importedSource: { body: 'Imported historical work account.', useWhen: 'Inspecting legacy history.', cues: ['legacy'], category: 'pattern', status: 'active', version: '1' } } : {}),
   }, null, 2)}\n`);
   fs.writeFileSync(path.join(directory, 'references', 'proof.md'), 'Work proof resource.\n');
-  return registerCanonicalKnowledge({ projectDir: value.projectDir, spectreHome: value.spectreHome, recordPath: directory });
+  return registerCanonicalKnowledge({
+    projectDir: value.projectDir, spectreHome: value.spectreHome, recordPath: directory, expectedRevision,
+  });
 }
 
 describe('semantic knowledge capture', () => {
@@ -193,7 +213,7 @@ describe('semantic knowledge capture', () => {
     assert.equal(output(rejectedNew).recoveryInput, newInput);
     assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
 
-    const legacy = await registerResourceWork(value, 'legacy-oversized-work', oversized);
+    const legacy = await registerResourceWork(value, 'legacy-oversized-work', oversized, { legacyImport: true });
     const legacyPath = path.join(value.storePath, 'knowledge', 'legacy-oversized-work', 'record.json');
     const before = fs.readFileSync(legacyPath, 'utf8');
     const revisedInput = inputPath(value, 'oversized-legacy-update.json', workInput({
@@ -216,6 +236,71 @@ describe('semantic knowledge capture', () => {
     ], value);
     assert.equal(compact.status, 0, compact.stderr);
     assert.equal(output(compact).status, 'updated');
+  });
+
+  it('rejects a canonical tag and work-id ceiling delta before tags or identity can mutate', async (t) => {
+    const value = await fixture(t);
+    const workId = 'work-00000000-0000-0000-0000-000000000000';
+    const canonicalTags = ['canonical-work-capture-rendering-ceiling-boundary-tag'];
+    let boundaryInput;
+    for (let length = 1; length < 12_000; length += 1) {
+      const candidate = workInput({
+        actualChanges: 'x'.repeat(length),
+        tags: [{ id: canonicalTags[0], description: 'Tests capture preflight accounting.' }],
+      });
+      const actual = estimateRenderedRecordTokens(renderedWorkRecord(candidate, workId, canonicalTags));
+      const standIn = estimateRenderedRecordTokens(renderedWorkRecord(candidate, 'semantic-capture-validation', ['semantic-capture-validation']));
+      if (actual > 2_000 && standIn <= 2_000) {
+        boundaryInput = candidate;
+        break;
+      }
+    }
+    assert.ok(boundaryInput, 'fixture must straddle the old stand-in accounting boundary');
+    const tagsPath = path.join(value.storePath, 'tags.json');
+    const tagsBefore = fs.readFileSync(tagsPath, 'utf8');
+    const source = inputPath(value, 'canonical-ceiling.json', boundaryInput);
+    const rejected = run('bundled', [
+      'capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-canonical-ceiling',
+    ], value);
+    assert.equal(rejected.status, 1);
+    assert.equal(output(rejected).code, 'WORK_RECORD_TOO_LARGE');
+    assert.equal(fs.readFileSync(tagsPath, 'utf8'), tagsBefore);
+    assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
+  });
+
+  it('enforces the work-record ceiling for direct registration while retaining legacy imports', async (t) => {
+    const value = await fixture(t);
+    const oversized = workInput({ actualChanges: 'x'.repeat(12_000) });
+    const proposal = path.join(value.root, 'direct-oversized-work');
+    fs.mkdirSync(proposal);
+    fs.writeFileSync(path.join(proposal, 'record.json'), `${JSON.stringify({
+      schemaVersion: 1, id: 'direct-oversized-work', kind: 'work', title: oversized.title, summary: oversized.summary,
+      tags: ['authentication'], applicability: { scope: 'work', workId: 'direct-oversized-work' },
+      provenance: { origin: 'captured', capturedAt: '2026-09-09T00:00:00.000Z' }, relatedRecordIds: [],
+      work: {
+        requestedOutcome: oversized.requestedOutcome, scope: oversized.scope, actualChanges: oversized.actualChanges,
+        reasons: oversized.reasons, discoveries: oversized.discoveries, verification: oversized.verification,
+        remainingWork: oversized.remainingWork, relatedContext: oversized.relatedContext,
+        execution: { state: 'unknown' }, verificationState: { state: 'unknown' }, pullRequest: { state: 'unknown' },
+        associations: { sourceRunIds: [], pullRequestIds: [], candidates: [] },
+      },
+    }, null, 2)}\n`);
+    await assert.rejects(
+      registerCanonicalKnowledge({ projectDir: value.projectDir, spectreHome: value.spectreHome, recordPath: proposal }),
+      (error) => error.code === 'WORK_RECORD_TOO_LARGE',
+    );
+    assert.equal(fs.existsSync(path.join(value.storePath, 'knowledge', 'direct-oversized-work')), false);
+
+    const legacy = await registerResourceWork(value, 'direct-legacy-oversized-work', oversized, { legacyImport: true });
+    const legacyPath = path.join(value.storePath, 'knowledge', 'direct-legacy-oversized-work', 'record.json');
+    const before = fs.readFileSync(legacyPath, 'utf8');
+    await assert.rejects(
+      registerResourceWork(value, 'direct-legacy-oversized-work', workInput({ actualChanges: 'y'.repeat(12_000) }), {
+        legacyImport: true, expectedRevision: legacy.revisionToken,
+      }),
+      (error) => error.code === 'WORK_RECORD_TOO_LARGE',
+    );
+    assert.equal(fs.readFileSync(legacyPath, 'utf8'), before);
   });
 
   it('preserves omitted tags on a revision-guarded update and replaces them only when explicitly supplied', async (t) => {

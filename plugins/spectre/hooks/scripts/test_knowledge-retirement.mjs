@@ -87,6 +87,7 @@ describe('retired active recall surface', () => {
       .map((line) => line.trim())
       .filter((line) => line && !line.startsWith('#'));
     assert.equal(expected.includes('spectre-recall'), false);
+    assert.equal(expected.includes('spectre-work-record'), true);
   });
 
   it('rewrites retained Codex knowledge commands to the neutral bundled CLI', () => {

@@ -12,6 +12,7 @@ const RECORD_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TAG_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TITLE_LIMIT = 200;
 const SUMMARY_LIMIT = 500;
+const WORK_RECORD_TOKEN_LIMIT = 2_000;
 
 const KINDS = new Set(['knowledge', 'work']);
 const CATEGORIES = new Set(['decision', 'pattern', 'gotcha', 'blocker']);
@@ -512,6 +513,18 @@ export function renderKnowledgeRecord(record) {
 
 export function estimateRenderedRecordTokens(record) {
   return estimatePayloadTokens(renderKnowledgeRecord(record));
+}
+
+export function assertRenderedWorkRecordTokenLimit(record) {
+  if (record.kind !== 'work') return;
+  const estimatedTokens = estimateRenderedRecordTokens(record);
+  if (estimatedTokens > WORK_RECORD_TOKEN_LIMIT) {
+    const error = new Error(`Work record exceeds the ${WORK_RECORD_TOKEN_LIMIT} estimated rendered-token limit (${estimatedTokens}). Compact the seven-section account and retry.`);
+    error.code = 'WORK_RECORD_TOO_LARGE';
+    error.estimatedTokens = estimatedTokens;
+    error.tokenLimit = WORK_RECORD_TOKEN_LIMIT;
+    throw error;
+  }
 }
 
 function parseRecordJson(text, recordPath, options) {

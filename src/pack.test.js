@@ -82,7 +82,7 @@ test('packed npm artifact contains portable Claude and Codex knowledge runtimes 
       'skills/spectre-scope/scripts/ensure-codex-agents.mjs',
       'skills/spectre-learn/scripts/register-knowledge.mjs',
       'skills/spectre-capture/references/knowledge-capture-input.json',
-      'skills/spectre-capture/references/work-capture-input.json',
+      'skills/spectre-work-record/references/work-capture-input.json',
       'skills/spectre-uninstall-codex/SKILL.md',
       'hooks/hooks.json',
       'hooks/scripts/bootstrap.mjs',
@@ -110,7 +110,7 @@ test('packed npm artifact contains portable Claude and Codex knowledge runtimes 
     for (const root of [claudePluginRoot, pluginRoot]) {
       for (const relativePath of [
         'skills/spectre-capture/references/knowledge-capture-input.json',
-        'skills/spectre-capture/references/work-capture-input.json',
+        'skills/spectre-work-record/references/work-capture-input.json',
         'hooks/hooks.json',
         'hooks/scripts/load-knowledge.mjs',
         'hooks/scripts/knowledge-cli.mjs',

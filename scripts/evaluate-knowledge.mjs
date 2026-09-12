@@ -376,6 +376,26 @@ export function judgeCell(cell, runtime, oracle) {
         return { valid: false, recalled: false, reason: 'automatic Execute capture evidence is missing' };
       }
     }
+    if (cell.condition === 'candidate' && expected.requiredStates?.some((state) =>
+      ['execute-start', 'execute-completion', 'ship-post-pr'].includes(state))) {
+      const sessions = runtime.sessionSnapshots ?? [];
+      const events = (runtime.trace?.events ?? []).filter((event) => event.type === 'capture' && event.kind === 'work' &&
+        (event.outcome === 'created' || event.outcome === 'updated'));
+      const inSession = (index) => events.filter((event) => event.contextHash === sessions[index]?.contextHash);
+      const executeEvents = inSession(0);
+      const shipEvents = inSession(2);
+      const starts = executeEvents.filter((event) => event.workLifecycle?.execution === 'in-progress');
+      const completions = executeEvents.filter((event) => ['implementation-ready', 'acceptance-pending'].includes(event.workLifecycle?.execution));
+      const ship = shipEvents.filter((event) => event.workLifecycle?.pullRequest === 'draft-open');
+      const shipDraftsBefore = new Set((sessions[2]?.gh?.before?.pullRequests ?? []).map((pullRequest) => pullRequest.number));
+      const createdDraftBeforeShipCapture = (sessions[2]?.gh?.after?.pullRequests ?? []).some((pullRequest) =>
+        pullRequest.state === 'OPEN' && pullRequest.isDraft === true && !shipDraftsBefore.has(pullRequest.number)
+      );
+      if (starts.length !== 1 || completions.length !== 1 || executeEvents.length !== 2 || ship.length !== 1 ||
+        !createdDraftBeforeShipCapture || !(runtime.workflowEvidence?.ghCommands ?? []).some((command) => /pr create --draft/.test(command))) {
+        return { valid: false, recalled: false, reason: 'work-boundary capture evidence is missing' };
+      }
+    }
     if (cell.condition === 'candidate' && expected.requiresFreshExtractedReuse === true) {
       const importedHashes = new Set(expected.importedRecordHashes ?? []);
       const importedReads = (runtime.toolOperations ?? []).filter((operation) => {

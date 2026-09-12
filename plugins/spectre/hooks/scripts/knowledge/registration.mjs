@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   RECORD_FILE_NAME,
+  assertRenderedWorkRecordTokenLimit,
   parseKnowledgeRecord,
   readRecordRevision,
   refreshKnowledgeIndex,
@@ -380,6 +381,10 @@ export async function registerCanonicalKnowledge(options) {
           stagedRevision: parsed.revisionToken,
           indexedCurrentRevision: indexedRevision(storePath, parsed.record.id),
         });
+        if (parsed.record.kind === 'work' &&
+          (parsed.record.provenance.origin !== 'legacy-import' || outcome.status === 'updated')) {
+          assertRenderedWorkRecordTokenLimit(parsed.record);
+        }
         if (outcome.status === 'noop') {
           const recorded = importReceipt
             ? findImportReceipt(storePath, importReceipt.sourceDigest)

@@ -3,14 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-  estimateRenderedRecordTokens,
+  assertRenderedWorkRecordTokenLimit,
   parseKnowledgeRecord,
   revisionTokenFor,
   validateKnowledgeRecord,
 } from './records.mjs';
 import { registerCanonicalKnowledge } from './registration.mjs';
 import { resolveProjectStore } from './store.mjs';
-import { ensureTags, loadTagCatalog, resolveTagId } from './tags.mjs';
+import { ensureTags, loadTagCatalog, normalizeTagId, resolveTagId } from './tags.mjs';
 import { resolveOrAllocateWorkIdentity, resolveWorkIdentity } from './work.mjs';
 
 const INPUT_VERSION = 1;
@@ -28,7 +28,6 @@ const WORK_INPUT_FIELDS = new Set([
 ]);
 const PLACEHOLDER = /^(?:<[^>]+>|{{[^}]+}}|TODO|REPLACE[_ -]?ME)$/i;
 const UNKNOWN_STATE = { state: 'unknown' };
-const WORK_RECORD_TOKEN_LIMIT = 2_000;
 
 function codedError(code, message, details = {}) {
   const error = new Error(message);
@@ -176,6 +175,20 @@ async function canonicalTags({ projectDir, tags, existingTags, lockOptions, ...o
   return { tags: canonical, tagOutcomes: [...known, ...ensured] };
 }
 
+/** Resolve the final record's tag ids without making the catalog writer reachable. */
+async function preflightCanonicalTags({ projectDir, tags, existingTags, ...options }) {
+  if (tags === undefined) return [...existingTags];
+  const loaded = await loadTagCatalog({ projectDir, readOnly: true, ...storeOptions(options) });
+  const canonical = [];
+  for (const intent of tags) {
+    const resolved = resolveTagId(loaded.catalog, intent.id);
+    const id = resolved?.id || normalizeTagId(intent.id);
+    if (!id) throw codedError('CAPTURE_INPUT_INVALID', `Tag ${intent.id} has an invalid id.`);
+    if (!canonical.includes(id)) canonical.push(id);
+  }
+  return canonical;
+}
+
 function constructKnowledge(input, current, tags, options) {
   const provenance = current?.provenance || {
     origin: 'captured', capturedAt: nowIso(options),
@@ -223,6 +236,7 @@ function constructWork(input, current, workId, tags, associations, options) {
     applicability: { ...applicability, ...(runIds.length ? { runIds } : {}) },
     provenance: { ...provenance, ...(sourceRunIds.length ? { sourceRunIds } : {}) },
     relatedRecordIds: input.relatedRecordIds || current?.relatedRecordIds || [],
+    ...(current?.importedSource ? { importedSource: current.importedSource } : {}),
     work: {
       ...Object.fromEntries(WORK_FIELDS.map((field) => [field, input[field]])),
       execution: input.execution || current?.work.execution || UNKNOWN_STATE,
@@ -234,28 +248,24 @@ function constructWork(input, current, workId, tags, associations, options) {
 }
 
 function assertWorkRecordTokenLimit(record) {
-  if (record.kind !== 'work') return;
-  const estimatedTokens = estimateRenderedRecordTokens(record);
-  if (estimatedTokens > WORK_RECORD_TOKEN_LIMIT) {
-    throw codedError(
-      'WORK_RECORD_TOO_LARGE',
-      `Work record exceeds the ${WORK_RECORD_TOKEN_LIMIT} estimated rendered-token limit (${estimatedTokens}). Compact the seven-section account and retry.`,
-      { estimatedTokens, tokenLimit: WORK_RECORD_TOKEN_LIMIT },
-    );
+  try {
+    assertRenderedWorkRecordTokenLimit(record);
+  } catch (error) {
+    throw codedError(error.code || 'CAPTURE_INPUT_INVALID', error.message, error);
   }
 }
 
 /**
- * Exercise the existing typed validator before any tag or identity writer. The temporary
- * identity and tag are only schema-valid stand-ins; registration constructs the final record.
+ * Exercise the existing typed validator before any tag or identity writer using the ids that
+ * the final record will render with. A new work identity has the same canonical UUID shape.
  */
-function prevalidateSemanticRecord(input, kind, current, requested, options) {
+function prevalidateSemanticRecord(input, kind, current, requested, options, tags) {
   const id = kind === 'knowledge'
     ? input.id
-    : current?.id || options.workId || 'semantic-capture-validation';
+    : current?.id || options.workId || 'work-00000000-0000-0000-0000-000000000000';
   const record = kind === 'knowledge'
-    ? constructKnowledge(input, current, current?.tags || ['semantic-capture-validation'], options)
-    : constructWork(input, current, id, current?.tags || ['semantic-capture-validation'], requested, options);
+    ? constructKnowledge(input, current, tags, options)
+    : constructWork(input, current, id, tags, requested, options);
   try {
     validateKnowledgeRecord(record, path.join('<semantic-input>', id, 'record.json'), { expectedId: id });
   } catch (error) {
@@ -324,7 +334,10 @@ export async function captureCanonicalKnowledge(options) {
     throw codedError('CAPTURE_KIND_CONFLICT', `${current.record.id} is not a ${kind} record.`);
   }
   try {
-    prevalidateSemanticRecord(input, kind, current?.record, requested, options);
+    const preflightTags = await preflightCanonicalTags({
+      projectDir: options.projectDir, tags: input.tags, existingTags: current?.record.tags || [], ...storeOptions(options),
+    });
+    prevalidateSemanticRecord(input, kind, current?.record, requested, options, preflightTags);
   } catch (error) {
     throw recovery(error, { recoveryInput: path.resolve(options.inputPath) });
   }
@@ -361,6 +374,11 @@ export async function captureCanonicalKnowledge(options) {
       });
       return {
         ok: true, kind, id: registration.id, ...(kind === 'work' ? { workId: registration.id, association: workIdentity } : {}),
+        ...(kind === 'work' ? { workLifecycle: {
+          execution: record.work.execution.state,
+          verification: record.work.verificationState.state,
+          pullRequest: record.work.pullRequest.state,
+        } } : {}),
         tags: tagResult.tags, tagOutcomes: tagResult.tagOutcomes,
         status: registration.status, revisionToken: registration.revisionToken,
         previousRevisionToken: registration.previousRevisionToken, recordPath: registration.recordPath,
