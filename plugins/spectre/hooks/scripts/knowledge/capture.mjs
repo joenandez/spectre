@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { parseKnowledgeRecord, revisionTokenFor, validateKnowledgeRecord } from './records.mjs';
+import {
+  estimateRenderedRecordTokens,
+  parseKnowledgeRecord,
+  revisionTokenFor,
+  validateKnowledgeRecord,
+} from './records.mjs';
 import { registerCanonicalKnowledge } from './registration.mjs';
 import { resolveProjectStore } from './store.mjs';
 import { ensureTags, loadTagCatalog, resolveTagId } from './tags.mjs';
@@ -23,6 +28,7 @@ const WORK_INPUT_FIELDS = new Set([
 ]);
 const PLACEHOLDER = /^(?:<[^>]+>|{{[^}]+}}|TODO|REPLACE[_ -]?ME)$/i;
 const UNKNOWN_STATE = { state: 'unknown' };
+const WORK_RECORD_TOKEN_LIMIT = 2_000;
 
 function codedError(code, message, details = {}) {
   const error = new Error(message);
@@ -227,6 +233,18 @@ function constructWork(input, current, workId, tags, associations, options) {
   };
 }
 
+function assertWorkRecordTokenLimit(record) {
+  if (record.kind !== 'work') return;
+  const estimatedTokens = estimateRenderedRecordTokens(record);
+  if (estimatedTokens > WORK_RECORD_TOKEN_LIMIT) {
+    throw codedError(
+      'WORK_RECORD_TOO_LARGE',
+      `Work record exceeds the ${WORK_RECORD_TOKEN_LIMIT} estimated rendered-token limit (${estimatedTokens}). Compact the seven-section account and retry.`,
+      { estimatedTokens, tokenLimit: WORK_RECORD_TOKEN_LIMIT },
+    );
+  }
+}
+
 /**
  * Exercise the existing typed validator before any tag or identity writer. The temporary
  * identity and tag are only schema-valid stand-ins; registration constructs the final record.
@@ -243,6 +261,7 @@ function prevalidateSemanticRecord(input, kind, current, requested, options) {
   } catch (error) {
     throw codedError('CAPTURE_INPUT_INVALID', error instanceof Error ? error.message : String(error));
   }
+  assertWorkRecordTokenLimit(record);
 }
 
 function proposalPath(record, current) {
@@ -304,7 +323,11 @@ export async function captureCanonicalKnowledge(options) {
   if (current && current.record.kind !== kind) {
     throw codedError('CAPTURE_KIND_CONFLICT', `${current.record.id} is not a ${kind} record.`);
   }
-  prevalidateSemanticRecord(input, kind, current?.record, requested, options);
+  try {
+    prevalidateSemanticRecord(input, kind, current?.record, requested, options);
+  } catch (error) {
+    throw recovery(error, { recoveryInput: path.resolve(options.inputPath) });
+  }
   try {
     tagResult = await canonicalTags({
       projectDir: options.projectDir, tags: input.tags, existingTags: current?.record.tags || [], lockOptions: options.lockOptions, ...storeOptions(options),
@@ -324,6 +347,7 @@ export async function captureCanonicalKnowledge(options) {
       ? constructKnowledge(input, current?.record, tagResult.tags, options)
       : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, options);
     validateKnowledgeRecord(record, path.join('<semantic-capture>', record.id, 'record.json'), { expectedId: record.id });
+    assertWorkRecordTokenLimit(record);
     if (current && !options.expectedRevision && current.revisionToken !== revisionTokenFor(record, current.resourceDigests)) {
       throw codedError('KNOWLEDGE_REVISION_REQUIRED', `Updating ${record.id} requires --expected-revision ${current.revisionToken}.`, {
         status: 'conflict', currentRevision: current.revisionToken,

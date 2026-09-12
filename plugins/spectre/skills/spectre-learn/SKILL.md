@@ -9,12 +9,12 @@ disable-model-invocation: true
 
 ## Purpose
 
-Turn an explicit user capture request into a qualified knowledge or work-record request. Learn owns user intent and routing; `Skill(spectre-capture)` owns persistence. Do not revive knowledge-skill authoring, proposal gates, dossiers, or SessionStart output.
+Turn an explicit user capture request into maintained knowledge or a historical work-record request. Learn owns user intent and routing; `Skill(spectre-capture)` owns knowledge persistence and `Skill(spectre-work-record)` owns work history. Do not revive knowledge-skill authoring, proposal gates, dossiers, or SessionStart output.
 
 ## Inputs
 
 - An explicit user capture request, `$ARGUMENTS`, and the current conversation; bare invocation means review the conversation for consequential, evidenced knowledge.
-- User intent: an insight or correction targets maintained knowledge; `summarize this work` or a broad feature account targets a typed work record.
+- User intent: an insight or correction targets maintained knowledge; a work summary, explicit snapshot, or historical correction targets a typed work record.
 - The current project directory and any exact record/work identity already in context. A Spectre feature root is not required.
 
 ## Working Set
@@ -24,15 +24,15 @@ Turn an explicit user capture request into a qualified knowledge or work-record 
 
 ## Outputs + DONE
 
-- `Skill(spectre-capture)` returns a saved, updated, or no-op result. Report its record kind, exact ID, and outcome.
+- `Skill(spectre-capture)` or `Skill(spectre-work-record)` returns a saved, updated, or no-op result. Report its record kind, exact ID, and outcome.
 - A broad account always uses the seven-section work record form. No Learn output creates a knowledge skill, separate dossier, or SessionStart entry.
 - DONE when qualifying evidence has reached Capture or bare Learn truthfully reports a no-op.
 
 ## Method / guardrails
 
 1. Identify intent from the request. A bare request scans the conversation for accepted consequential decisions, verified reusable constraints, corrections, or confirmed blockers/resolutions. An explicit user correction is already-authorized evidence, not an unsupported hypothesis; routine progress and model-generated hypotheses are no-ops.
-2. For an insight or correction, provide Capture the evidence, its authority, and the maintained-knowledge target. For an explicit user correction, cite that direction as the evidence, revise the current record, and retain disagreeing repository statements only as stale or historical context; absence of repository corroboration is not missing evidence. For work summary intent, provide the exact run/PR/candidate association and only truthful lifecycle facts.
-3. Tell `Skill(spectre-capture)` which kind applies, the evidence, exact identity, and tag intent. Capture reads `references/knowledge-capture-input.json` or `references/work-capture-input.json`, searches/reuses tags, and owns construction, revisions, saving, and recovery. Learn does not duplicate that SOP or write records. Already-authorized facts need no new proposal or approval loop.
+2. For an insight or correction, provide `Skill(spectre-capture)` the evidence, authority, and maintained-knowledge target. For an explicit user correction, cite that direction as evidence, revise the current record, and retain disagreeing repository statements only as stale or historical context; absence of repository corroboration is not missing evidence. For work summary, explicit snapshot, or historical correction, provide `Skill(spectre-work-record)` the exact run/PR/candidate association and only truthful lifecycle facts.
+3. The knowledge skill reads `references/knowledge-capture-input.json`; the work-record skill reads the shared `spectre-capture/references/work-capture-input.json`. Each owns construction, revisions, tags, saving, and recovery. Learn does not duplicate that SOP or write records. Already-authorized facts need no new proposal or approval loop.
 
 ## Handoff
 | Handoff | Details |

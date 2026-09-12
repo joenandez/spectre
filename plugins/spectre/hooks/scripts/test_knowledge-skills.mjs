@@ -18,44 +18,53 @@ function skill(name) {
   return fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', name, 'SKILL.md'), 'utf8');
 }
 
-test('workflow skills make capture primary-owned and preserve delivery lifecycle authority', () => {
+function description(content) {
+  return content.match(/^---\n[\s\S]*?^description: "([^"]+)"/m)?.[1] || '';
+}
+
+test('knowledge and work-record skills have separate self-sufficient routing contracts', () => {
   const execute = skill('spectre-execute');
   const ship = skill('spectre-ship');
   const createPr = skill('spectre-create_pr');
+  const learn = skill('spectre-learn');
   const capture = skill('spectre-capture');
+  const workRecord = skill('spectre-work-record');
 
-  assert.match(execute, /workers[\s\S]*findings[\s\S]*primary/i);
-  assert.match(execute, /accepted batch[\s\S]*capture/i);
-  assert.match(execute, /seven[\s\S]*work record/i);
-  assert.match(execute, /IMPLEMENTATION_READY[\s\S]*ACCEPTANCE_PENDING/);
-  assert.match(execute, /Failed\/incomplete[\s\S]*not[\s\S]*completed/i);
-
-  assert.match(ship, /work ID[\s\S]*before[\s\S]*draft/i);
-  assert.match(ship, /same work ID[\s\S]*repairs[\s\S]*URL/i);
-  assert.match(ship, /save failure[\s\S]*does not block/i);
-  assert.match(createPr, /shared pre-PR capture/i);
-  assert.match(createPr, /unchanged candidate[\s\S]*no-op/i);
-  assert.match(createPr, /draft[\s\S]*not[\s\S]*merged/i);
-  assert.match(capture, /load[\s\S]*--json[\s\S]*revisionToken/i);
-  assert.match(capture, /one successful[\s\S]*--json[\s\S]*unchanged revision[\s\S]*context/i);
-  assert.match(capture, /reuse[\s\S]*record[\s\S]*revisionToken[\s\S]*no-op[\s\S]*proposal[\s\S]*result/i);
-  assert.match(capture, /metadata-only[\s\S]*revision check/i);
-  assert.match(capture, /reload only[\s\S]*changed revision[\s\S]*conflict[\s\S]*new context/i);
-  assert.match(capture, /allowance[\s\S]*--allowance-tokens[\s\S]*never read canonical files/i);
-  assert.match(capture, /outside[\s\S]*knowledge store[\s\S]*expected-revision/i);
-  assert.match(capture, /never[\s\S]*canonical[\s\S]*index\.json[\s\S]*history/i);
-  assert.match(capture, /pullRequest\.state[\s\S]*draft-open/i);
+  assert.match(description(capture), /lasting decision[\s\S]*correction[\s\S]*reusable/i);
+  assert.match(description(capture), /disproved[\s\S]*persistent blocker/i);
+  assert.match(description(capture), /not[\s\S]*work summar|progress|task completion/i);
   assert.match(capture, /knowledge-capture-input\.json/);
-  assert.match(capture, /work-capture-input\.json/);
-  assert.match(capture, /eight[\s\S]*seven/i);
-  assert.match(capture, /capture --kind knowledge\|work/);
-  assert.match(capture, /aliases?[\s\S]*canonical/i);
-  assert.match(capture, /omitted[\s\S]*tags[\s\S]*preserve/i);
+  assert.match(capture, /capture --kind knowledge/);
+  assert.doesNotMatch(capture, /work-capture-input\.json|capture --kind knowledge\|work/);
+
+  assert.match(description(workRecord), /Execute start[\s\S]*blocked[\s\S]*completion/i);
+  assert.match(description(workRecord), /Ship[\s\S]*Create PR[\s\S]*snapshot[\s\S]*correction/i);
+  assert.match(description(workRecord), /not[\s\S]*routine progress[\s\S]*check[\s\S]*commit/i);
+  assert.match(workRecord, /work-capture-input\.json/);
+  assert.match(workRecord, /capture --kind work/);
+  assert.match(workRecord, /2,000[\s\S]*non-blocking/i);
+
+  assert.match(execute, /exact run[\s\S]*Skill\(spectre-work-record\)[\s\S]*start/i);
+  assert.match(execute, /meaningful blocked[\s\S]*resolved[\s\S]*Skill\(spectre-work-record\)/i);
+  assert.match(execute, /terminal completion[\s\S]*Skill\(spectre-work-record\)/i);
+  assert.match(execute, /accepted batch[\s\S]*Skill\(spectre-capture\)[\s\S]*qualifying reusable knowledge/i);
+  assert.match(execute, /capture failure[\s\S]*does not block/i);
+  assert.match(execute, /IMPLEMENTATION_READY[\s\S]*ACCEPTANCE_PENDING/);
+
+  assert.doesNotMatch(ship, /pre-PR[\s\S]*work/i);
+  assert.match(ship, /PR[\s\S]*first[\s\S]*Skill\(spectre-work-record\)/i);
+  assert.match(ship, /failure[\s\S]*does not block/i);
+  assert.match(createPr, /orchestrated[\s\S]*does not[\s\S]*work record/i);
+  assert.match(createPr, /standalone[\s\S]*Skill\(spectre-work-record\)[\s\S]*terminal/i);
+  assert.match(learn, /maintained knowledge[\s\S]*Skill\(spectre-capture\)/i);
+  assert.match(learn, /work summar|snapshot|historical correction/i);
+  assert.match(learn, /Skill\(spectre-work-record\)/);
 });
 
 test('Learn delegates capture and planning retains only loaded knowledge provenance', () => {
   const learn = skill('spectre-learn');
   const capture = skill('spectre-capture');
+  const workRecord = skill('spectre-work-record');
   const scope = skill('spectre-scope');
   const plan = skill('spectre-plan');
   const createPlan = skill('spectre-create_plan');
@@ -66,13 +75,12 @@ test('Learn delegates capture and planning retains only loaded knowledge provena
 
   assert.match(learn, /bare[\s\S]*no-op/i);
   assert.match(learn, /insight|correction/i);
-  assert.match(learn, /work record/i);
   assert.match(learn, /Skill\(spectre-capture\)/);
   assert.match(learn, /User-invoked front door for durable capture/);
-  assert.match(learn, /Learn owns user intent and routing[\s\S]*owns persistence/i);
+  assert.match(learn, /Learn owns user intent and routing[\s\S]*owns knowledge persistence/i);
   assert.match(learn, /Spectre feature root is not required/i);
   assert.match(learn, /knowledge-capture-input\.json/);
-  assert.match(learn, /work-capture-input\.json/);
+  assert.match(learn, /Skill\(spectre-work-record\)/);
   assert.match(learn, /disable-model-invocation: true/);
   assert.match(learn, /explicit user statement[\s\S]*accepted authoritative evidence/i);
   assert.match(learn, /do not seek independent corroboration or reconfirmation/i);
@@ -84,7 +92,7 @@ test('Learn delegates capture and planning retains only loaded knowledge provena
   assert.match(capture, /without waiting for a user request/i);
   assert.match(capture, /not a Spectre feature root/i);
   assert.match(capture, /maintained knowledge[\s\S]*requires no workflow, feature, run, or PR association/i);
-  assert.match(capture, /For work records only[\s\S]*exact run, PR, or repository\/base\/head\/diff association/i);
+  assert.match(workRecord, /exact run, PR, or repository\/base\/head\/diff association/i);
   assert.match(capture, /user-invocable: false/);
   assert.doesNotMatch(learn, /stop and wait for the user/i);
   assert.doesNotMatch(learn, /feature dossier/i);

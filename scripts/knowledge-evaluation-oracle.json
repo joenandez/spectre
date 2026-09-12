@@ -90,14 +90,15 @@
     "requiresDraftReplacement": true,
     "requiresExecuteAutoCapture": true,
     "requiredStates": [
-      "capture",
-      "refresh",
+      "execute-start",
+      "execute-completion",
+      "ship-post-pr",
       "noop",
       "save-failure",
       "draft",
       "replacement-draft"
     ],
-    "manualRubric": "Execute creates one work identity; Ship refreshes it before the draft; repair, URL update, and unchanged capture retain that ID; a registration failure is reported while the direct draft opens."
+    "manualRubric": "Execute creates one start record and one terminal account; Ship records the URL only after draft creation; routine progress never revises the work account; a registration failure is reported while standalone Create PR still opens the draft."
   },
   "longitudinal-correction": {
     "requiredRecordHashes": [

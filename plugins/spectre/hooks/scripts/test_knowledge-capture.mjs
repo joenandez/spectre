@@ -183,6 +183,41 @@ describe('semantic knowledge capture', () => {
     }
   });
 
+  it('rejects oversized work accounts before allocation and preserves legacy accounts until a compact revision', async (t) => {
+    const value = await fixture(t);
+    const oversized = workInput({ actualChanges: 'x'.repeat(12_000) });
+    const newInput = inputPath(value, 'oversized-new-work.json', oversized);
+    const rejectedNew = run('bundled', ['capture', '--kind', 'work', '--input', newInput, '--source-run-id', 'run-oversized-new'], value);
+    assert.equal(rejectedNew.status, 1);
+    assert.equal(output(rejectedNew).code, 'WORK_RECORD_TOO_LARGE');
+    assert.equal(output(rejectedNew).recoveryInput, newInput);
+    assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
+
+    const legacy = await registerResourceWork(value, 'legacy-oversized-work', oversized);
+    const legacyPath = path.join(value.storePath, 'knowledge', 'legacy-oversized-work', 'record.json');
+    const before = fs.readFileSync(legacyPath, 'utf8');
+    const revisedInput = inputPath(value, 'oversized-legacy-update.json', workInput({
+      actualChanges: 'y'.repeat(12_000),
+      tags: undefined,
+    }));
+    const rejectedUpdate = run('bundled', [
+      'capture', '--kind', 'work', '--input', revisedInput, '--work-id', 'legacy-oversized-work',
+      '--expected-revision', legacy.revisionToken,
+    ], value);
+    assert.equal(rejectedUpdate.status, 1);
+    assert.equal(output(rejectedUpdate).code, 'WORK_RECORD_TOO_LARGE');
+    assert.equal(output(rejectedUpdate).recoveryInput, revisedInput);
+    assert.equal(fs.readFileSync(legacyPath, 'utf8'), before);
+
+    const compactInput = inputPath(value, 'compact-legacy-update.json', workInput({ tags: undefined }));
+    const compact = run('bundled', [
+      'capture', '--kind', 'work', '--input', compactInput, '--work-id', 'legacy-oversized-work',
+      '--expected-revision', legacy.revisionToken,
+    ], value);
+    assert.equal(compact.status, 0, compact.stderr);
+    assert.equal(output(compact).status, 'updated');
+  });
+
   it('preserves omitted tags on a revision-guarded update and replaces them only when explicitly supplied', async (t) => {
     const value = await fixture(t);
     const initial = inputPath(value, 'initial.json', knowledgeInput());

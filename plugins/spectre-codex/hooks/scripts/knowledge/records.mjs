@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { atomicWriteJson } from './store.mjs';
+import { estimatePayloadTokens } from './payload.mjs';
 
 const RECORD_FILE_NAME = 'record.json';
 const RECORD_SCHEMA_VERSION = 1;
@@ -507,6 +508,10 @@ export function renderKnowledgeRecord(record) {
       : []),
   ];
   return lines.join('\n');
+}
+
+export function estimateRenderedRecordTokens(record) {
+  return estimatePayloadTokens(renderKnowledgeRecord(record));
 }
 
 function parseRecordJson(text, recordPath, options) {

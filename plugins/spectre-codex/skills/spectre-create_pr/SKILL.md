@@ -11,7 +11,7 @@ Produce a grounded draft PR.
 ## Inputs
 
 - `$ARGUMENTS`: `TARGET_BRANCH` (default `origin/main`), feedback focus, verification, all-or-none `EXPECTED_BASE_SHA`/`EXPECTED_HEAD_SHA`/`EXPECTED_DIFF_SHA256`, or `--orchestrated`.
-- Orchestrated `--pr-phase pending|final-update`: pending needs complete candidate tuple, local verification `RUNNING`, and returns URL/body; final-update needs its URL/body, same tuple, and `FINAL_VERIFICATION_SUMMARY`, updating existing draft Testing only. A parent may supply work ID; otherwise shared pre-PR capture resolves exact run/PR/candidate. An unchanged candidate is a no-op, never a duplicate work record.
+- Orchestrated `--pr-phase pending|final-update`: pending needs complete candidate tuple, local verification `RUNNING`, and returns URL/body; final-update needs its URL/body, same tuple, and `FINAL_VERIFICATION_SUMMARY`, updating existing draft Testing only. A parent may supply work ID. Orchestrated Create PR does not write a work record; an unchanged candidate is a no-op.
 - Resolve just-in-time: branch (not `main`/`master`), fetch target and derive `PR_BASE`, `BASE_SHA`, `HEAD_SHA`, canonical `git-diff-v1` `DIFF_SHA256` over binary/full-index/no-color/no-renames `{BASE_SHA}...{HEAD_SHA}`, commits, branch/commit issue ref, `gh`, and unpushed commits.
 - Expected fields are all-or-none. After fetch compare live tuple and clean candidate worktree (committed review/proof artifacts allowed; ignored lifecycle excluded). Tracked or non-ignored untracked changes return `PR_CANDIDATE_STALE` before push, create, or edit. Without `gh`, return title/body for manual draft.
 
@@ -30,7 +30,7 @@ The target-to-HEAD diff and commit log, issue reference, and any GitHub PR templ
 1. **Ground:** What is behavior; Why is issue, commits, branch, or `<!-- WHY: motivation not found in commits/issue — fill in -->`; visible How/trade-offs; Testing reports supplied verification, changed tests, or none.
 2. **Scale:** trivial What/Why/Closes; standard Summary/Changes/Testing/Closes; complex adds visible trade-offs, breaking/rollback, UI/CLI evidence, and reviewer focus. Derive type/scope from change; add found issue links only.
 3. **Verify before side effects:** map every claim to diff/commit/issue, drop unsupported claims/secrets, verify tuple and clean candidate, then push.
-4. **Capture fallback:** without parent work, invoke `Skill(spectre-capture)` before draft; refresh stale parent candidate. Report capture failure/recovery input without blocking draft; draft is not merged.
+4. **Work-record ownership:** in orchestrated mode return PR evidence to Ship without writing a work record. In standalone mode, when no Execute or Ship parent owns the history, invoke `Skill(spectre-work-record)` once at the terminal boundary after the draft exists; report capture failure/recovery input without blocking draft. Refresh a stale parent candidate; a draft is not merged.
 5. **Draft lifecycle:** pending grounds `RUNNING`, pushes, creates the draft, attaches PR to work ID, and returns URL/body. Final-update rechecks its tuple/clean candidate; if repairs changed the tuple, refresh candidate-sensitive claims under freshness, grounding, secret gates, verify clean repaired HEAD, pushes, re-resolves/rechecks live tuple, then `gh pr edit` only Testing from `FINAL_VERIFICATION_SUMMARY`; never mark ready.
 
 ## Handoff

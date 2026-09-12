@@ -172,6 +172,21 @@ test('lifecycle prompts use user transport only where the plugin exists', () => 
   assert.doesNotMatch(promptContract(learn, 'artifacts/decision.md', 'claude', 'no-knowledge')[0], /^\/spectre:|^spectre-learn/);
 });
 
+test('lifecycle fixture routes only historical work boundaries and excludes progress refreshes', () => {
+  const fixtures = JSON.parse(fs.readFileSync('scripts/knowledge-evaluation-fixtures/manifest.json', 'utf8'));
+  const oracle = JSON.parse(fs.readFileSync('scripts/knowledge-evaluation-oracle.json', 'utf8'));
+  const lifecycle = fixtures.cases.find((entry) => entry.id === 'lifecycle-identity');
+
+  assert.match(lifecycle.task, /Execute start[\s\S]*terminal completion/i);
+  assert.match(lifecycle.workflow, /Ship[\s\S]*after PR creation/i);
+  assert.doesNotMatch(lifecycle.task, /refresh[\s\S]*before the first draft/i);
+  assert.doesNotMatch(lifecycle.longitudinalSteps.join('\n'), /refresh that same work before opening/i);
+  assert.deepEqual(oracle['lifecycle-identity'].requiredStates.slice(0, 3), [
+    'execute-start', 'execute-completion', 'ship-post-pr',
+  ]);
+  assert.match(oracle['lifecycle-identity'].manualRubric, /routine progress[\s\S]*never/i);
+});
+
 test('longitudinal correction table keeps ordinary evidence identical while only candidates invoke Learn', () => {
   const fixtures = JSON.parse(fs.readFileSync('scripts/knowledge-evaluation-fixtures/manifest.json', 'utf8'));
   const correction = fixtures.cases.find((entry) => entry.id === 'longitudinal-correction');

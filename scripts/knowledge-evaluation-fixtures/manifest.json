@@ -173,17 +173,17 @@
     },
     {
       "id": "lifecycle-identity",
-      "task": "Execute the feature on the staged feature branch so it writes its templated work record. Ship must refresh that exact work before the first draft. Repair verification and add the draft URL while retaining the same work ID; repeat an unchanged capture as a no-op. The fixture then makes knowledge registration fail: report the failure and recovery input, but still open the local gh draft through the direct CreatePR fallback.",
-      "workflow": "Use Learn summarize this work, Plan, Execute, Ship, and CreatePR in order. Prove one work ID survives refresh, repair, URL update, and unchanged capture; a knowledge-save failure does not block the draft.",
+      "task": "Execute the feature on the staged feature branch so it creates one minimal work record at Execute start, leaves routine progress untouched, and writes its terminal completion. Ship must create the draft first, then update that exact work with the draft URL and final verification. Repeat an unchanged explicit snapshot as a no-op. The fixture then makes knowledge registration fail: report the failure and recovery input, but still open the local gh draft through standalone Create PR terminal ownership.",
+      "workflow": "Use an explicit Learn historical snapshot, Plan, Execute, Ship, and standalone Create PR in order. Prove one work ID survives Execute start/completion and Ship after PR creation with the post-PR association; routine progress never revises it, and a knowledge-save failure does not block the draft.",
       "initialFacts": [],
       "workflowCommandSession": 0,
       "userLearnSessions": [1, 3],
       "longitudinalSteps": [
         "Start a fresh session. As the user-requested workflow command, run {EXECUTE_COMMAND} --orchestrated --finalization-owner parent --review-profile final-only for the staged feature.",
-        "Start a fresh session. Use Learn with explicit work-summary intent to capture the Execute-created templated work record, including unknown or pending fields truthfully.",
-        "Start a fresh session. As the user-requested workflow command, run {SHIP_COMMAND}: refresh that same work before opening the local gh draft, then repair verification and retain the draft URL.",
-        "Start a fresh session. Repeat the unchanged work capture and record its explicit no-op outcome. Do not attempt a forced registration failure in this session.",
-        "Start a fresh session. The prior local draft was closed after an unchanged work capture. A newly verified delivery-note review confirms the bounded implementation result, so refresh that work with this fresh fact. If the registration-failure fixture was armed, report its failure and recovery input; otherwise report that fault setup was unavailable without claiming a save failure. In either case, use the direct CreatePR fallback to open a new local draft on the same branch, then write evaluation-result.json with the required decision artifact."
+        "Start a fresh session. Use Learn with explicit historical-snapshot intent to record the Execute-created account, including unknown or pending fields truthfully.",
+        "Start a fresh session. As the user-requested workflow command, run {SHIP_COMMAND}: create the local gh draft first, then associate its URL and final verification with that same work.",
+        "Start a fresh session. Record that routine progress must not revise the work account, then repeat the unchanged explicit snapshot and record its no-op outcome. Do not attempt a forced registration failure in this session.",
+        "Start a fresh session. The prior local draft was closed after an unchanged explicit snapshot. A newly verified delivery-note review confirms the bounded implementation result. If the registration-failure fixture was armed, report its failure and recovery input; otherwise report that fault setup was unavailable without claiming a save failure. In either case, use standalone Create PR terminal ownership to open a new local draft on the same branch, then write evaluation-result.json with the required decision artifact."
       ],
       "cohort": "workflow"
     },
