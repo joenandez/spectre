@@ -1,6 +1,6 @@
 ---
 name: "spectre-work-record"
-description: "Create or revise one bounded historical work record at Execute start, a meaningful blocked handoff or its resolution, Execute completion, Ship after PR creation, standalone Create PR terminal ownership, an explicit user snapshot, or a historical correction. Do not use for routine progress, task or batch updates, checks, reviews, commits, live context management, reusable guidance, or orchestrated Create PR."
+description: "Use only for one bounded historical account at an explicit ownership boundary, not as proactive project memory. Fires on: Execute start after exact run/work identity exists; a meaningful blocked handoff or its resolution; Execute completion; Ship after the PR exists; standalone Create PR when no Execute or Ship parent owns the record; an explicit user request to snapshot or summarize a body of work; or a historical correction. Workflow ownership or explicit historical intent is required. Not for reusable guidance, routine progress, or orchestrated Create PR."
 user-invocable: false
 ---
 

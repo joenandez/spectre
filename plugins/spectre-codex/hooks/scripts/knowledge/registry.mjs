@@ -22,10 +22,10 @@ function renderTagEntry([id, tag]) {
 function renderContent(entries, omittedCount, cliPath) {
   return [
     '## Project knowledge',
-    'For a substantive task, search the actual task, assess applicability, then exact-load only the needed record. For unrelated general conversation, load nothing.',
-    'Search can find untagged imported work and tags omitted here; previews and history are not active guidance.',
-    `Run ${shellQuote(cliPath)} search '<task>' --project-dir .; then replace search '<task>' with load '<id>'. Apply only a verified load.`,
-    "A standalone #tag in user input is an explicit lookup: strip #, search --tag '<tag>', then exact-load applicable matches; never create tags from lookup text.",
+    `Use ${shellQuote(cliPath)} with --project-dir . A matching listed tag uses search --tag '<tag>'; otherwise search '<task>' only if prior work is cited or a decision may depend on omitted/untagged knowledge. Substance alone is insufficient.`,
+    'Discovery is per question, not skill. Reuse results/loads; refine only for an unresolved question or new subject; never repeat an equivalent query.',
+    "Use load '<id>' only to resolve that question/decision; verified loads alone are guidance. Oversized loads require a blocked decision. Unrelated chat: load nothing.",
+    "#tag is explicit: search --tag '<tag>', exact-load applicable matches; never create tags.",
     'Tags:',
     ...(entries.length > 0 ? entries.map(renderTagEntry) : ['- No tagged records yet; imported work remains searchable.']),
     `Omitted tags: ${omittedCount}; omitted tags remain searchable.`,

@@ -30,16 +30,18 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   const capture = skill('spectre-capture');
   const workRecord = skill('spectre-work-record');
 
-  assert.match(description(capture), /lasting decision[\s\S]*correction[\s\S]*reusable/i);
+  assert.match(description(capture), /project must still know next week[\s\S]*immediately and unasked/i);
+  assert.match(description(capture), /decision made, reaffirmed, or reversed[\s\S]*correction[\s\S]*gotcha, root cause, version pin, constraint, or convention/i);
   assert.match(description(capture), /disproved[\s\S]*persistent blocker/i);
-  assert.match(description(capture), /not[\s\S]*work summar|progress|task completion/i);
+  assert.match(description(capture), /user’s word alone is sufficient authority[\s\S]*never wait for repo evidence or an explicit save request/i);
+  assert.match(description(capture), /not for work records or routine progress/i);
   assert.match(capture, /knowledge-capture-input\.json/);
   assert.match(capture, /capture --kind knowledge/);
   assert.doesNotMatch(capture, /work-capture-input\.json|capture --kind knowledge\|work/);
 
   assert.match(description(workRecord), /Execute start[\s\S]*blocked[\s\S]*completion/i);
   assert.match(description(workRecord), /Ship[\s\S]*Create PR[\s\S]*snapshot[\s\S]*correction/i);
-  assert.match(description(workRecord), /not[\s\S]*routine progress[\s\S]*check[\s\S]*commit/i);
+  assert.match(description(workRecord), /not for reusable guidance, routine progress, or orchestrated Create PR/i);
   assert.match(workRecord, /work-capture-input\.json/);
   assert.match(workRecord, /Execute start[\s\S]*None yet\.[\s\S]*never use[\s\S]*TODO[\s\S]*REPLACE_ME/i);
   assert.match(workRecord, /capture --kind work/);
@@ -102,15 +104,20 @@ test('Learn delegates capture and planning retains only loaded knowledge provena
   assert.doesNotMatch(learn, /feature dossier/i);
 
   for (const content of [scope, plan, createPlan]) {
-    assert.match(content, /search[\s\S]*actual task/i);
+    assert.match(content, /reuse current-request knowledge results\/loads/i);
+    assert.match(content, /follow Project knowledge routing/i);
+    assert.match(content, /refine only for an unresolved question or new subject/i);
     assert.match(content, /exact[ -]load[\s\S]*applicable/i);
     assert.match(content, /id[\s\S]*revision/i);
     assert.match(content, /preview-only|unloaded candidate/i);
     assert.match(content, /(?:unchanged revision[\s\S]*(?:not|never)[\s\S]*reload|(?:not|never)[\s\S]*reload[\s\S]*unchanged revision)/i);
     assert.match(content, /compact[\s\S]*provenance/i);
   }
-  assert.match(registry, /substantive task[\s\S]*search[\s\S]*assess applicability[\s\S]*exact-load/i);
-  assert.match(registry, /unrelated general conversation[\s\S]*load nothing/i);
+  assert.match(registry, /matching listed tag[\s\S]*search --tag '<tag>'/i);
+  assert.match(registry, /Discovery is per question, not skill/i);
+  assert.match(registry, /refine only for an unresolved question or new subject/i);
+  assert.match(registry, /never repeat an equivalent query/i);
+  assert.match(registry, /Unrelated chat: load nothing/i);
 });
 
 test('active spectre-recall surface is retired', () => {

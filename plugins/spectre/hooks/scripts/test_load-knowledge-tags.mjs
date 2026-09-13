@@ -30,7 +30,9 @@ describe('SessionStart tag discovery', () => {
     assert.equal(String(result.stderr), '');
     const content = JSON.parse(String(result.stdout)).hookSpecificOutput.additionalContext;
     assert.match(content, /No tagged records yet; imported work remains searchable/);
-    assert.match(content, /knowledge-cli\.mjs' search '<task>' --project-dir \./);
+    assert.match(content, /knowledge-cli\.mjs' with --project-dir \./);
+    assert.match(content, /search '<task>'/);
+    assert.match(content, /Discovery is per question, not skill/);
     assert.match(content, /load '<id>'/);
     assert.equal(content.includes('recordPath'), false);
     assert.equal(content.includes('PRIVATE_BODY'), false);

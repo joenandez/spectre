@@ -60,7 +60,9 @@ describe('typed SessionStart tag discovery', () => {
       const content = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
       assert.match(content, /session-routing: Route substantive session work/);
       assert.match(content, /aliases: routing/);
-      assert.match(content, /search '<task>' --project-dir \./);
+      assert.match(content, /with --project-dir \./);
+      assert.match(content, /matching listed tag[\s\S]*search --tag '<tag>'/i);
+      assert.match(content, /Discovery is per question, not skill/);
       assert.match(content, /load '<id>'/);
       for (const privateValue of [value.id, 'Private typed title', 'Private typed summary', 'PRIVATE_TYPED_RECORD_BODY']) {
         assert.equal(content.includes(privateValue), false, privateValue);

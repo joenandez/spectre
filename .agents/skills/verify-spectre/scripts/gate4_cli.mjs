@@ -351,9 +351,11 @@ g.check(
 );
 g.check(
   typeof registry === 'string' &&
-    (registry.match(/search '<task>'/g) || []).length === 2 &&
-    (registry.match(/load '<id>'/g) || []).length === 1,
-  'SessionStart provides one bounded search and exact-load workflow',
+    (registry.match(/search '<task>'/g) || []).length === 1 &&
+    (registry.match(/load '<id>'/g) || []).length === 1 &&
+    registry.includes('Discovery is per question, not skill') &&
+    registry.includes('never repeat an equivalent query'),
+  'SessionStart provides bounded reusable discovery and exact-load guidance',
   `unexpected registry: ${registry}`,
 );
 

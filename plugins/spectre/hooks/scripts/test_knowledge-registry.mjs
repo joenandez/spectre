@@ -20,11 +20,18 @@ describe('bounded SessionStart tag registry', () => {
     const result = renderKnowledgeRegistry({ catalog: catalog(80) });
 
     assert.ok(estimatePayloadTokens(result.frame) <= SESSION_START_TOKEN_LIMIT);
+    assert.ok(result.includedEntries.length > 0);
     assert.ok(result.omittedCount > 0);
     assert.match(result.content, /Omitted tags: \d+; omitted tags remain searchable/);
-    assert.match(result.content, /untagged imported work/i);
-    assert.match(result.content, /standalone #tag[\s\S]*search --tag '<tag>'[\s\S]*exact-load/i);
-    assert.match(result.content, /never create tags from lookup text/i);
+    assert.match(result.content, /matching listed tag[\s\S]*search --tag '<tag>'/i);
+    assert.match(result.content, /omitted\/untagged knowledge/i);
+    assert.match(result.content, /Substance alone is insufficient/i);
+    assert.match(result.content, /Discovery is per question, not skill/i);
+    assert.match(result.content, /reuse results\/loads[\s\S]*refine only for an unresolved question or new subject/i);
+    assert.match(result.content, /never repeat an equivalent query/i);
+    assert.match(result.content, /#tag is explicit[\s\S]*search --tag '<tag>'[\s\S]*exact-load/i);
+    assert.match(result.content, /never create tags/i);
+    assert.match(result.content, /Oversized loads require a blocked decision/i);
     assert.doesNotMatch(result.content, /recordPath|revisionToken|successfulLoads|PRIVATE_BODY|ID: /);
     for (const id of result.includedEntries) {
       assert.match(result.content, new RegExp(`^- ${id}:`, 'm'));
@@ -35,8 +42,9 @@ describe('bounded SessionStart tag registry', () => {
     const result = renderKnowledgeRegistry({ catalog: catalog() });
 
     assert.match(result.content, /No tagged records yet; imported work remains searchable/);
-    assert.match(result.content, /For unrelated general conversation, load nothing/);
-    assert.match(result.content, /knowledge-cli\.mjs' search '<task>' --project-dir \./);
+    assert.match(result.content, /Unrelated chat: load nothing/);
+    assert.match(result.content, /knowledge-cli\.mjs' with --project-dir \./);
+    assert.match(result.content, /search '<task>'/);
     assert.match(result.content, /load '<id>'/);
     assert.equal(result.omittedCount, 0);
   });

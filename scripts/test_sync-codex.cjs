@@ -723,6 +723,8 @@ test('execute preflight reuses observed assessment and proportionally creates ta
     assert.match(plan, /XS → `Skill\(spectre-create_plan\) --depth light --no-review --execution structured`/);
     assert.match(plan, /XS → xs; S → light; M\/L → standard; XL → comprehensive/);
     assert.match(plan, /requested outcome.*material decisions.*Scope\/anti-scope boundaries.*credible risks.*verification intent/i);
+    assert.match(plan, /Immediately before Execute[\s\S]*Trade-offs verbatim/i);
+    assert.match(plan, /Execute accepts them[\s\S]*feedback revises the draft/i);
     assert.doesNotMatch(plan, /spectre-plan_review|spectre-create_tasks|spectre-task_review/);
     assert.match(plan, /observed record[\s\S]*task_context\.md[\s\S]*raw-byte hash[\s\S]*authority hash/i);
     assert.match(route, /Plan-or-Execute|Plan or Execute/i);
@@ -1476,8 +1478,14 @@ test('create_plan and create_tasks preserve XS/direct routing contracts', () => 
     assert.match(createPlan, /observations only, never route selection/i);
     assert.match(createPlan, /Approved XS structured override[^\n]*spectre-create_tasks --depth xs/i);
     assert.match(createPlan, /Behavioral scope is binding; implementation means are not/i);
-    assert.match(createPlan, /Addition \| Required now by \| Simpler local option \| Why it fails now \| Verification/);
+    assert.match(createPlan, /start with zero new owned concepts/i);
+    assert.match(createPlan, /nothing new → reuse owner\/lifecycle\/state\/operation → extend one boundary and derive state/i);
+    assert.match(createPlan, /Addition \| Requirement failing without it \| Repository evidence \| Why reuse\/derivation fails \| Verification/);
+    assert.match(createPlan, /Future flexibility, optional diagnostics, and hypothetical scale are not evidence/i);
     assert.match(createPlan, /No valid row means delete or defer/i);
+    assert.match(createPlan, /Choice \| Simpler option \| Gives up \| Acceptable now because \| Revisit when/);
+    assert.match(createPlan, /Default to the simpler qualifying option/i);
+    assert.match(createPlan, /Reject it if it violates Scope, safety, or correctness/i);
     assert.match(createPlan, /Reversible decisions take the local default without research or alternatives/i);
     assert.match(createPlan, /compare at most two realistic options/i);
     assert.match(createPlan, /bounded spike[^\n]*not production architecture/i);

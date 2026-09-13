@@ -1,6 +1,6 @@
 ---
 name: "spectre-capture"
-description: "Proactively preserve maintained project knowledge when a lasting decision is accepted, an explicit correction is given, a reusable pattern, gotcha, cause, or constraint is verified, maintained guidance is disproved, or a persistent blocker changes state. Do not use for work summaries, workflow progress, task completion, historical work records, transient failures, speculation, lookup, or worker-owned writes."
+description: "Use whenever a message carries something the project must still know next week—record it immediately and unasked; the user will never say ‘remember this.’ Fires on: a decision made, reaffirmed, or reversed (‘we settled on X’, ‘not sharding after all’, ‘that’s the call’); a correction of you or standing guidance, however blunt or repeated (‘no, that’s wrong; X applies only to Y’); a gotcha, root cause, version pin, constraint, or convention worth handing to whoever hits it next (‘for future reference’, ‘so nobody else hits this’); maintained guidance now disproved; or a persistent blocker newly cleared, confirmed real, or otherwise changed state, even in passing. The user’s word alone is sufficient authority; never wait for repo evidence or an explicit save request. Not for work records or routine progress."
 user-invocable: false
 ---
 
@@ -30,7 +30,7 @@ Proactively preserve consequential project knowledge without waiting for a user 
 ## Method / guardrails
 
 1. Capture accepted lasting decisions, explicit corrections, verified reusable patterns/gotchas/constraints, disproved maintained guidance, and confirmed persistent-blocker transitions. Do not infer a durable fact from incidental code, a transient command failure, a task outcome, or routine progress.
-2. Search tags for the actual subject; exact-load a candidate only when needed. An explicit user statement that a lasting decision is current, corrected, or superseded is accepted authoritative evidence. Absence of corroborating repository evidence does not block the save or require reconfirmation; retain disagreeing repository statements as stale or historical context.
+2. Reuse the visible catalog and current-request tag results. Run `knowledge-cli.mjs tags search '<subject>' --project-dir <project-dir> --json` only for unresolved aliases, omitted tags, or genuinely new tag intent; exact-load a candidate only when needed. An explicit user statement that a lasting decision is current, corrected, or superseded is accepted authoritative evidence. Absence of corroborating repository evidence does not block the save or require reconfirmation; retain disagreeing repository statements as stale or historical context.
 3. Read only `references/knowledge-capture-input.json`, fill it outside the store, then invoke `knowledge-cli.mjs capture --kind knowledge --input <filled.json> --project-dir <project-dir> --json`. New input needs non-empty tag intent; reuse canonical tags and create only genuinely new tags.
 4. An unchanged retry is a no-op. A changed record needs its loaded `revisionToken` as `--expected-revision`; preserve omitted tags on updates and never edit canonical packages, `index.json`, or history.
 5. Return the tag and record outcome. A failed write returns recovery input and remains non-blocking; it never becomes an Execute, Ship, Create PR, verification, or acceptance gate.
