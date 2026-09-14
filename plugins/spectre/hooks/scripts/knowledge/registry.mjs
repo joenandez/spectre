@@ -22,11 +22,10 @@ function renderTagEntry([id, tag]) {
 function renderContent(entries, omittedCount, cliPath) {
   return [
     '## Project knowledge',
-    `Use ${shellQuote(cliPath)} with --project-dir . For substantive work, search the actual task with search '<task>' across mixed knowledge/work previews, including omitted/untagged knowledge; assess applicability, then exact-load only needed records. Substance alone is insufficient.`,
-    'Discovery is per question, not skill. Reuse results/loads; refine only for an unresolved question or new subject; never repeat an equivalent query.',
-    "Use load '<id>' only to resolve that question/decision; work remains historical evidence and requires --inspect-historical. Oversized loads require a blocked decision. Unrelated chat: load nothing.",
-    "#tag is explicit: search --tag '<tag>', assess previews, then exact-load applicable matches; tags never authorize guesses; never create tags.",
-    'Tags:',
+    `Use ${shellQuote(cliPath)} with --project-dir . Substantive work: search the actual task with search '<task>' across mixed knowledge/work previews incl. omitted/untagged knowledge; assess applicability previews, exact-load applicable records. Substance alone is insufficient.`,
+    'Discovery is per question, not skill: reuse results/loads; refine only for an unresolved question or new subject; never repeat an equivalent query.',
+    "Use load '<id>' for questions; work is historical: --inspect-historical. Oversized loads require a blocked decision. Unrelated chat: load nothing.",
+    "#tag is explicit: search --tag '<tag>'; assess previews, exact-load applicable matches. tags never authorize guesses; never create tags.",
     ...(entries.length > 0 ? entries.map(renderTagEntry) : ['- No tagged records yet; imported work remains searchable.']),
     `Omitted tags: ${omittedCount}; omitted tags remain searchable.`,
   ].join('\n');

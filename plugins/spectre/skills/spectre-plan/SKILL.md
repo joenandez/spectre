@@ -21,13 +21,13 @@ Turn confirmed Scope into the smallest sufficient draft and handoff. `spectre-pl
 - Reuse a managed `FEATURE_ROOT` only when explicit/current-thread evidence ties it to this work (physical directory wins; never branch/recency/lifecycle/scans); distinct work ignores ambient roots. Otherwise, including on collision, standalone MUST first load and follow `@skill-spectre:spectre-feature-root` through DONE; orchestrated calls escalate. Keep writes beneath it and pass it unchanged.
 - Immutable canonical Scope: `concepts/scope.md` when present, else confirmed thread; never narrow, expand, or reinterpret it without explicit scope-change approval.
 - Read `references/estimation-guidance.md` only at an applicable gate; each estimate excludes user waits and never delays or blocks the gate.
-- Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing: search the actual task across mixed knowledge/work previews, assess relevance, then exact-load applicable records. A standalone `#tag` is exact `search --tag` followed by preview assessment, never a guessed load. Refine only for an unresolved question or new subject. Retain used IDs/revisions in existing `task_context.md`; previews and unloaded candidates are not evidence.
+- Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing. Search actual task across mixed knowledge/work previews; assess, then exact-load applicable records. Standalone #tag: exact search --tag, assess previews, then exact-load applicable matches; never guessed loads. Refine only for an unresolved question or new subject. Keep IDs/revisions in `task_context.md`; previews/unloaded candidates are not evidence.
 
 ## Outputs + DONE
 
 Every route produces `specs/plan.md` plus `task_context.md` evidence; no review, task/index, or task-review artifact. The response is the alignment surface, not a second specification.
 
-DONE when initial and observed routing decisions are recorded; the observed record is transported in `task_context.md` bound to the draft's raw-byte hash and actual authority hash; the draft and protected inputs validate; Scope is unchanged; `plan.completed` records the draft; the response gives the concise alignment brief, Trade-offs, and one Execute handoff; telemetry is `complete|degraded`; or unavailable authority/scope change stopped before handoff.
+DONE when initial/observed routing in `task_context.md` is bound to draft raw-byte/authority hashes; inputs validate; Scope is unchanged; `plan.completed` records the draft; response gives alignment, Trade-offs, Execute handoff; telemetry is `complete|degraded`, or authority/scope stops handoff.
 
 ## Method / guardrails
 
