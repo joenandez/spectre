@@ -10,7 +10,7 @@ main(process.argv.slice(2)).catch(error => {
     }
     process.stdout.write(`${JSON.stringify(payload)}\n`);
   } else {
-    process.stderr.write(`${message}\n`);
+    process.stderr.write(`${message}${error?.recoveryInput ? `\nRecovery input: ${error.recoveryInput}` : ''}\n`);
   }
   process.exit(1);
 });

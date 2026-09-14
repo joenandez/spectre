@@ -54,6 +54,27 @@ function run(kind, args, value, input) {
   });
 }
 
+function runHuman(kind, args, value, input) {
+  const command = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
+  const prefix = kind === 'npm' ? ['knowledge'] : [];
+  return spawnSync(process.execPath, [command, ...prefix, ...args, '--project-dir', value.projectDir], {
+    cwd: value.projectDir,
+    env: { ...process.env, SPECTRE_HOME: value.spectreHome, TMPDIR: value.stdinTemp },
+    encoding: 'utf8',
+    input,
+  });
+}
+
+function runWithUnreadableStdin(kind, args, value) {
+  const command = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
+  const prefix = kind === 'npm' ? ['knowledge'] : [];
+  return spawnSync('/bin/sh', ['-c', 'exec 0< "$1"; shift; exec "$@"', 'sh', value.stdinTemp, process.execPath, command, ...prefix, ...args, '--project-dir', value.projectDir, '--json'], {
+    cwd: value.projectDir,
+    env: { ...process.env, SPECTRE_HOME: value.spectreHome, TMPDIR: value.stdinTemp },
+    encoding: 'utf8',
+  });
+}
+
 function runHelp(kind, value) {
   const command = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
   return spawnSync(process.execPath, [command], {
@@ -213,6 +234,39 @@ describe('semantic knowledge capture', () => {
       const help = runHelp(kind, value);
       assert.equal(help.status, 0, `${help.stdout}\n${help.stderr}`);
       assert.match(help.stdout, /capture --kind knowledge\|work --input <json\|->/);
+    }
+  });
+
+  it('prints retained recovery input for parsed-but-invalid stdin on both public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const failed = runHuman(kind, ['capture', '--kind', 'knowledge', '--input', '-'], value, `${JSON.stringify(filledTemplate('knowledge', { title: '' }))}\n`);
+      assert.equal(failed.status, 1);
+      assert.match(failed.stderr, /Capture input requires a non-empty title\./);
+      const recoveryInput = failed.stderr.match(/^Recovery input: (.+)$/m)?.[1];
+      assert.ok(recoveryInput, failed.stderr);
+      assert.equal(path.dirname(path.dirname(recoveryInput)), value.stdinTemp);
+      assert.equal(fs.readFileSync(recoveryInput, 'utf8'), `${JSON.stringify(filledTemplate('knowledge', { title: '' }))}\n`);
+    }
+  });
+
+  it('removes a failed stdin transport directory and returns the capture input contract', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const failed = runWithUnreadableStdin(kind, ['capture', '--kind', 'knowledge', '--input', '-'], value);
+      assert.equal(failed.status, 1);
+      const failure = output(failed);
+      assert.equal(failure.code, 'CAPTURE_INPUT_INVALID');
+      assert.deepEqual(fs.readdirSync(value.stdinTemp), []);
+    }
+  });
+
+  it('advertises standard input from both unresolved work resolution commands', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const resolved = run(kind, ['work', 'resolve', '--source-run-id', `run-unresolved-${kind}`], value);
+      assert.equal(resolved.status, 0, resolved.stderr);
+      assert.match(output(resolved).nextAction.command, /--input -/);
     }
   });
 
