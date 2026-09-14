@@ -24,7 +24,9 @@ async function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const projectDir = path.join(root, 'project');
   const spectreHome = path.join(root, 'spectre-home');
+  const stdinTemp = path.join(root, 'stdin-temp');
   fs.mkdirSync(projectDir, { recursive: true });
+  fs.mkdirSync(stdinTemp, { recursive: true });
   const { storePath } = await resolveProjectStore(projectDir, { spectreHome });
   fs.writeFileSync(path.join(storePath, 'tags.json'), JSON.stringify({
     schemaVersion: 1,
@@ -32,7 +34,7 @@ async function fixture(t) {
     redirects: { credentials: 'authentication' },
   }, null, 2));
   refreshKnowledgeIndex(storePath);
-  return { root, projectDir, spectreHome, storePath };
+  return { root, projectDir, spectreHome, stdinTemp, storePath };
 }
 
 function inputPath(value, name, input) {
@@ -41,12 +43,22 @@ function inputPath(value, name, input) {
   return result;
 }
 
-function run(kind, args, value) {
+function run(kind, args, value, input) {
   const command = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
   const prefix = kind === 'npm' ? ['knowledge'] : [];
   return spawnSync(process.execPath, [command, ...prefix, ...args, '--project-dir', value.projectDir, '--json'], {
     cwd: value.projectDir,
-    env: { ...process.env, SPECTRE_HOME: value.spectreHome },
+    env: { ...process.env, SPECTRE_HOME: value.spectreHome, TMPDIR: value.stdinTemp },
+    encoding: 'utf8',
+    input,
+  });
+}
+
+function runHelp(kind, value) {
+  const command = kind === 'npm' ? NPM_CLI : BUNDLED_CLI;
+  return spawnSync(process.execPath, [command], {
+    cwd: value.projectDir,
+    env: { ...process.env, SPECTRE_HOME: value.spectreHome, TMPDIR: value.stdinTemp },
     encoding: 'utf8',
   });
 }
@@ -154,6 +166,56 @@ async function registerResourceWork(value, id, input, { legacyImport = false, ex
 }
 
 describe('semantic knowledge capture', () => {
+  it('captures knowledge revisions and exact-associated work from stdin through both public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const id = `stdin-${kind}-knowledge`;
+      const created = run(kind, ['capture', '--kind', 'knowledge', '--input', '-'], value, `${JSON.stringify(filledTemplate('knowledge', { id }))}\n`);
+      assert.equal(created.status, 0, created.stderr);
+      const initial = output(created);
+      assert.equal(initial.recoveryInput, undefined);
+      assert.equal(fs.existsSync(initial.recordPath), true);
+      assert.deepEqual(fs.readdirSync(value.stdinTemp), []);
+
+      const revised = run(kind, ['capture', '--kind', 'knowledge', '--input', '-', '--expected-revision', initial.revisionToken], value, `${JSON.stringify(filledTemplate('knowledge', {
+        id, evidence: 'Updated through standard input.', tags: undefined,
+      }))}\n`);
+      assert.equal(revised.status, 0, revised.stderr);
+      assert.equal(output(revised).status, 'updated');
+      assert.equal(output(revised).recoveryInput, undefined);
+      assert.deepEqual(fs.readdirSync(value.stdinTemp), []);
+
+      const work = run(kind, ['capture', '--kind', 'work', '--input', '-', '--source-run-id', `run-stdin-${kind}`], value, `${JSON.stringify(filledTemplate('work'))}\n`);
+      assert.equal(work.status, 0, work.stderr);
+      assert.match(output(work).workId, /^work-/);
+      assert.equal(fs.existsSync(output(work).recordPath), true);
+      assert.deepEqual(fs.readdirSync(value.stdinTemp), []);
+    }
+  });
+
+  it('retains malformed stdin privately for file-input recovery and advertises direct input on both public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const failed = run(kind, ['capture', '--kind', 'knowledge', '--input', '-'], value, '{"inputVersion":');
+      assert.equal(failed.status, 1);
+      const failure = output(failed);
+      assert.equal(failure.code, 'CAPTURE_INPUT_INVALID');
+      assert.equal(path.dirname(path.dirname(failure.recoveryInput)), value.stdinTemp);
+      assert.equal(fs.statSync(path.dirname(failure.recoveryInput)).mode & 0o777, 0o700);
+      assert.equal(fs.statSync(failure.recoveryInput).mode & 0o777, 0o600);
+      assert.equal(fs.readFileSync(failure.recoveryInput, 'utf8'), '{"inputVersion":');
+
+      fs.writeFileSync(failure.recoveryInput, `${JSON.stringify(filledTemplate('knowledge', { id: `recovered-${kind}` }))}\n`);
+      const recovered = run(kind, ['capture', '--kind', 'knowledge', '--input', failure.recoveryInput], value);
+      assert.equal(recovered.status, 0, recovered.stderr);
+      assert.equal(fs.existsSync(output(recovered).recordPath), true);
+
+      const help = runHelp(kind, value);
+      assert.equal(help.status, 0, `${help.stdout}\n${help.stderr}`);
+      assert.match(help.stdout, /capture --kind knowledge\|work --input <json\|->/);
+    }
+  });
+
   it('captures canonicalized tag intent and repeats identical knowledge input as a no-op through both public CLIs', async (t) => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);

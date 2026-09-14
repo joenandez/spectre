@@ -23,7 +23,7 @@ Preserve one bounded historical account of a body of work at explicit ownership 
 
 ## Outputs + DONE
 
-- A created, updated, no-op, conflict, skipped, or surfaced-failure work result with exact work ID and revision where applicable.
+- A created, updated, no-op, conflict, skipped, or surfaced-failure work result with exact work ID, revision, and canonical `recordPath` where applicable.
 
 **DONE when:** the permitted boundary has a truthful historical account or a truthful skip/no-op/failure; a capture result never changes Execute, Ship, Create PR, verification, or acceptance authority.
 
@@ -32,13 +32,13 @@ Preserve one bounded historical account of a body of work at explicit ownership 
 1. Automatic boundaries are one minimal truthful Execute-start record after exact run/work identity exists; one meaningful blocked handoff or resolution when execution cannot safely continue or resume across an authority, control, or context boundary; one Execute completion; and one Ship update after the PR exists. At Execute start, state every not-yet-true section in plain prose such as `None yet.`; never use angle-bracket, `TODO`, or `REPLACE_ME` placeholders. If resolution coincides with completion, completion is sufficient.
 2. Orchestrated Create PR returns PR evidence to Ship and does not write a work record. Standalone Create PR may write once at its terminal boundary only when no parent owns the record. An explicit user snapshot and historical correction are allowed, but do not replace normal ownership boundaries.
 3. Never write for individual tasks, batches, checks, reviews, commits, ordinary decisions, routine progress, transient remediation, or active-context refreshes. Reusable guidance belongs to `Skill(spectre-capture)`.
-4. Read the shared work input reference, fill it outside the store, then invoke `knowledge-cli.mjs capture --kind work --input <filled.json> --work-id <exact-id>|--source-run-id <exact-run>|--pull-request-id <exact-pr>|--candidate <exact-json> --project-dir <project-dir> --json`. Keep execution, verification, and PR state separate; a draft PR is never merged.
+4. Read the shared work input reference, fill its semantic JSON outside the store, then submit it through standard input: `knowledge-cli.mjs capture --kind work --input - --work-id <exact-id>|--source-run-id <exact-run>|--pull-request-id <exact-pr>|--candidate <exact-json> --project-dir <project-dir> --json`. Use `--input <path>` only for an explicitly manual/advanced capture or a returned `recoveryInput` file. Keep execution, verification, and PR state separate; a draft PR is never merged.
 5. Retain all seven sections and exact associations. Carry the loaded `revisionToken` for changed records, preserve omitted tags, and treat unchanged retries as no-ops. Every new or revised account has a hard 2,000 estimated rendered-token ceiling; compact it and retry when exceeded, referencing evidence rather than copying logs.
-6. Return recovery input for conflicts or capture failure. Failure is non-blocking and must not prevent Execute, Ship, or PR delivery; later explicit snapshot or historical correction can repair missing historical detail.
+6. Return the exact work ID, revision/conflict, canonical `recordPath`, and `recoveryInput` for manual recovery after conflicts or capture failure. Failure is non-blocking and must not prevent Execute, Ship, or PR delivery; later explicit snapshot or historical correction can repair missing historical detail.
 
 ## Handoff
 
-Return boundary, work ID, revision/conflict, exact associations, lifecycle facts, and recovery input when applicable.
+Return boundary, work ID, revision/conflict, canonical `recordPath`, exact associations, lifecycle facts, and `recoveryInput` when applicable.
 
 ## Escalate-If
 

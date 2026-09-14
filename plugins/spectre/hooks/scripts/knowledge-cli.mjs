@@ -9,6 +9,7 @@ import { runtimeEvaluationTrace } from './knowledge/evaluation-trace.mjs';
 import { estimatePayloadTokens } from './knowledge/payload.mjs';
 import { inspectKnowledgeRevision, listKnowledgeHistory } from './knowledge/history.mjs';
 import { captureCanonicalKnowledge, serializeCaptureError } from './knowledge/capture.mjs';
+import { captureWithInputTransport } from './knowledge/capture-input.mjs';
 import { formatKnowledgeLoadHuman, loadKnowledgeById, ROUTINE_LOAD_ALLOWANCE_TOKENS, serializeKnowledgeLoadError } from './knowledge/loader.mjs';
 import { migrateLegacyKnowledge } from './knowledge/migration.mjs';
 import { previewKnowledgeRegistry } from './knowledge/preview.mjs';
@@ -77,7 +78,7 @@ function usage() {
     '  knowledge-cli.mjs inspect <id> --revision <token> --project-dir <path> [--json]',
     '  knowledge-cli.mjs work resolve [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs registry [--host claude|codex] --project-dir <path> [--json]',
-    '  knowledge-cli.mjs capture --kind knowledge|work --input <json> [--record-id <id>] [--work-id <id>] [--source-run-id <id>|--run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] --project-dir <path> [--json]',
+    '  knowledge-cli.mjs capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>|--run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs register --record <path> [--expected-revision <token>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs migrate --project-dir <path> [--json]',
     '',
@@ -216,12 +217,12 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === 'capture') {
     try {
       const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
-      const result = await captureCanonicalKnowledge({
+      const result = await captureWithInputTransport({
         projectDir: projectDir(flags), kind: flags.get('--kind'), inputPath: flags.get('--input'),
         recordId: flags.get('--record-id'), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
         pullRequestId: flags.get('--pull-request-id'), candidate, expectedRevision: flags.get('--expected-revision'),
         lockOptions: lockOptions(flags),
-      });
+      }, captureCanonicalKnowledge);
       recordTrace(trace, { type: 'capture', id: result.id, revisionToken: result.revisionToken, outcome: result.status, kind: result.kind,
         ...(result.workLifecycle ? { workLifecycle: result.workLifecycle } : {}) });
       writeResult(result, flags, (value) => `Captured ${value.kind} record ${value.id} (${value.status})\n`);

@@ -4,6 +4,7 @@ import fs from 'fs';
 import { runDoctor } from './lib/doctor.js';
 import { main as runWorkflowCli } from '../plugins/spectre/hooks/scripts/workflow-cli.mjs';
 import { resolveKnowledgeProjectDir } from '../plugins/spectre/hooks/scripts/knowledge/cli-arguments.mjs';
+import { captureWithInputTransport } from '../plugins/spectre/hooks/scripts/knowledge/capture-input.mjs';
 import {
   formatCanonicalKnowledgeLoad,
   formatCanonicalKnowledgeSearch,
@@ -87,7 +88,7 @@ function usage() {
   spectre knowledge inspect <id> --revision <token> [--project-dir <path>] [--json]
   spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--project-dir <path>] [--json]
   spectre knowledge registry [--host claude|codex] [--project-dir <path>] [--json]
-  spectre knowledge capture --kind knowledge|work --input <json> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] [--project-dir <path>] [--json]
+  spectre knowledge capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] [--project-dir <path>] [--json]
   spectre knowledge register --record <path> [--project-dir <path>] [--json]
   spectre knowledge migrate [--project-dir <path>] [--json]
   spectre workflow <run|stage|phase|wave|agent|task|gate|human-input|plan|cleanup|purge> ... [--json]
@@ -286,12 +287,12 @@ export async function main(argv) {
     if (target === 'capture') {
       try {
         const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
-        const result = await captureCanonicalKnowledge({
+        const result = await captureWithInputTransport({
           projectDir: knowledgeProjectDir(), kind: flags.get('--kind'), inputPath: flags.get('--input'),
           recordId: flags.get('--record-id'), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
           pullRequestId: flags.get('--pull-request-id'), candidate, expectedRevision: flags.get('--expected-revision'),
           lockOptions: lockOptions(),
-        });
+        }, captureCanonicalKnowledge);
         if (flags.has('--json')) writeJson(result); else process.stdout.write(`Captured ${result.kind} record ${result.id} (${result.status})\n`);
       } catch (error) { const payload = serializeCanonicalKnowledgeCaptureError(error); throw new CliError(payload.code, payload.message, payload); }
       return;
