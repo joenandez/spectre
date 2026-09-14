@@ -61,7 +61,8 @@ describe('typed SessionStart tag discovery', () => {
       assert.match(content, /session-routing: Route substantive session work/);
       assert.match(content, /aliases: routing/);
       assert.match(content, /with --project-dir \./);
-      assert.match(content, /matching listed tag[\s\S]*search --tag '<tag>'/i);
+      assert.match(content, /actual task[\s\S]*search '<task>'[\s\S]*assess.*preview/i);
+      assert.match(content, /#tag is explicit[\s\S]*search --tag '<tag>'[\s\S]*preview[\s\S]*exact-load/i);
       assert.match(content, /Discovery is per question, not skill/);
       assert.match(content, /load '<id>'/);
       for (const privateValue of [value.id, 'Private typed title', 'Private typed summary', 'PRIVATE_TYPED_RECORD_BODY']) {
