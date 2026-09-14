@@ -345,8 +345,9 @@ g.check(registryOutput !== null, 'load-knowledge emits valid SessionStart JSON o
 const registry = registryOutput?.hookSpecificOutput?.additionalContext;
 g.check(
   typeof registry === 'string' && registry.includes('- hook-timeout:') &&
+    registry.includes("search the actual task") && registry.includes('mixed knowledge/work previews') &&
     registry.includes("load '<id>'"),
-  'SessionStart delivers searchable metadata and exact-load guidance',
+  'SessionStart delivers request-first mixed discovery and exact-load guidance',
   `unexpected registry: ${registry}`,
 );
 g.check(
@@ -408,6 +409,14 @@ g.check(searchRun.code === 0, 'knowledge search exits 0 for a matching query', s
 g.check(
   searchOutput?.results?.some((record) => record.id === canonical.id),
   'knowledge search returns the canonical record ID',
+);
+const canonicalPreview = searchOutput?.results?.find((record) => record.id === canonical.id);
+g.check(
+  canonicalPreview?.kind === 'knowledge' && canonicalPreview?.activation === 'current-guidance' &&
+    canonicalPreview?.tags?.includes('hook-timeout') &&
+    canonicalPreview?.matchedSignals?.some((signal) => /use-when|summary|title|tag/.test(signal)),
+  'knowledge search returns a decision-bearing typed preview with match provenance',
+  JSON.stringify(canonicalPreview),
 );
 const loadRun = knowledgeCli(['load', canonical.id], populated);
 let loadOutput = null;
@@ -554,6 +563,14 @@ g.check(
     codexSearchOutput?.results?.some((record) => record.id === codexCanonical.id),
   'generated Codex bundled search returns the exact canonical ID',
   codexSearchRun.stderr || codexSearchRun.stdout,
+);
+const codexPreview = codexSearchOutput?.results?.find((record) => record.id === codexCanonical.id);
+g.check(
+  codexPreview?.kind === 'knowledge' && codexPreview?.activation === 'current-guidance' &&
+    codexPreview?.tags?.includes('codex-bundled-load-proof') &&
+    codexPreview?.matchedSignals?.some((signal) => /use-when|summary|title|tag/.test(signal)),
+  'generated Codex bundled search preserves typed preview provenance',
+  JSON.stringify(codexPreview),
 );
 const codexLoadRun = codexKnowledgeCli(['load', codexCanonical.id], codexProject);
 let codexLoadOutput = null;

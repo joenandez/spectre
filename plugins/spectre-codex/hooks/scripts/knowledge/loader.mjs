@@ -39,6 +39,14 @@ function inactiveKnowledgeError(id) {
   );
 }
 
+function historicalInspectionError(id) {
+  return knowledgeLoadError(
+    'KNOWLEDGE_HISTORICAL_INSPECTION_REQUIRED',
+    `Historical work record requires deliberate inspection: ${id}.`,
+    { inspectionCommand: historicalInspectionCommand(id) },
+  );
+}
+
 function validateExactId(id) {
   if (typeof id !== 'string' || !RECORD_ID_PATTERN.test(id)) {
     throw knowledgeLoadError(
@@ -266,6 +274,9 @@ export async function loadKnowledgeById(options = {}) {
           && options.inspectHistorical !== true
         ) {
           throw inactiveKnowledgeError(options.id);
+        }
+        if (parsed.record.kind === 'work' && options.inspectHistorical !== true) {
+          throw historicalInspectionError(options.id);
         }
 
         const resources = resourceManifest(

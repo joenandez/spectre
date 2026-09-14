@@ -83,7 +83,7 @@ function usage() {
   spectre knowledge tags ensure --input <json> [--project-dir <path>] [--json]
   spectre knowledge tags merge --input <json> [--project-dir <path>] [--json]
   spectre knowledge tags apply --input <json> [--project-dir <path>] [--json]
-  spectre knowledge load <id> [--project-dir <path>] [--json]
+  spectre knowledge load <id> [--inspect-historical] [--project-dir <path>] [--json]  (work and inactive records require --inspect-historical)
   spectre knowledge history <id> [--cursor <token>] [--project-dir <path>] [--json]
   spectre knowledge inspect <id> --revision <token> [--project-dir <path>] [--json]
   spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--project-dir <path>] [--json]

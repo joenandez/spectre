@@ -172,6 +172,7 @@ describe('typed public knowledge CLI parity', () => {
       assert.equal(help.status, 0, help.stderr);
       assert.match(help.stdout, /tags ensure --input <json>/);
       assert.match(help.stdout, /tags merge --input <json>/);
+      assert.match(help.stdout, /work and inactive records require --inspect-historical/);
     }
   });
 

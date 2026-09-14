@@ -21,7 +21,7 @@ Turn confirmed Scope into the smallest sufficient draft and handoff. `spectre-pl
 - Reuse a managed `FEATURE_ROOT` only when explicit/current-thread evidence ties it to this work (physical directory wins; never branch/recency/lifecycle/scans); distinct work ignores ambient roots. Otherwise, including on collision, standalone MUST first load and follow `Skill(spectre-feature-root)` through DONE; orchestrated calls escalate. Keep writes beneath it and pass it unchanged.
 - Immutable canonical Scope: `concepts/scope.md` when present, else confirmed thread; never narrow, expand, or reinterpret it without explicit scope-change approval.
 - Read `references/estimation-guidance.md` only at an applicable gate; each estimate excludes user waits and never delays or blocks the gate.
-- Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing. Refine only for an unresolved question or new subject. Exact-load applicable knowledge before affected decisions. Retain used IDs/revisions in existing `task_context.md`; previews and unloaded candidates are not evidence.
+- Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing: search the actual task across mixed knowledge/work previews, assess relevance, then exact-load applicable records. A standalone `#tag` is exact `search --tag` followed by preview assessment, never a guessed load. Refine only for an unresolved question or new subject. Retain used IDs/revisions in existing `task_context.md`; previews and unloaded candidates are not evidence.
 
 ## Outputs + DONE
 

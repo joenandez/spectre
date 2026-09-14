@@ -73,7 +73,7 @@ function usage() {
     '  knowledge-cli.mjs tags ensure --input <json> --project-dir <path> [--json]',
     '  knowledge-cli.mjs tags merge --input <json> --project-dir <path> [--json]',
     '  knowledge-cli.mjs tags apply --input <json> --project-dir <path> [--json]',
-    '  knowledge-cli.mjs load <id> [--work-id <id>] [--run-id <id>] [--allowance-tokens <n>] [--inspect-historical] --project-dir <path> [--json]',
+    '  knowledge-cli.mjs load <id> [--work-id <id>] [--run-id <id>] [--allowance-tokens <n>] [--inspect-historical] --project-dir <path> [--json]  (work and inactive records require --inspect-historical)',
     '  knowledge-cli.mjs history <id> --project-dir <path> [--json]',
     '  knowledge-cli.mjs inspect <id> --revision <token> --project-dir <path> [--json]',
     '  knowledge-cli.mjs work resolve [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] --project-dir <path> [--json]',

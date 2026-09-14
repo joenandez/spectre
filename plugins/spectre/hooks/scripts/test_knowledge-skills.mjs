@@ -116,8 +116,10 @@ test('Learn delegates capture and planning retains only loaded knowledge provena
     assert.match(content, /preview-only|unloaded candidate/i);
     assert.match(content, /(?:unchanged revision[\s\S]*(?:not|never)[\s\S]*reload|(?:not|never)[\s\S]*reload[\s\S]*unchanged revision)/i);
     assert.match(content, /compact[\s\S]*provenance/i);
+    assert.match(content, /actual task[\s\S]*mixed.*knowledge.*work|mixed.*knowledge.*work[\s\S]*actual task/i);
+    assert.match(content, /#tag[\s\S]*exact[\s\S]*preview[\s\S]*applicable/i);
   }
-  assert.match(registry, /matching listed tag[\s\S]*search --tag '<tag>'/i);
+  assert.match(registry, /actual task[\s\S]*search '<task>'/i);
   assert.match(registry, /Discovery is per question, not skill/i);
   assert.match(registry, /refine only for an unresolved question or new subject/i);
   assert.match(registry, /never repeat an equivalent query/i);

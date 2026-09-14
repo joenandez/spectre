@@ -62,6 +62,48 @@ test('unique imported constraints outrank weak maintained matches and untagged c
   assert.equal(found.results[0].activation, 'imported-history');
 });
 
+test('ranks applicability metadata and tag descriptions above generic imported-body overlap', async (t) => {
+  const value = await fixture(t);
+  await ensureTags({ ...options(value), tags: [
+    { id: 'daemon-architecture', description: 'Daemon reconnect and service startup behavior.' },
+  ] });
+  write(value.storePath, knowledge('daemon-reconnect-guidance', {
+    tags: ['daemon-architecture'], useWhen: 'Repair daemon reconnect behavior after startup.',
+  }));
+  write(value.storePath, importedWork('generic-daemon-history', {
+    importedSource: {
+      body: 'Daemon daemon daemon startup startup startup architecture architecture.',
+      useWhen: 'Review prior deployment work.', cues: ['legacy'], category: 'pattern', status: 'active', version: '1',
+    },
+  }));
+
+  const found = await searchKnowledge(options(value, { query: 'daemon reconnect' }));
+
+  assert.equal(found.results[0].id, 'daemon-reconnect-guidance');
+  assert.deepEqual(found.results[0].tags, ['daemon-architecture']);
+  assert.match(found.results[0].matchedSignals.join(' '), /use-when:daemon|tag:reconnect/);
+  assert.equal(found.results[1].id, 'generic-daemon-history');
+  assert.match(found.results[1].matchedSignals.join(' '), /body:daemon/);
+});
+
+test('exact tag filters mixed records while tag descriptions contribute natural-language relevance', async (t) => {
+  const value = await fixture(t);
+  await ensureTags({ ...options(value), tags: [
+    { id: 'daemon-architecture', description: 'Daemon reconnect and service startup behavior.' },
+  ] });
+  write(value.storePath, knowledge('tagged-daemon-guidance', { tags: ['daemon-architecture'] }));
+  write(value.storePath, importedWork('tagged-daemon-history', { tags: ['daemon-architecture'] }));
+  write(value.storePath, knowledge('untagged-daemon-guidance', { useWhen: 'Use for daemon reconnect behavior.' }));
+
+  const natural = await searchKnowledge(options(value, { query: 'service reconnect' }));
+  const exact = await searchKnowledge(options(value, { query: '', tags: ['daemon-architecture'] }));
+
+  assert.equal(natural.results[0].id, 'tagged-daemon-guidance');
+  assert.match(natural.results[0].matchedSignals.join(' '), /tag:reconnect/);
+  assert.deepEqual(exact.results.map(({ id }) => id), ['tagged-daemon-guidance', 'tagged-daemon-history']);
+  assert.ok(exact.results.some(({ kind, historical }) => kind === 'work' && historical));
+});
+
 test('filters guidance by explicit work/run context while keeping inactive and work records inspectable', async (t) => {
   const value = await fixture(t);
   write(value.storePath, knowledge('project-guidance', { useWhen: 'Use for deployment changes.' }));
@@ -167,7 +209,7 @@ test('retains malformed-neighbor diagnostics and succeeds on an empty store', as
   assert.deepEqual(empty, { results: [], warnings: [], cursor: null });
 });
 
-test('never repeats a pagination cursor when an oversized first candidate cannot fit the result budget', async (t) => {
+test('keeps a decision-bearing minimum preview when the first candidate is oversized', async (t) => {
   const value = await fixture(t);
   write(value.storePath, knowledge('a-oversized-first', {
     useWhen: `Use for oversized pagination ${'metadata '.repeat(3_000)}`,
@@ -178,7 +220,15 @@ test('never repeats a pagination cursor when an oversized first candidate cannot
 
   const first = await searchKnowledge(options(value, { query: '' }));
 
-  assert.ok(first.results.length > 0 || first.cursor === null, 'an oversized first candidate must not create an empty continuation page');
+  assert.equal(first.results[0].id, 'a-oversized-first');
+  assert.equal(first.results[0].kind, 'knowledge');
+  assert.equal(first.results[0].activation, 'current-guidance');
+  assert.deepEqual(first.results[0].tags, []);
+  assert.equal(typeof first.results[0].useWhen, 'string');
+  assert.ok(first.results[0].useWhen.length < 500);
+  assert.ok(first.results[0].estimatedLoadTokens > 0);
+  assert.ok(first.results[0].matchedSignals.length > 0);
+  assert.ok(measurePayload('codex', JSON.stringify(first)).measured <= 500);
   if (first.cursor) {
     const next = await searchKnowledge(options(value, { query: '', cursor: first.cursor }));
     assert.notDeepEqual(

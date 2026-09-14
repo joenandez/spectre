@@ -18,7 +18,7 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 
 - `FEATURE_ROOT = .spectre/features/<feature-name>/`, resolved from the input or proposed below.
 - captured session or current thread memory for this area, if present
-- Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing. Refine only for an unresolved question or new subject. Assess bounded previews, then exact-load applicable records. Retain used IDs/revisions in `concepts/scope.md` with the informed decision; previews and unloaded candidates are not evidence.
+- Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing: search the actual task across mixed knowledge/work previews, assess relevance, then exact-load applicable records. A standalone `#tag` is exact `search --tag` followed by preview assessment, never a guessed load. Refine only for an unresolved question or new subject. Retain used IDs/revisions in `concepts/scope.md` with the informed decision; previews and unloaded candidates are not evidence.
 
 ## Feature root contract
 

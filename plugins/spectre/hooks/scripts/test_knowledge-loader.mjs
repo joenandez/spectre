@@ -276,13 +276,18 @@ describe('verified exact-ID typed knowledge loader', () => {
     assert.equal(readActivity(storePath).records[id].revisions[result.revisionToken].successfulLoads, 1);
   });
 
-  it('loads a work record as labeled historical evidence', async (t) => {
+  it('requires deliberate historical inspection before loading a work record', async (t) => {
     const { projectDir, spectreHome, storePath } = await fixture(t);
     const id = 'work-imported-account';
     writeRecord(storePath, id, workRecord(id));
     const { loadKnowledgeById } = await loadModules();
 
-    const result = await loadKnowledgeById({ projectDir, spectreHome, id });
+    await assert.rejects(
+      loadKnowledgeById({ projectDir, spectreHome, id }),
+      (error) => assertLoadError('KNOWLEDGE_HISTORICAL_INSPECTION_REQUIRED')(error)
+        && /--inspect-historical/.test(error.inspectionCommand),
+    );
+    const result = await loadKnowledgeById({ projectDir, spectreHome, id, inspectHistorical: true });
 
     assert.equal(result.kind, 'work');
     assert.match(result.rendered, /historical evidence/i);
@@ -302,8 +307,8 @@ describe('verified exact-ID typed knowledge loader', () => {
     const { loadKnowledgeById } = await loadModules();
 
     const [projectWork, matchingWork] = await Promise.all([
-      loadKnowledgeById({ projectDir, spectreHome, id: projectId }),
-      loadKnowledgeById({ projectDir, spectreHome, id: matchingId, workId: matchingId }),
+      loadKnowledgeById({ projectDir, spectreHome, id: projectId, inspectHistorical: true }),
+      loadKnowledgeById({ projectDir, spectreHome, id: matchingId, workId: matchingId, inspectHistorical: true }),
     ]);
 
     for (const result of [projectWork, matchingWork]) {
