@@ -95,9 +95,26 @@ function observeFrame(args, input, stdout, stderr, exitCode) {
       typeof additionalContext === 'string' && additionalContext.includes(args.coreSentinel),
     resourceSentinelVisible:
       typeof additionalContext === 'string' && additionalContext.includes(args.resourceSentinel),
+    requestFirstDiscovery:
+      typeof additionalContext === 'string' &&
+      additionalContext.includes('search the actual task') &&
+      additionalContext.includes("search '<task>'") &&
+      additionalContext.includes('mixed knowledge/work previews'),
+    previewAssessment:
+      typeof additionalContext === 'string' && additionalContext.includes('assess applicability'),
+    exactTagLookup:
+      typeof additionalContext === 'string' &&
+      additionalContext.includes("#tag is explicit: search --tag '<tag>'") &&
+      additionalContext.includes('assess previews'),
+    noSpeculativeLoad:
+      typeof additionalContext === 'string' && additionalContext.includes('tags never authorize guesses'),
+    includedTagCount:
+      typeof additionalContext === 'string'
+        ? (additionalContext.match(/^- [a-z0-9]+(?:-[a-z0-9]+)*:/gm) || []).length
+        : null,
     omittedCount: Number(
       typeof additionalContext === 'string'
-        ? additionalContext.match(/Omitted active records:\s*(\d+)/)?.[1] ?? Number.NaN
+        ? additionalContext.match(/Omitted tags:\s*(\d+)/)?.[1] ?? Number.NaN
         : Number.NaN,
     ),
   };

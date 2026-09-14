@@ -268,6 +268,14 @@ function runProbePreflight(hostFixture) {
     || observation.hasHookSystemMessage
     || observation.hasPreview
     || observation.hasFallbackFile
+    || !observation.requestFirstDiscovery
+    || !observation.previewAssessment
+    || !observation.exactTagLookup
+    || !observation.noSpeculativeLoad
+    || !Number.isSafeInteger(observation.includedTagCount)
+    || observation.includedTagCount === 0
+    || !Number.isSafeInteger(observation.omittedCount)
+    || observation.omittedCount <= 0
   ) {
     throw new Error(`${hostFixture.host} preflight registry contract failed`);
   }
@@ -589,7 +597,7 @@ function sanitizeHostInteraction(host, rawOutput) {
 function observedRegistryCounts(fixture, result) {
   const omittedCount = result.observation.omittedCount;
   return {
-    includedCount: fixture.activeRecordCount - omittedCount,
+    includedCount: result.observation.includedTagCount,
     omittedCount,
   };
 }

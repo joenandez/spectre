@@ -197,6 +197,7 @@ describe('recoverable legacy-to-work import', () => {
       gitRunner() { throw new Error('not a Git project'); },
       id,
       allowanceTokens: 10_000,
+      inspectHistorical: true,
     });
     assert.equal(loaded.ok, true);
     assert.equal(loaded.id, id);

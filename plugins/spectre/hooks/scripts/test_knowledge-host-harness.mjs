@@ -2,7 +2,6 @@
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
@@ -22,14 +21,14 @@ describe('isolated real-host registry fixture', () => {
     assert.deepEqual(
       observedRegistryCounts(
         { activeRecordCount: 65, preflight: { includedCount: 10, omittedCount: 55 } },
-        { observation: { omittedCount: 56 } },
+        { observation: { includedTagCount: 9, omittedCount: 56 } },
       ),
       { includedCount: 9, omittedCount: 56 },
     );
   });
 
   it('preflights indexed typed metadata without exposing record bodies before real-host execution', async (t) => {
-    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-host-harness-'));
+    const fixtureRoot = fs.mkdtempSync('/tmp/spectre-host-harness-');
     t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
     const manifest = await prepareFixture(fixtureRoot, { date: '2026-07-22' });
 
@@ -57,7 +56,12 @@ describe('isolated real-host registry fixture', () => {
       assert.equal(value.preflight.observation.hasHookSystemMessage, false);
       assert.equal(value.preflight.observation.hasPreview, false);
       assert.equal(value.preflight.observation.hasFallbackFile, false);
-      assert.equal(value.preflight.observation.omittedCount, null);
+      assert.equal(value.preflight.observation.requestFirstDiscovery, true);
+      assert.equal(value.preflight.observation.previewAssessment, true);
+      assert.equal(value.preflight.observation.exactTagLookup, true);
+      assert.equal(value.preflight.observation.noSpeculativeLoad, true);
+      assert.ok(value.preflight.observation.includedTagCount > 0);
+      assert.ok(value.preflight.observation.omittedCount > 0);
       const omittedPath = path.join(value.storePath, 'knowledge', OMITTED_ID, 'record.json');
       const omitted = parseKnowledgeRecord(omittedPath).record;
       assert.equal(omitted.category, 'gotcha');
