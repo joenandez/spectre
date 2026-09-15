@@ -148,6 +148,16 @@ describe('stable work identity', () => {
       branch: 'feature/fold', sourceRunId: 'run-canonical',
     }));
     const provisional = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-provisional' }));
+    const registeredCanonical = await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(canonical.workId, {
+        sourceRunIds: ['run-canonical'], pullRequestIds: [], candidates: [],
+      })),
+    });
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(provisional.workId, {
+        sourceRunIds: ['run-provisional'], pullRequestIds: [], candidates: [],
+      })),
+    });
 
     const folded = await work.foldWorkIdentities(options(workspace, {
       branch: 'feature/fold', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
@@ -161,9 +171,20 @@ describe('stable work identity', () => {
       await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-provisional' })),
       { status: 'resolved', workId: canonical.workId },
     );
+    const canonicalBytes = fs.readFileSync(registeredCanonical.recordPath);
+    const associationPath = work.workAssociationPath(registeredCanonical.storePath);
+    const associationBytes = fs.readFileSync(associationPath);
+    assert.deepEqual(
+      await work.foldWorkIdentities(options(workspace, {
+        branch: 'feature/fold', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
+      })),
+      { ok: true, status: 'noop', workId: canonical.workId, foldedWorkIds: [provisional.workId] },
+    );
+    assert.deepEqual(fs.readFileSync(registeredCanonical.recordPath), canonicalBytes);
+    assert.deepEqual(fs.readFileSync(associationPath), associationBytes);
   });
 
-  it('folds source-run provenance into the canonical record without moving the old PR', async (t) => {
+  it('rejects a PR-bound provisional record without mutating the branch fold', async (t) => {
     const workspace = makeWorkspace(t);
     const canonical = await resolveOrAllocateWorkIdentity(options(workspace, {
       branch: 'feature/fold-history', sourceRunId: 'run-canonical-history',
@@ -178,22 +199,82 @@ describe('stable work identity', () => {
     });
     await registerCanonicalKnowledge({
       ...options(workspace), recordPath: writeProposal(workspace, workRecord(provisional.workId, {
-        sourceRunIds: ['run-provisional-history'], pullRequestIds: ['github:example/spectre#99'], candidates: [],
-      })),
+      sourceRunIds: ['run-provisional-history'], pullRequestIds: ['github:example/spectre#99'], candidates: [],
+    })),
     });
 
-    await work.foldWorkIdentities(options(workspace, {
-      branch: 'feature/fold-history', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
-    }));
-
-    const canonicalRecord = JSON.parse(fs.readFileSync(registeredCanonical.recordPath, 'utf8'));
-    assert.deepEqual(canonicalRecord.work.associations.sourceRunIds, [
-      'run-canonical-history', 'run-provisional-history',
-    ]);
-    assert.deepEqual(
-      await resolveWorkIdentity(options(workspace, { pullRequestId: 'github:example/spectre#99' })),
-      { status: 'resolved', workId: provisional.workId },
+    const canonicalBytes = fs.readFileSync(registeredCanonical.recordPath);
+    const associationPath = work.workAssociationPath(registeredCanonical.storePath);
+    const associationBytes = fs.readFileSync(associationPath);
+    await assert.rejects(
+      () => work.foldWorkIdentities(options(workspace, {
+        branch: 'feature/fold-history', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
+      })),
+      (error) => error.code === 'WORK_FOLD_PERMANENT_BOUNDARY',
     );
+    assert.deepEqual(fs.readFileSync(registeredCanonical.recordPath), canonicalBytes);
+    assert.deepEqual(fs.readFileSync(associationPath), associationBytes);
+  });
+
+  it('rejects missing, candidate-bearing, or terminal provisional work before changing identities', async (t) => {
+    const workspace = makeWorkspace(t);
+    const canonical = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/fold-rejects', sourceRunId: 'run-canonical-rejects',
+    }));
+    const candidate = {
+      repository: 'github.com/example/spectre', base: 'a'.repeat(40), head: 'b'.repeat(40), diff: `sha256:${'c'.repeat(64)}`,
+    };
+    const candidateWork = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-candidate-rejects', candidate,
+    }));
+    const terminalWork = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-terminal-rejects',
+    }));
+    const tamperedWork = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-tampered-rejects',
+    }));
+    const registeredCanonical = await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(canonical.workId, {
+        sourceRunIds: ['run-canonical-rejects'], pullRequestIds: [], candidates: [],
+      })),
+    });
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(candidateWork.workId, {
+        sourceRunIds: ['run-candidate-rejects'], pullRequestIds: [], candidates: [candidate],
+      })),
+    });
+    const terminal = workRecord(terminalWork.workId, {
+      sourceRunIds: ['run-terminal-rejects'], pullRequestIds: [], candidates: [],
+    });
+    terminal.work.pullRequest = { state: 'merged' };
+    await registerCanonicalKnowledge({ ...options(workspace), recordPath: writeProposal(workspace, terminal) });
+    const tampered = await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(tamperedWork.workId, {
+        sourceRunIds: ['run-tampered-rejects'], pullRequestIds: [], candidates: [],
+      })),
+    });
+    const tamperedRecord = JSON.parse(fs.readFileSync(tampered.recordPath, 'utf8'));
+    tamperedRecord.summary = 'These bytes no longer match the recorded revision.';
+    fs.writeFileSync(tampered.recordPath, `${JSON.stringify(tamperedRecord, null, 2)}\n`);
+
+    const associationPath = work.workAssociationPath(registeredCanonical.storePath);
+    const canonicalBytes = fs.readFileSync(registeredCanonical.recordPath);
+    const associationBytes = fs.readFileSync(associationPath);
+    for (const [oldWorkId, code] of [
+      ['work-missing-fold', 'WORK_FOLD_RECORD_MISSING'],
+      [candidateWork.workId, 'WORK_FOLD_CANDIDATE_BOUNDARY'],
+      [terminalWork.workId, 'WORK_FOLD_PERMANENT_BOUNDARY'],
+      [tamperedWork.workId, 'WORK_IDENTITY_UNVERIFIED'],
+    ]) {
+      await assert.rejects(
+        () => work.foldWorkIdentities(options(workspace, {
+          branch: 'feature/fold-rejects', canonicalWorkId: canonical.workId, oldWorkIds: [oldWorkId],
+        })),
+        (error) => error.code === code,
+      );
+      assert.deepEqual(fs.readFileSync(registeredCanonical.recordPath), canonicalBytes);
+      assert.deepEqual(fs.readFileSync(associationPath), associationBytes);
+    }
   });
 
   it('resolves concurrent captures for one exact source run to one work id', async (t) => {

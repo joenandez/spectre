@@ -402,11 +402,68 @@ function applyFoldToPending(storePath, options, canonicalWorkId, oldWorkIds) {
       throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} remains the pointer for another branch.`);
     }
   }
+  let changed = false;
   for (const [key, workId] of Object.entries(pending.sourceRuns)) {
-    if (oldWorkIds.includes(workId)) pending.sourceRuns[key] = canonicalWorkId;
+    if (oldWorkIds.includes(workId)) {
+      pending.sourceRuns[key] = canonicalWorkId;
+      changed = true;
+    }
   }
-  for (const oldWorkId of oldWorkIds) pending.redirects[oldWorkId] = canonicalWorkId;
-  atomicWriteJson(workAssociationPath(storePath), sortedAssociationIndex(pending));
+  for (const oldWorkId of oldWorkIds) {
+    if (pending.redirects[oldWorkId] !== canonicalWorkId) {
+      pending.redirects[oldWorkId] = canonicalWorkId;
+      changed = true;
+    }
+  }
+  if (changed) atomicWriteJson(workAssociationPath(storePath), sortedAssociationIndex(pending));
+  return changed;
+}
+
+function assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldWorkIds) {
+  const requestedWorkIds = [canonicalWorkId, ...oldWorkIds];
+  const unverifiedWorkIds = requestedWorkIds.filter((workId) => view.unverifiedWorkIds.has(workId));
+  if (unverifiedWorkIds.length > 0) {
+    throw codedError(
+      'WORK_IDENTITY_UNVERIFIED',
+      'A named work record no longer matches its persisted revision.',
+      { workIds: unverifiedWorkIds.sort() },
+    );
+  }
+  const missingWorkIds = requestedWorkIds.filter((workId) => !view.verifiedWorkRecords.has(workId));
+  if (missingWorkIds.length > 0) {
+    throw codedError(
+      'WORK_FOLD_RECORD_MISSING',
+      'Every named work id must resolve to a verified work package before folding.',
+      { workIds: missingWorkIds.sort() },
+    );
+  }
+  if (options.branch !== undefined && pending.branches?.[options.branch] !== canonicalWorkId) {
+    throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
+  }
+  for (const oldWorkId of oldWorkIds) {
+    const record = view.verifiedWorkRecords.get(oldWorkId);
+    if (pending.redirects?.[oldWorkId] && pending.redirects[oldWorkId] !== canonicalWorkId) {
+      throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} already redirects elsewhere.`);
+    }
+    if (Object.values(pending.branches || {}).includes(oldWorkId)) {
+      throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} remains the pointer for another branch.`);
+    }
+    if (record.work.associations.pullRequestIds.length > 0 ||
+      !['none', 'unknown'].includes(record.work.pullRequest.state)) {
+      throw codedError(
+        'WORK_FOLD_PERMANENT_BOUNDARY',
+        `Work id ${oldWorkId} is PR-bound or terminal and cannot be folded.`,
+        { workId: oldWorkId },
+      );
+    }
+    if (record.work.associations.candidates.length > 0) {
+      throw codedError(
+        'WORK_FOLD_CANDIDATE_BOUNDARY',
+        `Work id ${oldWorkId} has a candidate association and cannot be folded.`,
+        { workId: oldWorkId },
+      );
+    }
+  }
 }
 
 function foldedWorkRecord(view, canonicalWorkId, oldWorkIds) {
@@ -447,12 +504,21 @@ export async function foldWorkIdentities(options) {
     throw codedError('WORK_FOLD_INVALID', 'A canonical work id cannot be folded into itself.');
   }
   const resolved = await resolveStore(options, false);
-  const { view } = associationView(resolved.storePath);
-  const record = foldedWorkRecord(view, canonicalWorkId, oldWorkIds);
+  const prepared = await withStoreLock(resolved.storePath, 'prepare-fold-work-identities', async () => {
+    const { view, pending } = associationView(resolved.storePath);
+    assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldWorkIds);
+    return {
+      record: foldedWorkRecord(view, canonicalWorkId, oldWorkIds),
+      expectedRevision: readRecordRevision(path.join(resolved.storePath, 'knowledge', canonicalWorkId)),
+    };
+  }, options.lockOptions);
+  const { record } = prepared;
   if (!record) {
     return withStoreLock(resolved.storePath, 'fold-work-identities', async () => {
-      applyFoldToPending(resolved.storePath, options, canonicalWorkId, oldWorkIds);
-      return { ok: true, status: 'updated', workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
+      const { view, pending } = associationView(resolved.storePath);
+      assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldWorkIds);
+      const changed = applyFoldToPending(resolved.storePath, options, canonicalWorkId, oldWorkIds);
+      return { ok: true, status: changed ? 'updated' : 'noop', workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
     }, options.lockOptions);
   }
   const proposal = writeFoldProposal(resolved.storePath, record);
@@ -464,8 +530,9 @@ export async function foldWorkIdentities(options) {
       gitRunner: options.gitRunner,
       allocationLockOptions: options.allocationLockOptions,
       recordPath: proposal.proposal,
-      expectedRevision: readRecordRevision(path.join(resolved.storePath, 'knowledge', canonicalWorkId)),
+      expectedRevision: prepared.expectedRevision,
       foldFromWorkIds: oldWorkIds,
+      foldBranch: options.branch,
       lockOptions: options.lockOptions,
       afterIndexRefresh: () => applyFoldToPending(resolved.storePath, options, canonicalWorkId, oldWorkIds),
     });
@@ -478,7 +545,16 @@ export async function foldWorkIdentities(options) {
 /** Reject a registration that would split an exact association across verified work IDs. */
 export function assertWorkRecordAssociations(storePath, record, options = {}) {
   if (record.kind !== 'work') return;
-  const { view } = associationView(storePath);
+  const { view, pending } = associationView(storePath);
+  if (options.foldFromWorkIds?.length > 0) {
+    assertFoldableWorkRecords(
+      view,
+      pending,
+      { branch: options.foldBranch },
+      record.id,
+      options.foldFromWorkIds,
+    );
+  }
   const prior = view.verifiedWorkRecords.get(record.id);
   if (prior) {
     const next = record.work.associations;
