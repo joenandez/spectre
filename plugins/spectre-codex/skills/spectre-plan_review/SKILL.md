@@ -13,7 +13,7 @@ Produce the smallest correct plan through one evidence wave, correctness review,
 ## Inputs
 
 - `$ARGUMENTS`: feature root/name or exact selected plan path; optional explicit authority sources, `--auto-apply scope-safe`, `--orchestrated`.
-- Require the selected plan or route to `spectre-create_plan`. Authority sources are `concepts/scope.md`, `specs/prd.md`, `specs/ux.md`, explicit `task_context.md` requirements, or the selected plan's explicit requirements/boundaries when no separate Scope exists. Reuse existing research.
+- Require the selected plan or route to `spectre-create_plan`. Authority sources are `concepts/scope.md`, `specs/prd.md`, `specs/ux.md`, explicit `task_context.md` requirements, or the selected plan's explicit requirements/boundaries when no separate Scope exists. When present, pass the selected minimum-solution record from `task_context.md`; plans without a Plan-origin selection retain existing behavior. Reuse existing research.
 
 ## Working Set
 
@@ -37,7 +37,7 @@ DONE when both stages complete; research ran once at most; every mechanism trace
 
 2. **Correctness.** Read `references/correctness-review.md` and send it verbatim to a fresh reviewer with: plan, Scope, task-context, and report paths/hashes; compiled evidence/unknowns; edit mode and write bounds; route metadata.
 
-3. **Simplification.** After correctness writeback, read `references/simplification-review.md` and send it verbatim to a second fresh reviewer with: corrected plan, Scope, correctness-report, and output-report paths/hashes; edit mode and write bounds; route metadata. Supply existing evidence; allow one cited anchor spot-check.
+3. **Simplification.** After correctness writeback, read `references/simplification-review.md` and send it verbatim to a second fresh reviewer with: corrected plan, Scope, correctness-report, and output-report paths/hashes; selected minimum-solution record when present; edit mode/write bounds; route metadata. Supply existing evidence; one cited spot-check.
 
 4. **Writeback.** Reviewers write only their report and the selected plan, with the report written before plan edits; scope/context/tasks/code remain immutable. `--auto-apply scope-safe` permits Blocker/High and unambiguous Medium edits; otherwise ask `all|blockers|IDs|skip`, then continue on the same route. Record `addressed|skipped|unresolved|scope-change`. Stop on unresolved correctness Blocker/High, scope change, unavailable writeback, or failed schema/hash/scope/Out-of-Bounds checks. The primary may normalize mechanics, never semantics.
 

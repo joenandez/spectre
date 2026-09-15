@@ -217,7 +217,7 @@ A managed feature or bug gets a collision-safe root:
 
 ### 5.2 Plan: adapt ceremony to semantic risk
 
-`spectre-plan` always creates a durable aligned draft and scales its evidence depth to semantic risk. `spectre-plan-route` classifies semantic shape, uncertainty, evidence, protected boundaries, and task-graph risk—not raw file count or sensitive-domain keywords. Plan presents the draft's requested outcome, approach, decisions, boundaries, risks, verification intent, and ordering constraints, then hands it to Execute with an explicit preflight marker.
+`spectre-plan` selects an incumbent-first minimum solution in existing `task_context.md` before it renders one durable aligned draft, then scales its evidence depth to semantic risk. The selected record binds owners, admitted complexity, tier-below challenge, and assurance floor; detailed rendering and Plan Review cannot silently add owned complexity outside it. `spectre-plan-route` classifies semantic shape, uncertainty, evidence, protected boundaries, and task-graph risk—not raw file count or sensitive-domain keywords—and uses the completed selection before drafting. Plan presents the draft's requested outcome, approach, decisions, boundaries, risks, verification intent, and ordering constraints, then hands it to Execute with an explicit preflight marker.
 
 | Size | Semantic shape | Required planning output |
 | --- | --- | --- |

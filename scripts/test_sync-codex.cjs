@@ -2487,6 +2487,69 @@ test('plan review bounds correctness and enforces subtraction-only simplificatio
   }
 });
 
+test('Plan selects and binds the minimum solution before it renders a draft', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+
+  for (const rootName of ['spectre', 'spectre-codex']) {
+    const skills = path.join(repoRoot, 'plugins', rootName, 'skills');
+    const readSkill = (name) => fs.readFileSync(path.join(skills, name, 'SKILL.md'), 'utf8');
+    const plan = readSkill('spectre-plan');
+    const route = readSkill('spectre-plan-route');
+    const createPlan = readSkill('spectre-create_plan');
+    const planReview = readSkill('spectre-plan_review');
+    const minimumSolution = fs.readFileSync(
+      path.join(skills, 'spectre-plan', 'references', 'minimum-solution.md'),
+      'utf8',
+    );
+    const simplification = fs.readFileSync(
+      path.join(skills, 'spectre-plan_review', 'references', 'simplification-review.md'),
+      'utf8',
+    );
+
+    assert.match(minimumSolution, /incumbent-only delivery path/i);
+    assert.match(minimumSolution, /S challenges XS[\s\S]*M challenges S[\s\S]*L challenges M[\s\S]*XL challenges L/i);
+    assert.match(minimumSolution, /structural shape[\s\S]*assurance floor/i);
+    assert.match(minimumSolution, /XS\/S.*local/i);
+    assert.match(minimumSolution, /M.*durable state.*identity.*public contract.*migration.*dependency.*workflow\/lifecycle/i);
+    assert.match(minimumSolution, /L\/XL.*same evidence wave/i);
+    assert.match(minimumSolution, /simpler qualifying.*wins/i);
+    assert.match(minimumSolution, /Future flexibility.*optional diagnostics.*hypothetical scale.*not evidence/i);
+    assert.doesNotMatch(minimumSolution, /telemetry event|persistent.*store|evaluation framework/i);
+
+    const initialRoute = plan.indexOf('Skill(spectre-plan-route)` in `initial` mode');
+    const selection = plan.indexOf('## Minimum Solution Selection', initialRoute);
+    const observedRoute = plan.indexOf('Skill(spectre-plan-route)` in `observed` mode');
+    const draft = plan.indexOf('Draft once with the observed route-mapped depth');
+    assert.ok(initialRoute !== -1 && selection > initialRoute && observedRoute > selection && draft > observedRoute);
+    assert.match(plan, /read `references\/minimum-solution\.md`/i);
+    assert.match(plan, /existing parallel research wave/i);
+    assert.match(plan, /replaces one available evidence slot/i);
+    assert.match(plan, /task_context\.md[\s\S]*Scope\/authority[\s\S]*accepted evidence/i);
+    assert.match(plan, /automatically uses the observed route[\s\S]*no paid rerun.*user tier gate/i);
+    assert.match(plan, /conform.*selected record[\s\S]*raw-byte.*authority hash/i);
+    assert.equal((plan.match(/Skill\(spectre-plan-route\)/g) || []).length, 2);
+    assert.match(plan, /not a serial challenger/i);
+    assert.doesNotMatch(plan, /new telemetry event|named agent|evaluation framework/i);
+
+    assert.match(route, /observed[\s\S]*completed minimum-solution selection[\s\S]*before drafting/i);
+    assert.match(route, /selected structural facts[\s\S]*assurance floor/i);
+    assert.match(route, /same routing table.*alone maps/i);
+
+    assert.match(createPlan, /Plan-origin[\s\S]*Minimum Solution Selection/i);
+    assert.match(createPlan, /may add implementation detail but not.*new owner.*persisted fact.*state.*interface.*dependency.*migration.*lifecycle.*workflow/i);
+    assert.match(createPlan, /genuine.*insufficiency.*returns to minimum-solution selection/i);
+    assert.match(createPlan, /Standalone[\s\S]*same canonical minimum-solution reference locally/i);
+    assert.doesNotMatch(createPlan, /independent-challenge guarantee/i);
+
+    assert.match(planReview, /selected minimum-solution record/i);
+    assert.match(planReview, /Plan-origin selection/i);
+    assert.match(simplification, /Minimum Solution Selection[\s\S]*first trace/i);
+    assert.match(simplification, /undeclared owned complexity.*High/i);
+    assert.match(simplification, /minimum-solution reselection/i);
+    assert.match(simplification, /without.*selection.*current review behavior/i);
+  }
+});
+
 test('TDD uses a risk-proportionate behavioral floor without weakening RED-before-GREEN', () => {
   const repoRoot = path.resolve(__dirname, '..');
 

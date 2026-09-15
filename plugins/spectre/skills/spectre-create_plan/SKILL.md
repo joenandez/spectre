@@ -13,13 +13,14 @@ Turn confirmed Scope into the smallest correct implementation plan. Behavioral s
 ## Inputs
 
 - `$ARGUMENTS`: confirmed Scope—thread, root, or descendant—plus `--depth {xs|light|standard|comprehensive}` (default `standard`), `--no-review`, and `--execution {direct|structured}` (default `structured`).
-- Existing scope/PRD/UX and substantive `task_context.md` research. Orchestrated calls reuse router research; never redispatch it.
+- Existing scope/PRD/UX and substantive `task_context.md` research. Plan-origin calls consume its completed `## Minimum Solution Selection`. Orchestrated calls reuse router research; never redispatch it.
 
 ## Working Set
 
 - Reuse a managed `FEATURE_ROOT` only when explicit/current-thread evidence ties it to this work (physical directory wins; never branch/recency/lifecycle/scans); distinct work ignores ambient roots. Otherwise, including on collision, standalone MUST first load and follow `@skill-spectre:spectre-feature-root` through DONE; orchestrated calls escalate. Keep writes beneath it and pass it unchanged. Repair touched stale metadata.
 - Read repository rules and real code. Reuse evidence first; otherwise use `@finder`, `@analyst`, and `@patterns` only for unresolved material questions. They do not write planning artifacts.
 - Treat confirmed IN/OUT/ANTI-SCOPE, success criteria, constraints, and approved design as authoritative. Never silently change them.
+- For Plan-origin rendering, read `spectre-plan/references/minimum-solution.md` and conform to the completed selection. It may add implementation detail but not a new owner, persisted fact, state, interface, dependency, migration, lifecycle, workflow, or test opportunity outside the selected shape. Genuine insufficiency returns to minimum-solution selection; never silently admit it. Standalone calls without a selection use the same canonical minimum-solution reference locally.
 - Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing. Search actual task across mixed knowledge/work previews; assess, then exact-load applicable records. Standalone #tag: exact search --tag, assess previews, then exact-load applicable matches; never guessed loads. Refine only for an unresolved question or new subject. Keep IDs/revisions in `task_context.md`; previews/unloaded candidates are not evidence.
 
 ## Outputs + DONE
@@ -44,7 +45,7 @@ DONE when the plan stops at the first solution that satisfies Scope, safety, and
 
 ## Method / guardrails
 
-- Trace the current flow, start with zero new owned concepts, and stop at the first shape covering Scope, safety, and Verification: nothing new → reuse owner/lifecycle/state/operation → extend one boundary and derive state → existing platform/dependency → minimum new mechanism. Prefer deletion, consolidation, and one source of truth.
+- Trace the current flow and render the selected shape. For standalone fallback, start with zero new owned concepts and stop at the first shape covering Scope, safety, and Verification: nothing new → reuse owner/lifecycle/state/operation → extend one boundary and derive state → existing platform/dependency → minimum new mechanism. Prefer deletion, consolidation, and one source of truth.
 - Keep one cohesive vertical slice using the closest established local pattern. Keep cross-layer work together when splitting would create foundations or handoffs with no independent value.
 - Refine retrieval after affected files are known. Inspect work previews within the shared budget; load a work body only to answer a stated question, including a critical imported constraint without a maintained equivalent. Do not reload an unchanged revision already in context. Workers receive compact applicable findings and provenance, never record bodies.
 - Owned concepts include layers/interfaces/dependencies, tables/persisted facts/states/operations/processes, and configuration/migration/telemetry/extension points. Admit one only when the simpler shape fails a current requirement, safety constraint, or verified prerequisite; record `Addition | Requirement failing without it | Repository evidence | Why reuse/derivation fails | Verification`. Future flexibility, optional diagnostics, and hypothetical scale are not evidence; no valid row means delete or defer.

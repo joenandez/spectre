@@ -8,25 +8,25 @@ user-invocable: false
 
 ## Purpose
 
-Return a deterministic plan-routing/v1 decision to spectre-plan or spectre-execute. Classify only; the caller owns workflow authority.
+Return deterministic plan-routing/v1 to Plan/Execute. Classify only; caller owns authority.
 
 ## Inputs
 
-- Immutable canonical Scope or explicit selected source authority + bounded repository observations; observations describe work, not size.
-- Mode initial, or observed with the prior decision + plan Routing Observations.
-- Execute caller mode for a selected source when no valid transported assessment exists or material observations invalidate it.
-- Resume-only legacy size is validated and normalized once.
+- Canonical Scope/selected authority + bounded observations; observations describe work, not size.
+- Initial, or observed with prior decision + selection before drafting; legacy observed may include Routing Observations.
+- Execute selected source when transported assessment is missing/materially stale.
+- Normalize resume-only legacy size once.
 
 ## Working Set
 
-- Plan or Execute supplies one bounded scan: implementation topology, uncertainty, evidence, protected boundaries, graph risk, shipped precedent, and user-owned decisions.
+- Plan/Execute supplies one bounded scan: topology, uncertainty, evidence, boundaries, graph risk, shipped precedent, user decisions.
 - If missing evidence alone would cross a costlier route, use exactly one bounded probe (`@spectre_finder`/`@spectre_patterns`) for one repository question.
 
 ## Outputs + DONE
 
-Return schema plan-routing/v1; shape ATOMIC|DIRECT|STRUCTURED; uncertainty LOW|MODERATE|HIGH; evidence SUFFICIENT|PROBE_REQUIRED|PROBED; protected_boundaries[] {type, threatened_invariant, failure_mode}; task_graph_risk LOW|HIGH; design flag; size; route; rationale. Observed also returns regret, reason codes, and KEEP|RERUN_SMALLER|RERUN_LARGER.
+Return `plan-routing/v1`: shape ATOMIC|DIRECT|STRUCTURED; uncertainty LOW|MODERATE|HIGH; evidence SUFFICIENT|PROBE_REQUIRED|PROBED; protected_boundaries[] {type, threatened_invariant, failure_mode}; task_graph_risk LOW|HIGH; design flag, size, route, rationale. Observed adds regret, reason codes, KEEP|RERUN_SMALLER|RERUN_LARGER.
 
-DONE when fields validate; any probe is consumed; STRUCTURED names workstreams; HIGH graph risk names an implementation-graph failure; and only the table derives size/route.
+DONE when fields validate; probe is consumed; STRUCTURED names workstreams; HIGH graph risk names an implementation-graph failure; only table derives size/route.
 
 ## Method / guardrails
 
@@ -43,16 +43,16 @@ DONE when fields validate; any probe is consumed; STRUCTURED names workstreams; 
 - HIGH graph risk requires a credible implementation ordering/coordination/rollback failure; workflow gates/state transitions do not qualify.
 - A protected boundary needs a concrete invariant + credible failure mode; it floors size at S but never creates structure or HIGH graph risk.
 - Honor confirmed Scope assumptions and explicit selected-source boundaries. Missing paths/evidence permit at most the one probe; when Scope mandates an abstraction, spend it on whether it ships; classify the real delta. Only unresolved, approach-changing uncertainty affects size.
-- Design authority requires an unresolved product, compatibility, destructive, migration/rollback, or architecture choice outside implementation discretion; size and routine placement never create it.
-- Observed reports regret and KEEP|RERUN_SMALLER|RERUN_LARGER; never repeats work or removes artifacts.
-- Normalize legacy reads once: MICRO→XS, LIGHT→S, STANDARD-DIRECT→M, STANDARD→L, COMPREHENSIVE→XL; legacy labels never decide.
+- Design authority needs unresolved product, compatibility, destructive, migration/rollback, or architecture choice; size and routine placement never create it.
+- Observed consumes the completed minimum-solution selection before drafting, reports regret and KEEP|RERUN_SMALLER|RERUN_LARGER, and never repeats work or removes artifacts. The same routing table alone maps selected structural facts, uncertainty, protected boundaries, graph risk, and assurance floor; it does not select solution shape.
+- Normalize legacy once: MICRO→XS, LIGHT→S, STANDARD-DIRECT→M, STANDARD→L, COMPREHENSIVE→XL; labels never decide.
 - Never use file volume, dependency count, surface counts, or sensitive-domain keywords as size authority, and never let them create workstreams. Never plan, write artifacts, emit telemetry, or present gates.
 
 ## Handoff
 
-Return the record plus probe evidence. The caller owns persistence, explanation, orchestration, gates, and telemetry.
+Return record/probe; caller owns persistence/explanation, orchestration, gates, telemetry.
 
 ## Escalate-If
 
-- Canonical Scope is absent/conflicting, an enum is invalid, or a protected boundary lacks a predicate.
-- A material decision needs user authority; report `design_authority_required`, never decide it.
+- Canonical Scope absent/conflicting, invalid enum, or boundary lacks predicate.
+- Material user-authority decision: report `design_authority_required`, never decide.

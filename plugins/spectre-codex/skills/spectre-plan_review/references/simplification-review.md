@@ -1,8 +1,10 @@
 # Simplification Review
 
-Produce the smallest plan behaviorally equivalent to the corrected plan and approved Scope. Scope and the correctness review's retained constraints are binding.
+Produce smallest plan equivalent to corrected plan and Scope. Scope and retained constraints bind.
 
-For every mechanism, surface, phase, artifact, and test, identify its current requirement, constraint, prerequisite, or verified fact and the failure caused by removing it. Then delete, collapse, reuse, or defer wherever that trace is absent or a simpler established path is sufficient.
+With a Plan-origin `## Minimum Solution Selection`, make the first trace compare the corrected plan to it. Undeclared owned complexity is `High`: delete, or require minimum-solution reselection if removal fails a requirement. Without a selection, retain current review behavior.
+
+Trace each mechanism, surface, phase, artifact, and test to a current requirement, constraint, prerequisite, or verified fact and removal failure. Delete, collapse, reuse, or defer when absent or an established path suffices.
 
 Retain a new complexity boundary only with:
 
