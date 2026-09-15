@@ -30,6 +30,8 @@ function emptyAssociationIndex() {
     sourceRuns: {},
     pullRequests: {},
     candidates: {},
+    branches: {},
+    redirects: {},
   };
 }
 
@@ -84,6 +86,12 @@ function requestedAssociations(options) {
   if (options.candidate !== undefined) {
     associations.push(['candidates', candidateAssociationKey(options.candidate)]);
   }
+  if (options.branch !== undefined) {
+    if (!isNonEmptyString(options.branch)) {
+      throw codedError('WORK_ASSOCIATION_INVALID', 'branch must be a non-empty exact branch name.');
+    }
+    associations.push(['branches', options.branch]);
+  }
   return associations;
 }
 
@@ -91,11 +99,18 @@ function validateAssociationIndex(value, indexPath) {
   if (!isPlainObject(value) || value.schemaVersion !== WORK_ASSOCIATION_SCHEMA_VERSION) {
     throw codedError('WORK_ASSOCIATION_INDEX_INVALID', `${indexPath}: unsupported work association index`);
   }
-  for (const type of ['sourceRuns', 'pullRequests', 'candidates']) {
+  for (const type of ['sourceRuns', 'pullRequests', 'candidates', 'branches', 'redirects']) {
+    if (value[type] === undefined && (type === 'branches' || type === 'redirects')) continue;
     if (!isPlainObject(value[type])) {
       throw codedError('WORK_ASSOCIATION_INDEX_INVALID', `${indexPath}: ${type} must be an object`);
     }
     for (const workId of Object.values(value[type])) validateWorkId(workId);
+  }
+  for (const [oldWorkId, canonicalWorkId] of Object.entries(value.redirects || {})) {
+    validateWorkId(oldWorkId);
+    if (value.redirects[canonicalWorkId] !== undefined) {
+      throw codedError('WORK_ASSOCIATION_INDEX_INVALID', `${indexPath}: redirects must be one hop`);
+    }
   }
   return value;
 }
@@ -117,6 +132,7 @@ function emptyAssociationView() {
     sourceRuns: new Map(),
     pullRequests: new Map(),
     candidates: new Map(),
+    branches: new Map(),
     verifiedWorkIds: new Set(),
     verifiedWorkRecords: new Map(),
     unverifiedWorkIds: new Set(),
@@ -124,8 +140,14 @@ function emptyAssociationView() {
       sourceRuns: new Map(),
       pullRequests: new Map(),
       candidates: new Map(),
+      branches: new Map(),
     },
   };
+}
+
+function canonicalWorkId(index, workId) {
+  const redirected = index.redirects?.[workId];
+  return redirected || workId;
 }
 
 function addAssociation(view, type, key, workId, target = view) {
@@ -147,16 +169,16 @@ function recordPathForEntry(storePath, entry) {
   }
 }
 
-function addRecordAssociations(view, record, target = view) {
+function addRecordAssociations(view, record, target = view, workId = record.id) {
   if (record.kind !== 'work') return;
   for (const sourceRunId of record.work.associations.sourceRunIds) {
-    addAssociation(view, 'sourceRuns', sourceRunId, record.id, target);
+    addAssociation(view, 'sourceRuns', sourceRunId, workId, target);
   }
   for (const pullRequestId of record.work.associations.pullRequestIds) {
-    addAssociation(view, 'pullRequests', pullRequestId, record.id, target);
+    addAssociation(view, 'pullRequests', pullRequestId, workId, target);
   }
   for (const candidate of record.work.associations.candidates) {
-    addAssociation(view, 'candidates', candidateAssociationKey(candidate), record.id, target);
+    addAssociation(view, 'candidates', candidateAssociationKey(candidate), workId, target);
   }
 }
 
@@ -168,9 +190,11 @@ function addRecordAssociations(view, record, target = view) {
 function associationView(storePath) {
   const view = emptyAssociationView();
   const pending = readAssociationIndex(storePath);
-  for (const type of ['sourceRuns', 'pullRequests', 'candidates']) {
+  pending.branches ||= {};
+  pending.redirects ||= {};
+  for (const type of ['sourceRuns', 'pullRequests', 'candidates', 'branches']) {
     for (const [key, workId] of Object.entries(pending[type])) {
-      addAssociation(view, type, key, workId);
+      addAssociation(view, type, key, canonicalWorkId(pending, workId));
     }
   }
 
@@ -180,7 +204,7 @@ function associationView(storePath) {
     if (verified?.record.kind === 'work') {
       view.verifiedWorkIds.add(verified.record.id);
       view.verifiedWorkRecords.set(verified.record.id, verified.record);
-      addRecordAssociations(view, verified.record);
+      addRecordAssociations(view, verified.record, view, canonicalWorkId(pending, verified.record.id));
       continue;
     }
 
@@ -189,7 +213,9 @@ function associationView(storePath) {
     if (!recordPath) continue;
     try {
       const parsed = parseKnowledgeRecord(recordPath);
-      if (parsed.record.kind === 'work') addRecordAssociations(view, parsed.record, view.unverifiedAssociations);
+      if (parsed.record.kind === 'work') {
+        addRecordAssociations(view, parsed.record, view.unverifiedAssociations, canonicalWorkId(pending, parsed.record.id));
+      }
     } catch {
       // An unreadable package cannot safely establish an exact association.
     }
@@ -203,6 +229,8 @@ function sortedAssociationIndex(index) {
     sourceRuns: Object.fromEntries(Object.entries(index.sourceRuns).sort(([left], [right]) => left.localeCompare(right))),
     pullRequests: Object.fromEntries(Object.entries(index.pullRequests).sort(([left], [right]) => left.localeCompare(right))),
     candidates: Object.fromEntries(Object.entries(index.candidates).sort(([left], [right]) => left.localeCompare(right))),
+    branches: Object.fromEntries(Object.entries(index.branches).sort(([left], [right]) => left.localeCompare(right))),
+    redirects: Object.fromEntries(Object.entries(index.redirects).sort(([left], [right]) => left.localeCompare(right))),
   };
 }
 
@@ -223,30 +251,32 @@ function requestedWorkIds(view, associations) {
   return workIds;
 }
 
-function resolveFromIndex(view, options) {
+function resolveFromIndex(view, pending, options) {
   const associations = requestedAssociations(options);
   const suppliedWorkId = options.workId === undefined ? null : validateWorkId(options.workId);
-  if (suppliedWorkId !== null && view.unverifiedWorkIds.has(suppliedWorkId)) {
+  const canonicalSuppliedWorkId = suppliedWorkId === null ? null : canonicalWorkId(pending, suppliedWorkId);
+  if (canonicalSuppliedWorkId !== null && view.unverifiedWorkIds.has(canonicalSuppliedWorkId)) {
     throw codedError(
       'WORK_IDENTITY_UNVERIFIED',
-      `Work record ${suppliedWorkId} no longer matches its persisted revision.`,
-      { workIds: [suppliedWorkId] },
+      `Work record ${canonicalSuppliedWorkId} no longer matches its persisted revision.`,
+      { workIds: [canonicalSuppliedWorkId] },
     );
   }
   const resolvedIds = requestedWorkIds(view, associations);
-  if (suppliedWorkId !== null) {
-    const conflicts = [...resolvedIds].filter((workId) => workId !== suppliedWorkId);
+  if (canonicalSuppliedWorkId !== null) {
+    const conflicts = [...resolvedIds].filter((workId) => workId !== canonicalSuppliedWorkId);
     if (conflicts.length > 0) {
       throw codedError(
         'WORK_IDENTITY_CONFLICT',
-        `Supplied work id ${suppliedWorkId} conflicts with an existing exact association.`,
-        { workId: suppliedWorkId, conflictingWorkIds: conflicts },
+        `Supplied work id ${canonicalSuppliedWorkId} conflicts with an existing exact association.`,
+        { workId: canonicalSuppliedWorkId, conflictingWorkIds: conflicts },
       );
     }
     return {
-      status: resolvedIds.size === 0 && !view.verifiedWorkIds.has(suppliedWorkId) ? 'unresolved' : 'resolved',
-      workId: suppliedWorkId,
+      status: resolvedIds.size === 0 && !view.verifiedWorkIds.has(canonicalSuppliedWorkId) && suppliedWorkId === canonicalSuppliedWorkId ? 'unresolved' : 'resolved',
+      workId: canonicalSuppliedWorkId,
       associations,
+      ...(suppliedWorkId !== canonicalSuppliedWorkId ? { redirectedFrom: suppliedWorkId } : {}),
     };
   }
   if (resolvedIds.size > 1) {
@@ -276,8 +306,13 @@ export async function resolveWorkIdentity(options) {
   const resolved = await resolveStore(options, true);
   if (!resolved.storePath) return { status: 'unresolved', workId: null };
   return withStoreLock(resolved.storePath, 'resolve-work-identity', async () => {
-    const identity = resolveFromIndex(associationView(resolved.storePath).view, options);
-    return { status: identity.status, workId: identity.workId };
+    const { view, pending } = associationView(resolved.storePath);
+    const identity = resolveFromIndex(view, pending, options);
+    return {
+      status: identity.status,
+      workId: identity.workId,
+      ...(identity.redirectedFrom ? { redirectedFrom: identity.redirectedFrom } : {}),
+    };
   }, options.lockOptions);
 }
 
@@ -289,12 +324,18 @@ export async function resolveOrAllocateWorkIdentity(options) {
   const resolved = await resolveStore(options, false);
   return withStoreLock(resolved.storePath, 'resolve-work-identity', async () => {
     const { view, pending } = associationView(resolved.storePath);
-    const identity = resolveFromIndex(view, options);
-    const workId = identity.workId || `work-${crypto.randomUUID()}`;
+    const identity = resolveFromIndex(view, pending, options);
+    const branchWorkId = options.branch === undefined ? null : identity.workId;
+    const runWorkId = options.sourceRunId === undefined ? null : [...(view.sourceRuns.get(options.sourceRunId) || [])][0];
+    const pointedRecord = branchWorkId ? view.verifiedWorkRecords.get(branchWorkId) : null;
+    const terminalBranch = pointedRecord && ['merged', 'closed'].includes(pointedRecord.work.pullRequest.state);
+    const workId = terminalBranch && runWorkId !== branchWorkId
+      ? `work-${crypto.randomUUID()}`
+      : identity.workId || `work-${crypto.randomUUID()}`;
     let changed = false;
     for (const [type, key] of identity.associations) {
       const existing = view[type].get(key) || new Set();
-      const conflicts = [...existing].filter((current) => current !== workId);
+      const conflicts = type === 'branches' ? [] : [...existing].filter((current) => current !== workId);
       if (conflicts.length > 0) {
         throw codedError(
           'WORK_IDENTITY_CONFLICT',
@@ -302,7 +343,10 @@ export async function resolveOrAllocateWorkIdentity(options) {
           { workId, conflictingWorkIds: conflicts },
         );
       }
-      if (!pending[type][key] && existing.size === 0) {
+      if (type === 'branches' && pending[type][key] !== workId) {
+        pending[type][key] = workId;
+        changed = true;
+      } else if (!pending[type][key] && existing.size === 0) {
         pending[type][key] = workId;
         changed = true;
       }
@@ -315,6 +359,42 @@ export async function resolveOrAllocateWorkIdentity(options) {
       storePath: resolved.storePath,
       associationPath: workAssociationPath(resolved.storePath),
     };
+  }, options.lockOptions);
+}
+
+/** Explicit recovery: redirect provisional exact associations to one named canonical work id. */
+export async function foldWorkIdentities(options) {
+  if (!Array.isArray(options.oldWorkIds) || options.oldWorkIds.length === 0) {
+    throw codedError('WORK_FOLD_INVALID', 'oldWorkIds must name at least one provisional work id.');
+  }
+  const canonicalWorkId = validateWorkId(options.canonicalWorkId);
+  const oldWorkIds = [...new Set(options.oldWorkIds.map(validateWorkId))];
+  if (oldWorkIds.includes(canonicalWorkId)) {
+    throw codedError('WORK_FOLD_INVALID', 'A canonical work id cannot be folded into itself.');
+  }
+  const resolved = await resolveStore(options, false);
+  return withStoreLock(resolved.storePath, 'fold-work-identities', async () => {
+    const { pending } = associationView(resolved.storePath);
+    const branchWorkId = pending.branches[options.branch];
+    if (options.branch !== undefined && branchWorkId !== canonicalWorkId) {
+      throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
+    }
+    for (const oldWorkId of oldWorkIds) {
+      if (pending.redirects[oldWorkId] && pending.redirects[oldWorkId] !== canonicalWorkId) {
+        throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} already redirects elsewhere.`);
+      }
+      if (Object.values(pending.branches).includes(oldWorkId)) {
+        throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} remains the pointer for another branch.`);
+      }
+    }
+    for (const type of ['sourceRuns', 'pullRequests', 'candidates']) {
+      for (const [key, workId] of Object.entries(pending[type])) {
+        if (oldWorkIds.includes(workId)) pending[type][key] = canonicalWorkId;
+      }
+    }
+    for (const oldWorkId of oldWorkIds) pending.redirects[oldWorkId] = canonicalWorkId;
+    atomicWriteJson(workAssociationPath(resolved.storePath), sortedAssociationIndex(pending));
+    return { ok: true, status: 'updated', workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
   }, options.lockOptions);
 }
 

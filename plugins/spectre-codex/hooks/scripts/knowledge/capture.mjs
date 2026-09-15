@@ -319,10 +319,10 @@ export async function captureCanonicalKnowledge(options) {
   assertAllowedInput(input, kind, { tagsRequired: false });
   if (kind === 'knowledge') current = existingRecord(resolved.storePath, input.id);
   if (kind === 'work' && options.workId) current = existingRecord(resolved.storePath, options.workId);
-  if (kind === 'work' && !current && hasExactAssociation(requested)) {
+  if (kind === 'work' && !current && (hasExactAssociation(requested) || options.branch !== undefined)) {
     const existingIdentity = await resolveWorkIdentity({
       projectDir: options.projectDir, workId: options.workId, sourceRunId: options.sourceRunId,
-      pullRequestId: options.pullRequestId, candidate: options.candidate, lockOptions: options.lockOptions,
+      pullRequestId: options.pullRequestId, candidate: options.candidate, branch: options.branch, lockOptions: options.lockOptions,
       ...storeOptions(options),
     });
     if (existingIdentity.status === 'resolved') current = existingRecord(resolved.storePath, existingIdentity.workId);
@@ -351,7 +351,7 @@ export async function captureCanonicalKnowledge(options) {
       }
       workIdentity = await resolveOrAllocateWorkIdentity({
         projectDir: options.projectDir, workId: options.workId, sourceRunId: options.sourceRunId,
-        pullRequestId: options.pullRequestId, candidate: options.candidate, lockOptions: options.lockOptions,
+        pullRequestId: options.pullRequestId, candidate: options.candidate, branch: options.branch, lockOptions: options.lockOptions,
         ...storeOptions(options),
       });
       current = existingRecord(resolved.storePath, workIdentity.workId);

@@ -187,6 +187,28 @@ async function registerResourceWork(value, id, input, { legacyImport = false, ex
 }
 
 describe('semantic knowledge capture', () => {
+  it('uses one branch work id for distinct Execute captures through both public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const firstInput = inputPath(value, `branch-first-${kind}.json`, workInput());
+      const first = run(kind, [
+        'capture', '--kind', 'work', '--input', firstInput,
+        '--source-run-id', `run-branch-a-${kind}`, '--branch', 'feature/branch-work',
+      ], value);
+      assert.equal(first.status, 0, first.stderr);
+      const secondInput = inputPath(value, `branch-second-${kind}.json`, workInput({
+        summary: 'The second Execute boundary updates the same branch work record.',
+      }));
+      const second = run(kind, [
+        'capture', '--kind', 'work', '--input', secondInput,
+        '--source-run-id', `run-branch-b-${kind}`, '--branch', 'feature/branch-work',
+        '--expected-revision', output(first).revisionToken,
+      ], value);
+      assert.equal(second.status, 0, second.stderr);
+      assert.equal(output(second).workId, output(first).workId);
+    }
+  });
+
   it('captures knowledge revisions and exact-associated work from stdin through both public CLIs', async (t) => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);

@@ -36,6 +36,7 @@ import {
   searchTags
 } from '../../plugins/spectre/hooks/scripts/knowledge/tags.mjs';
 import {
+  foldWorkIdentities,
   resolveWorkIdentity
 } from '../../plugins/spectre/hooks/scripts/knowledge/work.mjs';
 import {
@@ -101,6 +102,10 @@ export async function mergeCanonicalKnowledgeTags(options) {
 
 export async function resolveCanonicalKnowledgeWork(options) {
   return resolveWorkIdentity(options);
+}
+
+export async function foldCanonicalKnowledgeWork(options) {
+  return foldWorkIdentities(options);
 }
 
 export async function captureCanonicalKnowledge(options) {

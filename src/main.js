@@ -21,6 +21,7 @@ import {
   ensureCanonicalKnowledgeTags,
   mergeCanonicalKnowledgeTags,
   resolveCanonicalKnowledgeWork,
+  foldCanonicalKnowledgeWork,
   searchCanonicalKnowledge,
   serializeCanonicalKnowledgeCaptureError,
   serializeCanonicalKnowledgeError,
@@ -86,9 +87,10 @@ function usage() {
   spectre knowledge load <id> [--inspect-historical] [--project-dir <path>] [--json]  (work and inactive records require --inspect-historical)
   spectre knowledge history <id> [--cursor <token>] [--project-dir <path>] [--json]
   spectre knowledge inspect <id> --revision <token> [--project-dir <path>] [--json]
-  spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--project-dir <path>] [--json]
+  spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--branch <exact-branch>] [--project-dir <path>] [--json]
+  spectre knowledge work fold --canonical-work-id <id> --old-work-id <id> [--old-work-id <id>] [--branch <exact-branch>] [--project-dir <path>] [--json]
   spectre knowledge registry [--host claude|codex] [--project-dir <path>] [--json]
-  spectre knowledge capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] [--project-dir <path>] [--json]
+  spectre knowledge capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--branch <exact-branch>] [--expected-revision <token>] [--project-dir <path>] [--json]
   spectre knowledge register --record <path> [--project-dir <path>] [--json]
   spectre knowledge migrate [--project-dir <path>] [--json]
   spectre workflow <run|stage|phase|wave|agent|task|gate|human-input|plan|cleanup|purge> ... [--json]
@@ -271,7 +273,7 @@ export async function main(argv) {
         const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
         const result = await resolveCanonicalKnowledgeWork({
           projectDir: knowledgeProjectDir(), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
-          pullRequestId: flags.get('--pull-request-id'), candidate, lockOptions: lockOptions()
+          pullRequestId: flags.get('--pull-request-id'), candidate, branch: flags.get('--branch'), lockOptions: lockOptions()
         });
         writeJson(result.status === 'unresolved' ? {
           ...result,
@@ -284,13 +286,23 @@ export async function main(argv) {
       return;
     }
 
+    if (target === 'work' && positional[2] === 'fold') {
+      try {
+        writeJson(await foldCanonicalKnowledgeWork({
+          projectDir: knowledgeProjectDir(), canonicalWorkId: flags.get('--canonical-work-id'),
+          oldWorkIds: flags.getAll('--old-work-id'), branch: flags.get('--branch'), lockOptions: lockOptions(),
+        }));
+      } catch (error) { throw new CliError(error?.code || 'WORK_FOLD_FAILED', error instanceof Error ? error.message : String(error)); }
+      return;
+    }
+
     if (target === 'capture') {
       try {
         const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
         const result = await captureWithInputTransport({
           projectDir: knowledgeProjectDir(), kind: flags.get('--kind'), inputPath: flags.get('--input'),
           recordId: flags.get('--record-id'), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
-          pullRequestId: flags.get('--pull-request-id'), candidate, expectedRevision: flags.get('--expected-revision'),
+          pullRequestId: flags.get('--pull-request-id'), candidate, branch: flags.get('--branch'), expectedRevision: flags.get('--expected-revision'),
           lockOptions: lockOptions(),
         }, captureCanonicalKnowledge);
         if (flags.has('--json')) writeJson(result); else process.stdout.write(`Captured ${result.kind} record ${result.id} (${result.status})\n`);

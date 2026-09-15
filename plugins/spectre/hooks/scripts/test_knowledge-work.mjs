@@ -5,9 +5,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+import * as work from './knowledge/work.mjs';
 
 import { registerCanonicalKnowledge } from './knowledge/registration.mjs';
-import { resolveWorkIdentity, resolveOrAllocateWorkIdentity } from './knowledge/work.mjs';
+import {
+  resolveWorkIdentity,
+  resolveOrAllocateWorkIdentity,
+} from './knowledge/work.mjs';
 
 function makeWorkspace(t) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-knowledge-work-'));
@@ -58,6 +62,83 @@ function writeProposal(workspace, record) {
 }
 
 describe('stable work identity', () => {
+  it('reuses one branch work id for distinct Execute source runs', async (t) => {
+    const workspace = makeWorkspace(t);
+    const first = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/delivery-group', sourceRunId: 'run-a',
+    }));
+    const second = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/delivery-group', sourceRunId: 'run-b',
+    }));
+
+    assert.equal(second.workId, first.workId);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { branch: 'feature/delivery-group' })),
+      { status: 'resolved', workId: first.workId },
+    );
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-b' })),
+      { status: 'resolved', workId: first.workId },
+    );
+  });
+
+  it('does not let a branch pointer select work from another branch', async (t) => {
+    const workspace = makeWorkspace(t);
+    const first = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/one', sourceRunId: 'run-one',
+    }));
+    const second = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/two', sourceRunId: 'run-two',
+    }));
+
+    assert.notEqual(second.workId, first.workId);
+  });
+
+  it('rotates a branch pointer after its registered PR is terminal', async (t) => {
+    const workspace = makeWorkspace(t);
+    const initial = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/terminal', sourceRunId: 'run-before-merge',
+    }));
+    const terminal = workRecord(initial.workId, {
+      sourceRunIds: ['run-before-merge'], pullRequestIds: ['github:example/spectre#1'], candidates: [],
+    });
+    terminal.work.pullRequest = { state: 'merged' };
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, terminal),
+    });
+
+    const next = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/terminal', sourceRunId: 'run-after-merge',
+    }));
+    assert.notEqual(next.workId, initial.workId);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-before-merge' })),
+      { status: 'resolved', workId: initial.workId },
+    );
+  });
+
+  it('folds a named provisional work id into its canonical branch record with a redirect', async (t) => {
+    const workspace = makeWorkspace(t);
+    assert.equal(typeof work.foldWorkIdentities, 'function');
+    const canonical = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/fold', sourceRunId: 'run-canonical',
+    }));
+    const provisional = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-provisional' }));
+
+    const folded = await work.foldWorkIdentities(options(workspace, {
+      branch: 'feature/fold', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
+    }));
+    assert.equal(folded.workId, canonical.workId);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { workId: provisional.workId })),
+      { status: 'resolved', workId: canonical.workId, redirectedFrom: provisional.workId },
+    );
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-provisional' })),
+      { status: 'resolved', workId: canonical.workId },
+    );
+  });
+
   it('resolves concurrent captures for one exact source run to one work id', async (t) => {
     const workspace = makeWorkspace(t);
     const results = await Promise.all([

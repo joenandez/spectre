@@ -16,7 +16,7 @@ import { previewKnowledgeRegistry } from './knowledge/preview.mjs';
 import { registerCanonicalKnowledge, serializeKnowledgeError } from './knowledge/registration.mjs';
 import { formatKnowledgeSearchHuman, formatKnowledgeSearchWarningsHuman, searchKnowledge } from './knowledge/search.mjs';
 import { applyTagOperationFile, ensureTags, mergeTags, readTagOperationFile, searchTags, serializeTagError } from './knowledge/tags.mjs';
-import { resolveWorkIdentity } from './knowledge/work.mjs';
+import { foldWorkIdentities, resolveWorkIdentity } from './knowledge/work.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -76,9 +76,10 @@ function usage() {
     '  knowledge-cli.mjs load <id> [--work-id <id>] [--run-id <id>] [--allowance-tokens <n>] [--inspect-historical] --project-dir <path> [--json]  (work and inactive records require --inspect-historical)',
     '  knowledge-cli.mjs history <id> --project-dir <path> [--json]',
     '  knowledge-cli.mjs inspect <id> --revision <token> --project-dir <path> [--json]',
-    '  knowledge-cli.mjs work resolve [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] --project-dir <path> [--json]',
+    '  knowledge-cli.mjs work resolve [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--branch <exact-branch>] --project-dir <path> [--json]',
+    '  knowledge-cli.mjs work fold --canonical-work-id <id> --old-work-id <id> [--old-work-id <id>] [--branch <exact-branch>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs registry [--host claude|codex] --project-dir <path> [--json]',
-    '  knowledge-cli.mjs capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>|--run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--expected-revision <token>] --project-dir <path> [--json]',
+    '  knowledge-cli.mjs capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>|--run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--branch <exact-branch>] [--expected-revision <token>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs register --record <path> [--expected-revision <token>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs migrate --project-dir <path> [--json]',
     '',
@@ -195,7 +196,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (command === 'work' && subcommand === 'resolve') {
     try {
       const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
-      const result = await resolveWorkIdentity({ projectDir: projectDir(flags), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags), pullRequestId: flags.get('--pull-request-id'), candidate, lockOptions: lockOptions(flags) });
+      const result = await resolveWorkIdentity({ projectDir: projectDir(flags), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags), pullRequestId: flags.get('--pull-request-id'), candidate, branch: flags.get('--branch'), lockOptions: lockOptions(flags) });
       writeResult(result.status === 'unresolved' ? {
         ...result,
         nextAction: {
@@ -204,6 +205,15 @@ export async function main(argv = process.argv.slice(2)) {
         },
       } : result, flags);
     } catch (error) { throw codedError(error?.code || 'WORK_RESOLUTION_FAILED', error instanceof Error ? error.message : String(error)); }
+    return;
+  }
+  if (command === 'work' && subcommand === 'fold') {
+    try {
+      writeResult(await foldWorkIdentities({
+        projectDir: projectDir(flags), canonicalWorkId: flags.get('--canonical-work-id'),
+        oldWorkIds: flags.getAll('--old-work-id'), branch: flags.get('--branch'), lockOptions: lockOptions(flags),
+      }), flags);
+    } catch (error) { throw codedError(error?.code || 'WORK_FOLD_FAILED', error instanceof Error ? error.message : String(error)); }
     return;
   }
   if (command === 'registry') {
@@ -220,7 +230,7 @@ export async function main(argv = process.argv.slice(2)) {
       const result = await captureWithInputTransport({
         projectDir: projectDir(flags), kind: flags.get('--kind'), inputPath: flags.get('--input'),
         recordId: flags.get('--record-id'), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
-        pullRequestId: flags.get('--pull-request-id'), candidate, expectedRevision: flags.get('--expected-revision'),
+        pullRequestId: flags.get('--pull-request-id'), candidate, branch: flags.get('--branch'), expectedRevision: flags.get('--expected-revision'),
         lockOptions: lockOptions(flags),
       }, captureCanonicalKnowledge);
       recordTrace(trace, { type: 'capture', id: result.id, revisionToken: result.revisionToken, outcome: result.status, kind: result.kind,
