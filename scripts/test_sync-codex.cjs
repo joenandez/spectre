@@ -1455,6 +1455,10 @@ test('create_plan and create_tasks preserve XS/direct routing contracts', () => 
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-create_tasks', 'SKILL.md'),
       'utf8',
     ).replaceAll('/spectre:', 'spectre-');
+    const minimumSolution = fs.readFileSync(
+      path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-plan', 'references', 'minimum-solution.md'),
+      'utf8',
+    );
 
     assert.match(createPlan, /--depth \{xs\|light\|standard\|comprehensive\}/);
     assert.match(createTasks, /--depth xs\|light\|standard\|comprehensive/);
@@ -1479,16 +1483,17 @@ test('create_plan and create_tasks preserve XS/direct routing contracts', () => 
     assert.match(createPlan, /Approved XS structured override[^\n]*spectre-create_tasks --depth xs/i);
     assert.match(createPlan, /Behavioral scope is binding; implementation means are not/i);
     assert.match(createPlan, /start with zero new owned concepts/i);
-    assert.match(createPlan, /nothing new → reuse owner\/lifecycle\/state\/operation → extend one boundary and derive state/i);
+    assert.match(minimumSolution, /nothing new → reuse owner\/lifecycle\/state\/operation → extend one boundary and derive state/i);
     assert.match(createPlan, /Addition \| Requirement failing without it \| Repository evidence \| Why reuse\/derivation fails \| Verification/);
-    assert.match(createPlan, /Future flexibility, optional diagnostics, and hypothetical scale are not evidence/i);
+    assert.match(minimumSolution, /Future flexibility, optional diagnostics, and hypothetical scale are not evidence/i);
     assert.match(createPlan, /No valid row means delete or defer/i);
     assert.match(createPlan, /Choice \| Simpler option \| Gives up \| Acceptable now because \| Revisit when/);
-    assert.match(createPlan, /Default to the simpler qualifying option/i);
-    assert.match(createPlan, /Reject it if it violates Scope, safety, or correctness/i);
-    assert.match(createPlan, /Reversible decisions take the local default without research or alternatives/i);
-    assert.match(createPlan, /compare at most two realistic options/i);
-    assert.match(createPlan, /bounded spike[^\n]*not production architecture/i);
+    assert.match(minimumSolution, /Default to the simpler qualifying option/i);
+    assert.match(minimumSolution, /Reject it only when it violates Scope, safety, or correctness/i);
+    assert.match(minimumSolution, /Reversible decisions take the local default without research or alternatives/i);
+    assert.match(minimumSolution, /compare at most two realistic options/i);
+    assert.match(minimumSolution, /bounded spike[^\n]*not production architecture/i);
+    assert.doesNotMatch(createPlan, /nothing new → reuse|Future flexibility, optional diagnostics|Default to the simpler qualifying option/i);
     assert.match(createPlan, /For `comprehensive`, add sections only when triggered/i);
     assert.match(createPlan, /Omit untriggered sections; do not emit `N\/A` ceremony/i);
     assert.doesNotMatch(createPlan, /Escalate-If[\s\S]*(?:>3 critical files|new abstraction|data migration|public-API change|tier-reassessment recommendation)/i);
@@ -2505,8 +2510,12 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
       path.join(skills, 'spectre-plan_review', 'references', 'simplification-review.md'),
       'utf8',
     );
+    const planReferences = fs.readdirSync(
+      path.join(skills, 'spectre-plan', 'references'),
+    ).filter((file) => file.endsWith('.md')).sort();
 
     assert.match(minimumSolution, /incumbent-only delivery path/i);
+    assert.match(minimumSolution, /nothing new → reuse owner\/lifecycle\/state\/operation → extend one boundary and derive state → existing platform\/dependency → minimum new mechanism/i);
     assert.match(minimumSolution, /S challenges XS[\s\S]*M challenges S[\s\S]*L challenges M[\s\S]*XL challenges L/i);
     assert.match(minimumSolution, /structural shape[\s\S]*assurance floor/i);
     assert.match(minimumSolution, /XS\/S.*local/i);
@@ -2517,29 +2526,47 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
     assert.doesNotMatch(minimumSolution, /telemetry event|persistent.*store|evaluation framework/i);
 
     const initialRoute = plan.indexOf('Skill(spectre-plan-route)` in `initial` mode');
+    const challenger = plan.indexOf('fresh evidence-only challenger');
+    const persistedEvidence = plan.indexOf('persists accepted evidence');
     const selection = plan.indexOf('## Minimum Solution Selection', initialRoute);
     const observedRoute = plan.indexOf('Skill(spectre-plan-route)` in `observed` mode');
     const draft = plan.indexOf('Draft once with the observed route-mapped depth');
-    assert.ok(initialRoute !== -1 && selection > initialRoute && observedRoute > selection && draft > observedRoute);
+    assert.ok(initialRoute !== -1 && challenger > initialRoute && challenger < persistedEvidence && selection > persistedEvidence && observedRoute > selection && draft > observedRoute);
     assert.match(plan, /read `references\/minimum-solution\.md`/i);
     assert.match(plan, /existing parallel research wave/i);
-    assert.match(plan, /replaces one available evidence slot/i);
+    assert.match(plan, /reserves one available evidence slot/i);
     assert.match(plan, /task_context\.md[\s\S]*Scope\/authority[\s\S]*accepted evidence/i);
     assert.match(plan, /automatically uses the observed route[\s\S]*no paid rerun.*user tier gate/i);
     assert.match(plan, /conform.*selected record[\s\S]*raw-byte.*authority hash/i);
     assert.equal((plan.match(/Skill\(spectre-plan-route\)/g) || []).length, 2);
-    assert.match(plan, /not a serial challenger/i);
-    assert.doesNotMatch(plan, /new telemetry event|named agent|evaluation framework/i);
+    assert.match(plan, /dispatches it with the wave/i);
+    assert.deepEqual(planReferences, [
+      'estimation-guidance.md',
+      'high-level-design-gate.md',
+      'minimum-solution.md',
+    ]);
+    assert.deepEqual(
+      [...new Set(plan.match(/\bplan\.(?!md\b)[a-z_]+/g) || [])].sort(),
+      ['plan.completed', 'plan.reclassified', 'plan.started'],
+    );
+    assert.doesNotMatch(plan, /\b(?:selection|solution-shape)\.(?:json|md)\b/i);
 
     assert.match(route, /observed[\s\S]*completed minimum-solution selection[\s\S]*before drafting/i);
     assert.match(route, /selected structural facts[\s\S]*assurance floor/i);
     assert.match(route, /same routing table.*alone maps/i);
 
+    assert.match(
+      createPlan,
+      rootName === 'spectre'
+        ? /\$\{CLAUDE_PLUGIN_ROOT\}\/skills\/spectre-plan\/references\/minimum-solution\.md/
+        : /\$\{PLUGIN_ROOT\}\/skills\/spectre-plan\/references\/minimum-solution\.md/,
+    );
     assert.match(createPlan, /Plan-origin[\s\S]*Minimum Solution Selection/i);
     assert.match(createPlan, /may add implementation detail but not.*new owner.*persisted fact.*state.*interface.*dependency.*migration.*lifecycle.*workflow/i);
     assert.match(createPlan, /genuine.*insufficiency.*returns to minimum-solution selection/i);
     assert.match(createPlan, /Standalone[\s\S]*same canonical minimum-solution reference locally/i);
-    assert.doesNotMatch(createPlan, /independent-challenge guarantee/i);
+    assert.doesNotMatch(createPlan, /\bchallenger\b/i);
+    assert.doesNotMatch(createPlan, /Future flexibility.*optional diagnostics.*hypothetical scale/i);
 
     assert.match(planReview, /selected minimum-solution record/i);
     assert.match(planReview, /Plan-origin selection/i);
@@ -2547,6 +2574,9 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
     assert.match(simplification, /undeclared owned complexity.*High/i);
     assert.match(simplification, /minimum-solution reselection/i);
     assert.match(simplification, /without.*selection.*current review behavior/i);
+
+    assert.match(plan, /requested outcome, approach, material decisions/i);
+    assert.match(plan, /observed XS → xs; S → light; M\/L → standard; XL → comprehensive/i);
   }
 });
 

@@ -11,7 +11,9 @@ Persist `## Minimum Solution Selection` in existing `task_context.md`, bound to 
 - tier-below candidate, structural-shape and assurance-floor dispositions, and any concrete requirement, safety, or verification failure;
 - challenger trigger/candidate, disagreement, simpler-wins disposition, and evidence provenance.
 
-Start from incumbent ownership. Scope nouns do not mandate entities, identifiers, stores, interfaces, dependencies, migrations, lifecycle states, or workflows. New owned concepts need current requirement, safety, or verification evidence; future flexibility, optional diagnostics, and hypothetical scale are not evidence.
+Start from incumbent ownership: nothing new → reuse owner/lifecycle/state/operation → extend one boundary and derive state → existing platform/dependency → minimum new mechanism. Scope nouns do not mandate entities, identifiers, stores, interfaces, dependencies, migrations, lifecycle states, or workflows. New owned concepts need current requirement, safety, or verification evidence; future flexibility, optional diagnostics, and hypothetical scale are not evidence.
+
+Default to the simpler qualifying option. Reject it only when it violates Scope, safety, or correctness; record its concrete consequence and revisit trigger. Reversible decisions take the local default without research or alternatives; compare at most two realistic options only for a material irreversible/public/persisted decision. Unknown feasibility is a bounded spike with question, evidence, and stop condition—not production architecture.
 
 ## Tier challenge
 

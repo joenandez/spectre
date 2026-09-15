@@ -108,6 +108,7 @@ function rewriteCodexAgentRefs(source, agentNames = []) {
 function rewriteTextForCodex(source, agentNames = []) {
   return rewriteCodexAgentRefs(
     rewriteCodexCommandRefs(rewriteProjectSkillPaths(source))
+      .replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, '${PLUGIN_ROOT}')
       .replace(
         /\bspectre-workflow\b/g,
         'node "${PLUGIN_ROOT}/hooks/scripts/workflow-cli.mjs"',

@@ -12,14 +12,14 @@ Return deterministic plan-routing/v1 to Plan/Execute. Classify only; caller owns
 
 ## Inputs
 
-- Canonical Scope/selected authority + bounded observations; observations describe work, not size.
-- Initial, or observed with prior decision + selection before drafting; legacy observed may include Routing Observations.
-- Execute selected source when transported assessment is missing/materially stale.
-- Normalize resume-only legacy size once.
+- Canonical Scope/authority + bounded work, not size.
+- Initial; observed uses prior decision + selection before drafting; legacy may include Routing Observations.
+- Execute when transported assessment is missing/materially stale.
+- Resume-only legacy size is normalized once.
 
 ## Working Set
 
-- Plan/Execute supplies one bounded scan: topology, uncertainty, evidence, boundaries, graph risk, shipped precedent, user decisions.
+- Bounded scan: topology, uncertainty, evidence, boundaries, graph risk, shipped precedent, user decisions.
 - If missing evidence alone would cross a costlier route, use exactly one bounded probe (`@spectre_finder`/`@spectre_patterns`) for one repository question.
 
 ## Outputs + DONE
