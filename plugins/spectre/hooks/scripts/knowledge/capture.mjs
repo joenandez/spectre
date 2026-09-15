@@ -241,7 +241,7 @@ function constructWork(input, current, workId, tags, associations, options) {
       ...Object.fromEntries(WORK_FIELDS.map((field) => [field, input[field]])),
       execution: input.execution || current?.work.execution || UNKNOWN_STATE,
       verificationState: input.verificationState || current?.work.verificationState || UNKNOWN_STATE,
-      pullRequest: input.pullRequest || current?.work.pullRequest || UNKNOWN_STATE,
+      pullRequest: options.resetPullRequest ? { state: 'none' } : input.pullRequest || current?.work.pullRequest || UNKNOWN_STATE,
       associations: mergedAssociations,
     },
   };
@@ -351,14 +351,16 @@ export async function captureCanonicalKnowledge(options) {
       }
       workIdentity = await resolveOrAllocateWorkIdentity({
         projectDir: options.projectDir, workId: options.workId, sourceRunId: options.sourceRunId,
-        pullRequestId: options.pullRequestId, candidate: options.candidate, branch: options.branch, lockOptions: options.lockOptions,
+        pullRequestId: options.pullRequestId, candidate: options.candidate, branch: options.branch, branchPrState: options.branchPrState, lockOptions: options.lockOptions,
         ...storeOptions(options),
       });
       current = existingRecord(resolved.storePath, workIdentity.workId);
     }
     record = kind === 'knowledge'
       ? constructKnowledge(input, current?.record, tagResult.tags, options)
-      : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, options);
+      : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, {
+        ...options, resetPullRequest: workIdentity.rolledOver,
+      });
     validateKnowledgeRecord(record, path.join('<semantic-capture>', record.id, 'record.json'), { expectedId: record.id });
     assertWorkRecordTokenLimit(record);
     if (current && !options.expectedRevision && current.revisionToken !== revisionTokenFor(record, current.resourceDigests)) {

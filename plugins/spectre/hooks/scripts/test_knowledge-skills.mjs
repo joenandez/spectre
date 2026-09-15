@@ -50,6 +50,8 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(workRecord, /recordPath/);
   assert.match(workRecord, /recoveryInput[\s\S]*manual|manual[\s\S]*recoveryInput/i);
   assert.match(workRecord, /2,000[\s\S]*non-blocking/i);
+  assert.match(workRecord, /gh pr view[\s\S]*--branch-pr-state[\s\S]*merged[\s\S]*closed/i);
+  assert.match(workRecord, /unavailable[\s\S]*(?:skip|recovery)[\s\S]*does not block/i);
 
   assert.match(execute, /exact run[\s\S]*Skill\(spectre-work-record\)[\s\S]*start/i);
   assert.match(execute, /meaningful blocked[\s\S]*resolved[\s\S]*Skill\(spectre-work-record\)/i);

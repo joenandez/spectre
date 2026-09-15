@@ -9,6 +9,7 @@ import { atomicWriteJson, resolveProjectStore, withStoreLock } from './store.mjs
 const WORK_ASSOCIATION_FILE_NAME = 'work-associations.json';
 const WORK_ASSOCIATION_SCHEMA_VERSION = 1;
 const WORK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const BRANCH_PR_STATES = new Set(['open', 'merged', 'closed']);
 
 function codedError(code, message, details = {}) {
   const error = new Error(message);
@@ -45,6 +46,14 @@ function validateWorkId(workId) {
     throw codedError('WORK_ID_INVALID', `Not a canonical work id: ${JSON.stringify(workId)}`);
   }
   return workId;
+}
+
+function branchPrState(options) {
+  if (options.branchPrState === undefined) return null;
+  if (!BRANCH_PR_STATES.has(options.branchPrState)) {
+    throw codedError('WORK_BRANCH_PR_STATE_INVALID', 'branchPrState must be open, merged, or closed.');
+  }
+  return options.branchPrState;
 }
 
 function validateCandidate(candidate) {
@@ -333,8 +342,18 @@ export async function resolveOrAllocateWorkIdentity(options) {
     const branchWorkId = options.branch === undefined ? null : identity.workId;
     const runWorkId = options.sourceRunId === undefined ? null : [...(view.sourceRuns.get(options.sourceRunId) || [])][0];
     const pointedRecord = branchWorkId ? view.verifiedWorkRecords.get(branchWorkId) : null;
-    const terminalBranch = pointedRecord && ['merged', 'closed'].includes(pointedRecord.work.pullRequest.state);
-    const workId = terminalBranch && runWorkId !== branchWorkId
+    const observedBranchPrState = branchPrState(options);
+    const storedBranchTerminal = pointedRecord && ['merged', 'closed'].includes(pointedRecord.work.pullRequest.state);
+    if (observedBranchPrState === 'open' && storedBranchTerminal) {
+      throw codedError(
+        'WORK_BRANCH_PR_STATE_CONFLICT',
+        'Validated open PR state conflicts with the terminal state stored for the branch work record.',
+        { workId: branchWorkId, storedState: pointedRecord.work.pullRequest.state },
+      );
+    }
+    const terminalBranch = Boolean(branchWorkId) && (storedBranchTerminal || ['merged', 'closed'].includes(observedBranchPrState));
+    const rolledOver = terminalBranch && runWorkId !== branchWorkId;
+    const workId = rolledOver
       ? `work-${crypto.randomUUID()}`
       : identity.workId || `work-${crypto.randomUUID()}`;
     let changed = false;
@@ -361,6 +380,7 @@ export async function resolveOrAllocateWorkIdentity(options) {
       ok: true,
       status: identity.status === 'resolved' && !changed ? 'noop' : identity.status === 'resolved' ? 'updated' : 'created',
       workId,
+      ...(rolledOver ? { rolledOver: true } : {}),
       storePath: resolved.storePath,
       associationPath: workAssociationPath(resolved.storePath),
     };

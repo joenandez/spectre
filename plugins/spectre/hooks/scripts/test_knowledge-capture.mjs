@@ -209,6 +209,26 @@ describe('semantic knowledge capture', () => {
     }
   });
 
+  it('rotates a branch capture after a validated external terminal PR lifecycle through both public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const first = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `terminal-first-${kind}.json`, workInput({
+          pullRequest: { state: 'draft-open', identity: 'github:example/spectre#2' },
+        })), '--source-run-id', `run-terminal-a-${kind}`, '--pull-request-id', 'github:example/spectre#2', '--branch', 'feature/external-terminal',
+      ], value);
+      assert.equal(first.status, 0, first.stderr);
+
+      const next = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `terminal-next-${kind}.json`, workInput()),
+        '--source-run-id', `run-terminal-b-${kind}`, '--branch', 'feature/external-terminal', '--branch-pr-state', 'merged',
+      ], value);
+      assert.equal(next.status, 0, next.stderr);
+      assert.notEqual(output(next).workId, output(first).workId);
+      assert.equal(output(next).workLifecycle.pullRequest, 'none');
+    }
+  });
+
   it('captures knowledge revisions and exact-associated work from stdin through both public CLIs', async (t) => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);

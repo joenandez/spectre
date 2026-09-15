@@ -90,7 +90,7 @@ function usage() {
   spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--branch <exact-branch>] [--project-dir <path>] [--json]
   spectre knowledge work fold --canonical-work-id <id> --old-work-id <id> [--old-work-id <id>] [--branch <exact-branch>] [--project-dir <path>] [--json]
   spectre knowledge registry [--host claude|codex] [--project-dir <path>] [--json]
-  spectre knowledge capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--branch <exact-branch>] [--expected-revision <token>] [--project-dir <path>] [--json]
+  spectre knowledge capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--branch <exact-branch>] [--branch-pr-state open|merged|closed] [--expected-revision <token>] [--project-dir <path>] [--json]
   spectre knowledge register --record <path> [--project-dir <path>] [--json]
   spectre knowledge migrate [--project-dir <path>] [--json]
   spectre workflow <run|stage|phase|wave|agent|task|gate|human-input|plan|cleanup|purge> ... [--json]
@@ -302,7 +302,7 @@ export async function main(argv) {
         const result = await captureWithInputTransport({
           projectDir: knowledgeProjectDir(), kind: flags.get('--kind'), inputPath: flags.get('--input'),
           recordId: flags.get('--record-id'), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags),
-          pullRequestId: flags.get('--pull-request-id'), candidate, branch: flags.get('--branch'), expectedRevision: flags.get('--expected-revision'),
+          pullRequestId: flags.get('--pull-request-id'), candidate, branch: flags.get('--branch'), branchPrState: flags.get('--branch-pr-state'), expectedRevision: flags.get('--expected-revision'),
           lockOptions: lockOptions(),
         }, captureCanonicalKnowledge);
         if (flags.has('--json')) writeJson(result); else process.stdout.write(`Captured ${result.kind} record ${result.id} (${result.status})\n`);

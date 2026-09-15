@@ -117,6 +117,30 @@ describe('stable work identity', () => {
     );
   });
 
+  it('rotates a draft branch record when validated external PR state is terminal', async (t) => {
+    const workspace = makeWorkspace(t);
+    const initial = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/external-terminal', sourceRunId: 'run-before-external-merge',
+    }));
+    const draft = workRecord(initial.workId, {
+      sourceRunIds: ['run-before-external-merge'], pullRequestIds: ['github:example/spectre#2'], candidates: [],
+    });
+    draft.work.pullRequest = { state: 'draft-open', identity: 'github:example/spectre#2' };
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, draft),
+    });
+
+    const next = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/external-terminal', sourceRunId: 'run-after-external-merge', branchPrState: 'merged',
+    }));
+
+    assert.notEqual(next.workId, initial.workId);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { branch: 'feature/external-terminal' })),
+      { status: 'resolved', workId: next.workId },
+    );
+  });
+
   it('folds a named provisional work id into its canonical branch record with a redirect', async (t) => {
     const workspace = makeWorkspace(t);
     assert.equal(typeof work.foldWorkIdentities, 'function');
