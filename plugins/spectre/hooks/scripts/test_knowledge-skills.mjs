@@ -51,6 +51,7 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(workRecord, /recoveryInput[\s\S]*manual|manual[\s\S]*recoveryInput/i);
   assert.match(workRecord, /2,000[\s\S]*non-blocking/i);
   assert.match(workRecord, /gh pr view[\s\S]*--branch-pr-state[\s\S]*merged[\s\S]*closed/i);
+  assert.match(workRecord, /git rev-parse --abbrev-ref HEAD[\s\S]*(?:skip|recovery)/i);
   assert.match(workRecord, /unavailable[\s\S]*(?:skip|recovery)[\s\S]*does not block/i);
 
   assert.match(execute, /exact run[\s\S]*Skill\(spectre-work-record\)[\s\S]*start/i);
@@ -62,6 +63,8 @@ test('knowledge and work-record skills have separate self-sufficient routing con
 
   assert.doesNotMatch(ship, /pre-PR[\s\S]*work/i);
   assert.match(ship, /PR[\s\S]*first[\s\S]*Skill\(spectre-work-record\)/i);
+  assert.match(ship, /neither stages\/commits/i);
+  assert.match(ship, /relay compact paths\/checks and repair\/route cross-boundary needs unless `NEEDS_AUTHORITY`/i);
   assert.match(ship, /failure[\s\S]*does not block/i);
   assert.match(createPr, /orchestrated[\s\S]*does not[\s\S]*work record/i);
   assert.doesNotMatch(createPr, /pending[\s\S]*attaches PR to work ID/i);

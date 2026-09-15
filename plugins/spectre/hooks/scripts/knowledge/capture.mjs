@@ -327,7 +327,17 @@ export async function captureCanonicalKnowledge(options) {
     });
     if (existingIdentity.status === 'resolved') current = existingRecord(resolved.storePath, existingIdentity.workId);
   }
-  if (!current && input.tags === undefined) {
+  const sourceRunIdentity = kind === 'work' && current && options.sourceRunId !== undefined
+    ? await resolveWorkIdentity({
+      projectDir: options.projectDir, sourceRunId: options.sourceRunId, lockOptions: options.lockOptions,
+      ...storeOptions(options),
+    })
+    : null;
+  const rolloverCreatesNewRecord = kind === 'work' && !options.workId && current &&
+    (!sourceRunIdentity || sourceRunIdentity.workId !== current.record.id) &&
+    (['merged', 'closed'].includes(current.record.work.pullRequest.state) ||
+      ['merged', 'closed'].includes(options.branchPrState));
+  if ((!current || rolloverCreatesNewRecord) && input.tags === undefined) {
     throw codedError('CAPTURE_INPUT_INVALID', 'New captures require a non-empty tags array.');
   }
   if (current && current.record.kind !== kind) {

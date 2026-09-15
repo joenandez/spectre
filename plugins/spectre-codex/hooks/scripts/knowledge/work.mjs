@@ -290,6 +290,7 @@ function resolveFromIndex(view, pending, options) {
       status: resolvedIds.size === 0 && !view.verifiedWorkIds.has(canonicalSuppliedWorkId) && suppliedWorkId === canonicalSuppliedWorkId ? 'unresolved' : 'resolved',
       workId: canonicalSuppliedWorkId,
       associations,
+      suppliedWorkId: canonicalSuppliedWorkId,
       ...(suppliedWorkId !== canonicalSuppliedWorkId ? { redirectedFrom: suppliedWorkId } : {}),
     };
   }
@@ -352,7 +353,7 @@ export async function resolveOrAllocateWorkIdentity(options) {
       );
     }
     const terminalBranch = Boolean(branchWorkId) && (storedBranchTerminal || ['merged', 'closed'].includes(observedBranchPrState));
-    const rolledOver = terminalBranch && runWorkId !== branchWorkId;
+    const rolledOver = terminalBranch && runWorkId !== branchWorkId && identity.suppliedWorkId !== branchWorkId;
     const workId = rolledOver
       ? `work-${crypto.randomUUID()}`
       : identity.workId || `work-${crypto.randomUUID()}`;
@@ -378,7 +379,7 @@ export async function resolveOrAllocateWorkIdentity(options) {
     if (changed) atomicWriteJson(workAssociationPath(resolved.storePath), sortedAssociationIndex(pending));
     return {
       ok: true,
-      status: identity.status === 'resolved' && !changed ? 'noop' : identity.status === 'resolved' ? 'updated' : 'created',
+      status: rolledOver ? 'created' : identity.status === 'resolved' && !changed ? 'noop' : identity.status === 'resolved' ? 'updated' : 'created',
       workId,
       ...(rolledOver ? { rolledOver: true } : {}),
       storePath: resolved.storePath,
@@ -394,6 +395,9 @@ function applyFoldToPending(storePath, options, canonicalWorkId, oldWorkIds) {
   if (options.branch !== undefined && pending.branches[options.branch] !== canonicalWorkId) {
     throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
   }
+  if (pending.redirects[canonicalWorkId] !== undefined) {
+    throw codedError('WORK_FOLD_CONFLICT', `Canonical work id ${canonicalWorkId} already redirects elsewhere.`);
+  }
   for (const oldWorkId of oldWorkIds) {
     if (pending.redirects[oldWorkId] && pending.redirects[oldWorkId] !== canonicalWorkId) {
       throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} already redirects elsewhere.`);
@@ -406,6 +410,12 @@ function applyFoldToPending(storePath, options, canonicalWorkId, oldWorkIds) {
   for (const [key, workId] of Object.entries(pending.sourceRuns)) {
     if (oldWorkIds.includes(workId)) {
       pending.sourceRuns[key] = canonicalWorkId;
+      changed = true;
+    }
+  }
+  for (const [redirectedWorkId, targetWorkId] of Object.entries(pending.redirects)) {
+    if (oldWorkIds.includes(targetWorkId)) {
+      pending.redirects[redirectedWorkId] = canonicalWorkId;
       changed = true;
     }
   }
@@ -439,6 +449,9 @@ function assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldW
   }
   if (options.branch !== undefined && pending.branches?.[options.branch] !== canonicalWorkId) {
     throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
+  }
+  if (pending.redirects?.[canonicalWorkId] !== undefined) {
+    throw codedError('WORK_FOLD_CONFLICT', `Canonical work id ${canonicalWorkId} already redirects elsewhere.`);
   }
   for (const oldWorkId of oldWorkIds) {
     const record = view.verifiedWorkRecords.get(oldWorkId);

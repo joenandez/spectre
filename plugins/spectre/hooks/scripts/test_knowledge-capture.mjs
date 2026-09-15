@@ -229,6 +229,27 @@ describe('semantic knowledge capture', () => {
     }
   });
 
+  it('requires explicit tags for a post-terminal branch capture through both public CLIs', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const first = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `tagged-terminal-${kind}.json`, workInput({
+          pullRequest: { state: 'draft-open', identity: 'github:example/spectre#3' },
+        })), '--source-run-id', `run-tagged-terminal-${kind}`, '--pull-request-id', 'github:example/spectre#3', '--branch', 'feature/post-terminal-tags',
+      ], value);
+      assert.equal(first.status, 0, first.stderr);
+
+      const next = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `untagged-terminal-${kind}.json`, workInput({ tags: undefined })),
+        '--source-run-id', `run-untagged-terminal-${kind}`, '--branch', 'feature/post-terminal-tags', '--branch-pr-state', 'merged',
+      ], value);
+      assert.equal(next.status, 1);
+      assert.equal(output(next).code, 'CAPTURE_INPUT_INVALID');
+      const associations = JSON.parse(fs.readFileSync(path.join(value.storePath, 'work-associations.json'), 'utf8'));
+      assert.equal(associations.branches['feature/post-terminal-tags'], output(first).workId);
+    }
+  });
+
   it('captures knowledge revisions and exact-associated work from stdin through both public CLIs', async (t) => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);
