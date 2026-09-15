@@ -139,6 +139,39 @@ describe('stable work identity', () => {
     );
   });
 
+  it('folds source-run provenance into the canonical record without moving the old PR', async (t) => {
+    const workspace = makeWorkspace(t);
+    const canonical = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/fold-history', sourceRunId: 'run-canonical-history',
+    }));
+    const provisional = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-provisional-history', pullRequestId: 'github:example/spectre#99',
+    }));
+    const registeredCanonical = await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(canonical.workId, {
+        sourceRunIds: ['run-canonical-history'], pullRequestIds: [], candidates: [],
+      })),
+    });
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(provisional.workId, {
+        sourceRunIds: ['run-provisional-history'], pullRequestIds: ['github:example/spectre#99'], candidates: [],
+      })),
+    });
+
+    await work.foldWorkIdentities(options(workspace, {
+      branch: 'feature/fold-history', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
+    }));
+
+    const canonicalRecord = JSON.parse(fs.readFileSync(registeredCanonical.recordPath, 'utf8'));
+    assert.deepEqual(canonicalRecord.work.associations.sourceRunIds, [
+      'run-canonical-history', 'run-provisional-history',
+    ]);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { pullRequestId: 'github:example/spectre#99' })),
+      { status: 'resolved', workId: provisional.workId },
+    );
+  });
+
   it('resolves concurrent captures for one exact source run to one work id', async (t) => {
     const workspace = makeWorkspace(t);
     const results = await Promise.all([

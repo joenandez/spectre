@@ -371,7 +371,7 @@ export async function registerCanonicalKnowledge(options) {
         const stagedRecordDir = path.join(stageRoot, path.basename(sourceDir));
         copyDirectory(sourceDir, stagedRecordDir);
         const parsed = validateStagedRecord(stagedRecordDir);
-        assertWorkRecordAssociations(storePath, parsed.record);
+        assertWorkRecordAssociations(storePath, parsed.record, { foldFromWorkIds: options.foldFromWorkIds });
         const destinationPath = path.join(storePath, 'knowledge', parsed.record.id);
         const indexPath = path.join(storePath, 'index.json');
         const outcome = resolveRegistrationOutcome({

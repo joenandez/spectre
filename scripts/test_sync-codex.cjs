@@ -2022,6 +2022,9 @@ test('ship composes focused skills without a proof prerequisite', () => {
     assert.ok(sweepIndex > testIndex);
     assert.ok(rebaseIndex > sweepIndex);
     assert.ok(createPrIndex > rebaseIndex);
+    assert.match(skill, /Resolve exact current branch -> canonical work ID before Create PR/i);
+    assert.match(skill, /quiet[^\n]*no recency/i);
+    assert.match(skill, /same work ID[\s\S]*pending[\s\S]*final[\s\S]*work record/i);
     assert.match(skill, /Proof is optional:/);
     assert.match(skill, /do not inspect, infer, invoke, or gate on it/);
     assert.doesNotMatch(skill, /--require-proof/);

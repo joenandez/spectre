@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-import { parseKnowledgeRecord, readVerifiedIndexedRecord, refreshKnowledgeIndex } from './records.mjs';
+import { parseKnowledgeRecord, readRecordRevision, readVerifiedIndexedRecord, refreshKnowledgeIndex } from './records.mjs';
 import { atomicWriteJson, resolveProjectStore, withStoreLock } from './store.mjs';
 
 const WORK_ASSOCIATION_FILE_NAME = 'work-associations.json';
@@ -150,6 +151,10 @@ function canonicalWorkId(index, workId) {
   return redirected || workId;
 }
 
+function associationWorkId(index, type, workId) {
+  return type === 'sourceRuns' || type === 'branches' ? canonicalWorkId(index, workId) : workId;
+}
+
 function addAssociation(view, type, key, workId, target = view) {
   const values = target[type].get(key) || new Set();
   values.add(workId);
@@ -169,16 +174,16 @@ function recordPathForEntry(storePath, entry) {
   }
 }
 
-function addRecordAssociations(view, record, target = view, workId = record.id) {
+function addRecordAssociations(view, record, target = view, sourceWorkId = record.id) {
   if (record.kind !== 'work') return;
   for (const sourceRunId of record.work.associations.sourceRunIds) {
-    addAssociation(view, 'sourceRuns', sourceRunId, workId, target);
+    addAssociation(view, 'sourceRuns', sourceRunId, sourceWorkId, target);
   }
   for (const pullRequestId of record.work.associations.pullRequestIds) {
-    addAssociation(view, 'pullRequests', pullRequestId, workId, target);
+    addAssociation(view, 'pullRequests', pullRequestId, record.id, target);
   }
   for (const candidate of record.work.associations.candidates) {
-    addAssociation(view, 'candidates', candidateAssociationKey(candidate), workId, target);
+    addAssociation(view, 'candidates', candidateAssociationKey(candidate), record.id, target);
   }
 }
 
@@ -194,7 +199,7 @@ function associationView(storePath) {
   pending.redirects ||= {};
   for (const type of ['sourceRuns', 'pullRequests', 'candidates', 'branches']) {
     for (const [key, workId] of Object.entries(pending[type])) {
-      addAssociation(view, type, key, canonicalWorkId(pending, workId));
+      addAssociation(view, type, key, associationWorkId(pending, type, workId));
     }
   }
 
@@ -362,7 +367,56 @@ export async function resolveOrAllocateWorkIdentity(options) {
   }, options.lockOptions);
 }
 
-/** Explicit recovery: redirect provisional exact associations to one named canonical work id. */
+function applyFoldToPending(storePath, options, canonicalWorkId, oldWorkIds) {
+  const pending = readAssociationIndex(storePath);
+  pending.branches ||= {};
+  pending.redirects ||= {};
+  if (options.branch !== undefined && pending.branches[options.branch] !== canonicalWorkId) {
+    throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
+  }
+  for (const oldWorkId of oldWorkIds) {
+    if (pending.redirects[oldWorkId] && pending.redirects[oldWorkId] !== canonicalWorkId) {
+      throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} already redirects elsewhere.`);
+    }
+    if (Object.values(pending.branches).includes(oldWorkId)) {
+      throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} remains the pointer for another branch.`);
+    }
+  }
+  for (const [key, workId] of Object.entries(pending.sourceRuns)) {
+    if (oldWorkIds.includes(workId)) pending.sourceRuns[key] = canonicalWorkId;
+  }
+  for (const oldWorkId of oldWorkIds) pending.redirects[oldWorkId] = canonicalWorkId;
+  atomicWriteJson(workAssociationPath(storePath), sortedAssociationIndex(pending));
+}
+
+function foldedWorkRecord(view, canonicalWorkId, oldWorkIds) {
+  const canonical = view.verifiedWorkRecords.get(canonicalWorkId);
+  if (!canonical) return null;
+  const sourceRunIds = new Set(canonical.work.associations.sourceRunIds);
+  for (const oldWorkId of oldWorkIds) {
+    for (const sourceRunId of view.verifiedWorkRecords.get(oldWorkId)?.work.associations.sourceRunIds || []) {
+      sourceRunIds.add(sourceRunId);
+    }
+  }
+  if (sourceRunIds.size === canonical.work.associations.sourceRunIds.length) return null;
+  const mergedSourceRunIds = [...sourceRunIds].sort();
+  const record = structuredClone(canonical);
+  record.work.associations.sourceRunIds = mergedSourceRunIds;
+  record.provenance = { ...record.provenance, sourceRunIds: mergedSourceRunIds };
+  record.applicability = { ...record.applicability, runIds: mergedSourceRunIds };
+  return record;
+}
+
+function writeFoldProposal(storePath, record) {
+  const sourceDir = path.join(storePath, 'knowledge', record.id);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-work-fold-'));
+  const proposal = path.join(root, record.id);
+  fs.cpSync(sourceDir, proposal, { recursive: true });
+  fs.writeFileSync(path.join(proposal, 'record.json'), `${JSON.stringify(record, null, 2)}\n`);
+  return { root, proposal };
+}
+
+/** Explicit recovery: fold source provenance into a named canonical record, then redirect old ids. */
 export async function foldWorkIdentities(options) {
   if (!Array.isArray(options.oldWorkIds) || options.oldWorkIds.length === 0) {
     throw codedError('WORK_FOLD_INVALID', 'oldWorkIds must name at least one provisional work id.');
@@ -373,33 +427,36 @@ export async function foldWorkIdentities(options) {
     throw codedError('WORK_FOLD_INVALID', 'A canonical work id cannot be folded into itself.');
   }
   const resolved = await resolveStore(options, false);
-  return withStoreLock(resolved.storePath, 'fold-work-identities', async () => {
-    const { pending } = associationView(resolved.storePath);
-    const branchWorkId = pending.branches[options.branch];
-    if (options.branch !== undefined && branchWorkId !== canonicalWorkId) {
-      throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
-    }
-    for (const oldWorkId of oldWorkIds) {
-      if (pending.redirects[oldWorkId] && pending.redirects[oldWorkId] !== canonicalWorkId) {
-        throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} already redirects elsewhere.`);
-      }
-      if (Object.values(pending.branches).includes(oldWorkId)) {
-        throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} remains the pointer for another branch.`);
-      }
-    }
-    for (const type of ['sourceRuns', 'pullRequests', 'candidates']) {
-      for (const [key, workId] of Object.entries(pending[type])) {
-        if (oldWorkIds.includes(workId)) pending[type][key] = canonicalWorkId;
-      }
-    }
-    for (const oldWorkId of oldWorkIds) pending.redirects[oldWorkId] = canonicalWorkId;
-    atomicWriteJson(workAssociationPath(resolved.storePath), sortedAssociationIndex(pending));
-    return { ok: true, status: 'updated', workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
-  }, options.lockOptions);
+  const { view } = associationView(resolved.storePath);
+  const record = foldedWorkRecord(view, canonicalWorkId, oldWorkIds);
+  if (!record) {
+    return withStoreLock(resolved.storePath, 'fold-work-identities', async () => {
+      applyFoldToPending(resolved.storePath, options, canonicalWorkId, oldWorkIds);
+      return { ok: true, status: 'updated', workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
+    }, options.lockOptions);
+  }
+  const proposal = writeFoldProposal(resolved.storePath, record);
+  try {
+    const { registerCanonicalKnowledge } = await import('./registration.mjs');
+    const registration = await registerCanonicalKnowledge({
+      projectDir: options.projectDir,
+      spectreHome: options.spectreHome,
+      gitRunner: options.gitRunner,
+      allocationLockOptions: options.allocationLockOptions,
+      recordPath: proposal.proposal,
+      expectedRevision: readRecordRevision(path.join(resolved.storePath, 'knowledge', canonicalWorkId)),
+      foldFromWorkIds: oldWorkIds,
+      lockOptions: options.lockOptions,
+      afterIndexRefresh: () => applyFoldToPending(resolved.storePath, options, canonicalWorkId, oldWorkIds),
+    });
+    return { ok: true, status: registration.status, workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
+  } finally {
+    fs.rmSync(proposal.root, { recursive: true, force: true });
+  }
 }
 
 /** Reject a registration that would split an exact association across verified work IDs. */
-export function assertWorkRecordAssociations(storePath, record) {
+export function assertWorkRecordAssociations(storePath, record, options = {}) {
   if (record.kind !== 'work') return;
   const { view } = associationView(storePath);
   const prior = view.verifiedWorkRecords.get(record.id);
@@ -438,7 +495,9 @@ export function assertWorkRecordAssociations(storePath, record) {
           { workIds: [...unverified].sort() },
         );
       }
-      const conflicts = [...(view[type].get(key) || [])].filter((workId) => workId !== record.id);
+      const foldFrom = type === 'sourceRuns' ? new Set(options.foldFromWorkIds || []) : new Set();
+      const conflicts = [...(view[type].get(key) || [])]
+        .filter((workId) => workId !== record.id && !foldFrom.has(workId));
       if (conflicts.length > 0) {
         throw codedError(
           'WORK_IDENTITY_CONFLICT',
