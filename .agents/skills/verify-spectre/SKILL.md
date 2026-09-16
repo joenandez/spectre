@@ -29,9 +29,9 @@ Report the PASS/FAIL summary. On failure, each check already names what was expe
 
 | # | Gate | Asserts |
 |---|------|---------|
-| 1 | **structure** | Skill/agent frontmatter valid and `name` matches its directory · expected-skills manifest intact · `hooks.json` parses, scripts exist, SessionStart order is `bootstrap → handoff-resume → load-knowledge` · no active skill contains `{{REGISTRY}}` · no stale fork naming · every `Skill(spectre-x)` / `/spectre:x` / `@spectre:agent` reference resolves · four canonical version files agree |
+| 1 | **structure** | Skill/agent frontmatter valid and `name` matches its directory · expected-skills manifest intact · `hooks.json` parses, scripts exist, SessionStart order is `bootstrap → handoff-resume → load-knowledge` · no active skill contains `{{REGISTRY}}` · no stale fork naming · every `Skill(spectre-x)` / `/spectre:spectre-x` / `@spectre:agent` reference resolves · four canonical version files agree |
 | 2 | **tests** | `npm test` passes; reports the test count so a silent drop (deleted tests, not fixed ones) is visible |
-| 3 | **codex** | `sync-codex --check` is clean — the committed mirror matches canonical source · generated hooks reference `.mjs`, never `.cjs`, and every referenced script exists · skills rewritten to `.agents/skills/` and bare skill names |
+| 3 | **codex** | `sync-codex --check` is clean — the committed mirror matches canonical source · generated hooks reference `.mjs`, never `.cjs`, and every referenced script exists · user commands use `$spectre:spectre-*` and skill paths use `.agents/skills/` |
 | 4 | **real-cli** | The CLI and hooks actually run, in throwaway temp dirs with a fresh `CODEX_HOME` (see below) |
 | 5 | **release** | Clean tree · mirror in sync · versions in lockstep · tag free · **GitHub authenticated** |
 

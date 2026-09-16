@@ -19,6 +19,7 @@ Proactively preserve consequential project knowledge without waiting for a user 
 ## Working Set
 
 - Bounded tag/task search results, exact verified loads, and current revision tokens.
+- `references/tagging-policy.md` and `references/knowledge-capture-input.json`.
 - Worker findings and evidence references only; workers never write records or tags.
 
 ## Outputs + DONE
@@ -30,8 +31,8 @@ Proactively preserve consequential project knowledge without waiting for a user 
 ## Method / guardrails
 
 1. Capture accepted lasting decisions, explicit corrections, verified reusable patterns/gotchas/constraints, disproved maintained guidance, and confirmed persistent-blocker transitions. Do not infer a durable fact from incidental code, a transient command failure, a task outcome, or routine progress.
-2. Reuse the visible catalog and current-request tag results. Run `knowledge-cli.mjs tags search '<subject>' --project-dir <project-dir> --json` only for unresolved aliases, omitted tags, or genuinely new tag intent; exact-load a candidate only when needed. An explicit user statement that a lasting decision is current, corrected, or superseded is accepted authoritative evidence. Absence of corroborating repository evidence does not block the save or require reconfirmation; retain disagreeing repository statements as stale or historical context.
-3. Read only `references/knowledge-capture-input.json`, fill its semantic JSON outside the store, then submit it through standard input: `knowledge-cli.mjs capture --kind knowledge --input - --project-dir <project-dir> --json`. New input needs non-empty tag intent; reuse canonical tags and create only genuinely new tags. Use `--input <path>` only for an explicitly manual/advanced capture or a returned `recoveryInput` file.
+2. Read `references/tagging-policy.md`, then reuse the visible catalog and current-request tag results. Run `knowledge-cli.mjs tags search '<subject>' --project-dir <project-dir> --json` only for unresolved aliases, omitted tags, or genuinely new tag intent; exact-load a candidate only when needed. Select or create tags at the policy's durable area altitude. An explicit user statement that a lasting decision is current, corrected, or superseded is accepted authoritative evidence. Absence of corroborating repository evidence does not block the save or require reconfirmation; retain disagreeing repository statements as stale or historical context.
+3. Read `references/knowledge-capture-input.json`, fill its semantic JSON outside the store, then submit it through standard input: `knowledge-cli.mjs capture --kind knowledge --input - --project-dir <project-dir> --json`. New input needs non-empty tag intent; reuse canonical tags or create a qualifying new tag under the shared policy. Use `--input <path>` only for an explicitly manual/advanced capture or a returned `recoveryInput` file.
 4. An unchanged retry is a no-op. A changed record needs its loaded `revisionToken` as `--expected-revision`; preserve omitted tags on updates and never edit canonical packages, `index.json`, or history.
 5. Return the tag and record outcome, canonical `recordPath`, and ID/revision. A failed write returns `recoveryInput` for manual recovery and remains non-blocking; it never becomes an Execute, Ship, Create PR, verification, or acceptance gate.
 

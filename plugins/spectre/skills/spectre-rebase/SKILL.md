@@ -47,7 +47,7 @@ Return compressed Rebase Summary; `--orchestrated`: no step; parent verification
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone success → `/spectre:create_pr`; incomplete → exact recovery only.
+Standalone success → `/spectre:spectre-create_pr`; incomplete → exact recovery only.
 
 ## Escalate-If
 - Conflicts can't be resolved by favoring the target (genuine semantic divergence) → stop, report, leave the rebase in progress for the user.

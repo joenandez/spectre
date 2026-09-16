@@ -72,7 +72,7 @@ Standalone: load-bearing user-facing behavior without adequate UX/prototype acce
 ## Escalate-If
 
 - Standalone `plan.md` says `Execution Mode: direct` without supplied finalized plan path/hash and closed-review evidence -> stop; require explicit structured re-route before task writes.
-- Requirements are too thin -> `spectre-fix` for a fix source, otherwise `spectre-scope` or `spectre-plan`.
+- Requirements are too thin -> `$spectre:spectre-fix` for a fix source, otherwise `$spectre:spectre-scope` or `$spectre:spectre-plan`.
 - Required boundary or Verification is missing -> flag it; proceed only with otherwise-clear scope.
 - A requirement cannot become an executable `test|observable|state` criterion -> surface it.
 - Any task would expand scope -> stop for confirmation.

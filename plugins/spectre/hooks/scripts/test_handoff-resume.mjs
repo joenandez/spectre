@@ -234,9 +234,9 @@ describe('HandoffResume', () => {
       assert.equal(result.exitCode, 0);
       const output = JSON.parse(result.stdout);
       assert.ok(output.systemMessage);
-      assert.ok(output.systemMessage.includes('/spectre:scope'));
-      assert.ok(output.systemMessage.includes('/spectre:handoff'));
-      assert.ok(output.systemMessage.includes('/spectre:forget'));
+      assert.ok(output.systemMessage.includes('/spectre:spectre-scope'));
+      assert.ok(output.systemMessage.includes('/spectre:spectre-handoff'));
+      assert.ok(output.systemMessage.includes('/spectre:spectre-forget'));
     } finally {
       cleanup(tmp);
     }
@@ -251,7 +251,7 @@ describe('HandoffResume', () => {
       assert.equal(result.exitCode, 0);
       const output = JSON.parse(result.stdout);
       assert.ok(output.systemMessage);
-      assert.ok(output.systemMessage.includes('/spectre:scope'));
+      assert.ok(output.systemMessage.includes('/spectre:spectre-scope'));
     } finally {
       cleanup(tmp);
     }
@@ -562,7 +562,7 @@ describe('HandoffResume', () => {
       assert.equal(result.exitCode, 0);
       const output = JSON.parse(result.stdout);
       assert.ok(output.systemMessage);
-      assert.ok(output.systemMessage.includes('/spectre:scope'));
+      assert.ok(output.systemMessage.includes('/spectre:spectre-scope'));
     } finally {
       cleanup(tmp);
     }

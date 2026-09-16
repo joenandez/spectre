@@ -61,7 +61,7 @@ Use inline SVG/data URIs/CSS shapes only: no remote images, relative assets, cus
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Return path/screens/fidelity/anchor/assumptions/NOT included; opens/shareable; revalidate edits/research; promote post-UX to `ux.md`. explore → Scope; flows-only UX → Stage 2; post-UX contradiction/assumption → UX, else Plan; post-scope unresolved UX → UX, post-scope validated scope → `/spectre:plan`; standalone no scope → Scope, else reclassify as `post-scope`. One route/conditional/pause.
+Return path/screens/fidelity/anchor/assumptions/NOT included; opens/shareable; revalidate edits/research; promote post-UX to `ux.md`. explore → Scope; flows-only UX → Stage 2; post-UX contradiction/assumption → UX, else Plan; post-scope unresolved UX → UX, post-scope validated scope → `/spectre:spectre-plan`; standalone no scope → Scope, else reclassify as `post-scope`. One route/conditional/pause.
 
 ## Escalate-If
 

@@ -1,6 +1,6 @@
 # spectre-managed-codex-agent
 name = "spectre_sync"
-description = "Memory consolidation agent that synthesizes current session context with historical sessions to maintain continuity across handoffs. Called by /spectre:handoff when previous handoffs exist."
+description = "Memory consolidation agent that synthesizes current session context with historical sessions to maintain continuity across handoffs. Called by $spectre:spectre-handoff when previous handoffs exist."
 model = "gpt-5.6-terra"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "workspace-write"

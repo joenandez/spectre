@@ -6,7 +6,7 @@ user-invocable: true
 
 # scope
 
-Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE), user value, load-bearing assumptions, and decisions — **clear on WHAT, silent on HOW.** Boundaries and user value first; defer all technical/implementation questions to `spectre-plan`.
+Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE), user value, load-bearing assumptions, and decisions — **clear on WHAT, silent on HOW.** Boundaries and user value first; defer all technical/implementation questions to `$spectre:spectre-plan`.
 
 ## Inputs
 
@@ -27,7 +27,7 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 ## Method / guardrails
 
 - **Reply before tools.** Acknowledge first; never go silent to "think." No tool calls in the opening reply except reading `KICKOFF_DOC` when `FROM_KICKOFF=true`.
-- **WHAT, not HOW.** Ask only about boundaries, user value, and anti-scope. Defer architecture/trade-offs/integration to `spectre-plan`. Exception: scope that is inherently technical (e.g. "migrate DB X→Y").
+- **WHAT, not HOW.** Ask only about boundaries, user value, and anti-scope. Defer architecture/trade-offs/integration to `$spectre:spectre-plan`. Exception: scope that is inherently technical (e.g. "migrate DB X→Y").
 - **Ground once.** Start with exactly **one** fast lookup to anchor the hypothesis in repo reality — a single `@spectre_finder` query, or one `grep`/`glob`; skip it if slow. Needing broader grounding exceeds this fast scope pass.
 - **Use knowledge before affected decisions.** Discovery is per question, not skill: never repeat an equivalent query merely because Scope began. A work body answers only a stated question, including a potentially critical imported constraint without a maintained equivalent. Do not reload an unchanged revision already in context; workers receive compact applicable findings and provenance, never record bodies.
 - Lead with a grounded hypothesis (problem, who it affects, proposed feature name/root, IN / OUT / ANTI-SCOPE) and 5–8 questions tagged **(blocking)** / *(optional)*. Iterate boundaries (IN / OUT / ANTI-SCOPE / Unsure) until confirmed, then clarify remaining ambiguity with `AskUserQuestion` (≤4 at a time). No clarification files.
@@ -58,12 +58,12 @@ Write `{FEATURE_ROOT}/concepts/scope.md`, beginning immediately below the title 
 | 🧭 **Current phase** | Done |
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
-| 🔀 **Alternative** | Pause: `spectre-handoff` with the resolved feature when stopping. |
+| 🔀 **Alternative** | Pause: `$spectre:spectre-handoff` with the resolved feature when stopping. |
 
-Present boundaries/assumptions/path; unsettled → Scope; UI load-bearing and journeys, segments, states, copy, or accessibility unresolved → UX; interaction/layout/visual validation materially matters → Prototype; otherwise confirmed repository-changing work → `spectre-plan`. One route/conditional; edits re-route.
+Present boundaries/assumptions/path; unsettled → Scope; UI load-bearing and journeys, segments, states, copy, or accessibility unresolved → UX; interaction/layout/visual validation materially matters → Prototype; otherwise confirmed repository-changing work → `$spectre:spectre-plan`. One route/conditional; edits re-route.
 
 ## Escalate-If
 
 - Grounding needs more than one lookup, or the request spans several unknowns → this exceeds a fast scope pass; gather context more fully before proceeding.
-- The user pushes for implementation/architecture answers → note them and defer to `spectre-plan`; keep this pass on WHAT.
+- The user pushes for implementation/architecture answers → note them and defer to `$spectre:spectre-plan`; keep this pass on WHAT.
 - Boundaries won't converge after iterating → surface the specific unresolved tension and ask the user to decide before writing the doc.

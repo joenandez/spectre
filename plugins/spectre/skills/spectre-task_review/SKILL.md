@@ -65,6 +65,6 @@ Standalone unresolved Blocker/High stays remediation; resolved review → Execut
 
 ## Escalate-If
 
-- Missing/unparseable plan or task graph → `/spectre:create_plan` or `/spectre:create_tasks`.
+- Missing/unparseable plan or task graph → `/spectre:spectre-create_plan` or `/spectre:spectre-create_tasks`.
 - A correction changes scope or plan meaning → record Scope Change Required and withhold it.
 - No route yields a usable report, or deterministic close fails → preserve recovery state and surface the blocker; do not request `--review-again`.

@@ -3,7 +3,7 @@
 /**
  * handoff-resume.mjs
  *
- * SessionStart hook that injects context from the last /spectre:handoff.
+ * SessionStart hook that injects context from the last /spectre:spectre-handoff.
  * Consolidates the previous session-resume-hook.sh + format-resume-context.py.
  *
  * Outputs JSON for Claude Code hook system:
@@ -300,7 +300,7 @@ function formatContext(data, opts) {
     noticeLines.push(`\n\ud83d\udcc1 Full details: ${handoffPath}`);
   }
 
-  noticeLines.push('\n\ud83d\udca1 Run /spectre:forget to clear session memory and start fresh.');
+  noticeLines.push('\n\ud83d\udca1 Run /spectre:spectre-forget to clear session memory and start fresh.');
 
   const visibleNotice = noticeLines.join('\n');
 
@@ -440,10 +440,10 @@ async function main() {
       'Getting Started with SPECTRE:',
       '',
       '\u2699\ufe0f  Tip: Turn off auto-compact via /config \u2014 SPECTRE works best with manual context management',
-      '\ud83d\udcbe  Use /spectre:handoff when context is getting full but you\'re still going \u2014 saves state for the next session',
-      '\ud83e\uddf9  Use /spectre:forget to clear session memory and start fresh',
-      '\ud83d\ude80  Use /spectre:scope to start building features with the full SPECTRE workflow',
-      '\ud83c\udf93  Use /spectre:learn to create a documentation skill that your Agent will auto-load when relevant.'
+      '\ud83d\udcbe  Use /spectre:spectre-handoff when context is getting full but you\'re still going \u2014 saves state for the next session',
+      '\ud83e\uddf9  Use /spectre:spectre-forget to clear session memory and start fresh',
+      '\ud83d\ude80  Use /spectre:spectre-scope to start building features with the full SPECTRE workflow',
+      '\ud83c\udf93  Use /spectre:spectre-learn to create a documentation skill that your Agent will auto-load when relevant.'
     ].join('\n');
 
     const welcome = {

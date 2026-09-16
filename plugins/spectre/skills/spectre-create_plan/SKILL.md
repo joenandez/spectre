@@ -62,7 +62,7 @@ DONE when the selected shape, or standalone canonical fallback, satisfies Scope,
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone awaits approval: Approved direct → `/spectre:execute`; Approved XS structured override → `/spectre:create_tasks --depth xs`; Approved light structured → `/spectre:create_tasks`; Approved standard/comprehensive → `/spectre:plan_review`; unresolved behavior → UX/Prototype. One primary/conditional/pause.
+Standalone awaits approval: Approved direct → `/spectre:spectre-execute`; Approved XS structured override → `/spectre:spectre-create_tasks --depth xs`; Approved light structured → `/spectre:spectre-create_tasks`; Approved standard/comprehensive → `/spectre:spectre-plan_review`; unresolved behavior → UX/Prototype. One primary/conditional/pause.
 
 ## Escalate-If
 

@@ -1,6 +1,6 @@
 ---
 name: "spectre-kickoff"
-description: "Project kickoff — deep codebase + external research producing an evidence-backed kickoff doc, gap analysis, and MVP path before scoping. Use to start a fresh feature/project from an unclear problem, when the user wants research/options/an MVP recommendation before committing to scope or a plan. Do not trigger once scope is already defined (use spectre-scope) or for a single targeted code question (use an analyst agent directly)."
+description: "Project kickoff — deep codebase + external research producing an evidence-backed kickoff doc, gap analysis, and MVP path before scoping. Use to start a fresh feature/project from an unclear problem, when the user wants research/options/an MVP recommendation before committing to scope or a plan. Do not trigger once scope is already defined (use $spectre:spectre-scope) or for a single targeted code question (use an analyst agent directly)."
 user-invocable: true
 disable-model-invocation: true
 ---

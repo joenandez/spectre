@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { rewriteUserCommandRefsForCodex } = require('./commands.cjs');
 
 const CODEX_PLUGIN_ROOT = '${PLUGIN_ROOT}';
 
@@ -58,7 +59,7 @@ function rewriteHookCommand(command) {
 }
 
 function rewriteRuntimeScript(source) {
-  return source
+  return rewriteUserCommandRefsForCodex(source)
     .replace(
       /\bspectre knowledge (search|tags|load|register|capture|work|history|inspect|registry|migrate)\b/g,
       (_match, operation) =>

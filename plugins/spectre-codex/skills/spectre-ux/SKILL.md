@@ -16,7 +16,7 @@ Turn requirements into a behavioral spec — **what users see/do and the system 
   1. `{OUT_DIR}/concepts/scope.md` (canonical, preferred)
   2. `{OUT_DIR}/specs/prd.md`
   3. `{OUT_DIR}/task_summary.md`
-- **If none exist → ask for scope context or recommend `spectre-scope` first; do not invent scope.**
+- **If none exist → ask for scope context or recommend `$spectre:spectre-scope` first; do not invent scope.**
 
 ## Working Set (late-bound — read at run-time, never inline)
 
@@ -39,7 +39,7 @@ Turn requirements into a behavioral spec — **what users see/do and the system 
 | 📦 **What was just done** | Initial or revised flows. |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-- `CONTINUATION`: Prototype when interaction, layout, visual validation, or stakeholder review materially matters; otherwise Plan when Scope + flows suffice. Render `spectre-prototype {FEATURE_ROOT} FROM_UX=true` or `spectre-plan {FEATURE_ROOT}`; at most one explicit conditional alternative.
+- `CONTINUATION`: Prototype when interaction, layout, visual validation, or stakeholder review materially matters; otherwise Plan when Scope + flows suffice. Render `$spectre:spectre-prototype {FEATURE_ROOT} FROM_UX=true` or `$spectre:spectre-plan {FEATURE_ROOT}`; at most one explicit conditional alternative.
 - Flows approved: complete {OUT_DIR}/ux.md, then Prototype or Plan with resolved values.
 - **GATE:** Never write `{OUT_DIR}/ux.md` before explicit flow approval + selected continuation. Feedback without approval → revise and re-present. Ambiguous approval or missing route authority → ask only the unresolved choice.
 
@@ -84,11 +84,11 @@ Derive both values from the physical feature directory.
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action; no placeholders. |
 
-Confirm UX/doc path. Material visual/interaction/stakeholder/prose-limit → Prototype (apply assumptions to `ux.md`); otherwise confirmed repository-changing work → `spectre-plan`. One route/conditional; read-only may stop/Handoff.
+Confirm UX/doc path. Material visual/interaction/stakeholder/prose-limit → Prototype (apply assumptions to `ux.md`); otherwise confirmed repository-changing work → `$spectre:spectre-plan`. One route/conditional; read-only may stop/Handoff.
 
 ## Escalate-If
 
-- No scope/PRD/summary found → stop; get scope context or route to `spectre-scope` before specifying.
-- User pushes for implementation/architecture decisions → note them, defer to `spectre-plan`; keep this pass on behavior.
+- No scope/PRD/summary found → stop; get scope context or route to `$spectre:spectre-scope` before specifying.
+- User pushes for implementation/architecture decisions → note them, defer to `$spectre:spectre-plan`; keep this pass on behavior.
 - Flows won't converge after iterating → surface the specific unresolved divergence (usually a segment conflict) and ask the user to decide before Stage 2.
-- Feature has no user-facing surface → this spec adds nothing; route back to `spectre-plan`.
+- Feature has no user-facing surface → this spec adds nothing; route back to `$spectre:spectre-plan`.

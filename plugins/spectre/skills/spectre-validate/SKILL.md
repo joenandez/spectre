@@ -70,7 +70,7 @@ Return status/delivered/gap/scope-creep/findings/report; `--orchestrated`: summa
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone `Needs Work`/`Significant Gaps` → `/spectre:fix` then revalidate; Standalone `Complete` → `/spectre:prove`. Boundary ambiguity → Scope; flow/state/copy ambiguity → UX; pause → Handoff; Test/Clean only when proof is deferred.
+Standalone `Needs Work`/`Significant Gaps` → `/spectre:spectre-fix` then revalidate; Standalone `Complete` → `/spectre:spectre-prove`. Boundary ambiguity → Scope; flow/state/copy ambiguity → UX; pause → Handoff; Test/Clean only when proof is deferred.
 
 ## Escalate-If
 

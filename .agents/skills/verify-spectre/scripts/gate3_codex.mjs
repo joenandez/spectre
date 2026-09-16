@@ -55,6 +55,26 @@ if (fs.existsSync(mirrorHooks)) {
   }
 }
 
+const mirrorHookScripts = path.join(MIRROR, 'hooks', 'scripts');
+const untranslatedHookCommands = [];
+if (fs.existsSync(mirrorHookScripts)) {
+  const visit = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) visit(file);
+      if (entry.isFile() && /\/spectre:[a-z0-9_-]+/.test(fs.readFileSync(file, 'utf8'))) {
+        untranslatedHookCommands.push(path.relative(mirrorHookScripts, file));
+      }
+    }
+  };
+  visit(mirrorHookScripts);
+}
+g.check(
+  untranslatedHookCommands.length === 0,
+  'Codex hook prompts use $spectre:spectre-* commands, not /spectre: commands',
+  `untranslated in: ${untranslatedHookCommands.join(', ')}`,
+);
+
 // --- generated skills -------------------------------------------------------
 // The translator rewrites Claude-shaped references into Codex-shaped ones.
 // If either rewrite regresses, Codex agents get paths and commands that don't
@@ -74,7 +94,7 @@ if (fs.existsSync(mirrorSkills)) {
 
   g.check(untranslatedPaths.length === 0, 'Codex skills use .agents/skills/, not .claude/skills/',
     `untranslated in: ${untranslatedPaths.join(', ')}`);
-  g.check(untranslatedCommands.length === 0, 'Codex skills use bare skill names, not /spectre: commands',
+  g.check(untranslatedCommands.length === 0, 'Codex skills use $spectre:spectre-* commands, not /spectre: commands',
     `untranslated in: ${untranslatedCommands.join(', ')}`);
 }
 

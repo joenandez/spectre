@@ -55,7 +55,7 @@ Guardrails:
 | 📦 **What was just done** |Result|
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone: `/spectre:rebase`; acceptance needed: alternative `/spectre:prove`.
+Standalone: `/spectre:spectre-rebase`; acceptance needed: alternative `/spectre:spectre-prove`.
 
 ## Escalate-If
 

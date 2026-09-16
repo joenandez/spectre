@@ -24,6 +24,35 @@ test('knowledge translators retain every public operation', () => {
   }
 });
 
+test('skill command translator emits plugin-qualified Codex invocations and rejects legacy shorthand', () => {
+  assert.equal(
+    skills.rewriteCodexCommandRefs('/spectre:spectre-execute path/to/plan.md --origin plan'),
+    '$spectre:spectre-execute path/to/plan.md --origin plan',
+  );
+  assert.throws(
+    () => skills.rewriteCodexCommandRefs('/spectre:execute path/to/plan.md'),
+    /Legacy Spectre command reference "\/spectre:execute"; use \/spectre:spectre-execute/,
+  );
+  assert.equal(
+    hooks.rewriteRuntimeScript('Continue with /spectre:spectre-handoff.'),
+    'Continue with $spectre:spectre-handoff.',
+  );
+});
+
+test('agent translator rewrites user-facing workflow commands for Codex', () => {
+  const source = `---
+name: sync
+description: Called by /spectre:spectre-handoff.
+model: claude-sonnet-5
+---
+
+Resume with /spectre:spectre-execute.
+`;
+  const fields = agents.parseToml(agents.buildAgentToml(source, 'sync.md'));
+  assert.equal(fields.description, 'Called by $spectre:spectre-handoff.');
+  assert.equal(fields.developer_instructions, 'Resume with $spectre:spectre-execute.');
+});
+
 function tempRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-sync-test-'));
 }
@@ -58,6 +87,16 @@ const INTERNAL_HANDOFF_SKILLS = [
 
 function handoffSection(source) {
   return source.match(/^## Handoff\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1] || '';
+}
+
+function markdownFiles(root, current = root) {
+  const files = [];
+  for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+    const filePath = path.join(current, entry.name);
+    if (entry.isDirectory()) files.push(...markdownFiles(root, filePath));
+    if (entry.isFile() && entry.name.endsWith('.md')) files.push(path.relative(root, filePath));
+  }
+  return files.sort();
 }
 
 function createFixture(root) {
@@ -106,10 +145,10 @@ Write tests carefully.
     path.join(canonicalRoot, 'skills', 'spectre-plan', 'SKILL.md'),
     `---
 name: spectre-plan
-description: "\\ud83d\\udc7b | Create implementation plans after /spectre:scope."
+description: "\\ud83d\\udc7b | Create implementation plans after /spectre:spectre-scope."
 ---
 
-Read .claude/skills/example/SKILL.md, then invoke /spectre:create_tasks.
+Read .claude/skills/example/SKILL.md, then invoke /spectre:spectre-create_tasks.
 Load @skill-spectre:spectre-tdd and dispatch @spectre:tester plus @dev.
 Record lifecycle markers with spectre-workflow task start.
 `,
@@ -197,11 +236,11 @@ test('sync generates agents, rewrites skills, and rewrites hook roots', () => {
       'utf8',
     );
     const { frontmatter } = skills.parseFrontmatter(skill, 'spectre-plan/SKILL.md');
-    assert.equal(frontmatter.description, '👻 | Create implementation plans after spectre-scope.');
-    assert.match(skill, /^description: "👻 \| Create implementation plans after spectre-scope\."/m);
+    assert.equal(frontmatter.description, '👻 | Create implementation plans after $spectre:spectre-scope.');
+    assert.match(skill, /^description: "👻 \| Create implementation plans after \$spectre:spectre-scope\."/m);
     assert.doesNotMatch(skill, /\\ud83d/);
     assert.match(skill, /\.agents\/skills\/example\/SKILL\.md/);
-    assert.match(skill, /invoke spectre-create_tasks\./);
+    assert.match(skill, /invoke \$spectre:spectre-create_tasks\./);
     assert.match(skill, /Skill\(spectre-tdd\)/);
     assert.match(skill, /@spectre_tester/);
     assert.match(skill, /@spectre_dev/);
@@ -209,7 +248,7 @@ test('sync generates agents, rewrites skills, and rewrites hook roots', () => {
     assert.doesNotMatch(skill, /\bspectre-workflow\b/);
     assert.doesNotMatch(skill, /Codex Agent Preflight|ensure-codex-agents\.mjs|start a new Codex session before dispatching/);
     assert.doesNotMatch(skill, /\.claude\/skills\//);
-    assert.doesNotMatch(skill, /\/spectre:create_tasks/);
+    assert.doesNotMatch(skill, /\/spectre:spectre-create_tasks/);
     assert.doesNotMatch(skill, /@skill-spectre:/);
     assert.doesNotMatch(skill, /@spectre:/);
     assert.doesNotMatch(skill, /(?<![\w:-])@dev\b/);
@@ -221,6 +260,9 @@ test('sync generates agents, rewrites skills, and rewrites hook roots', () => {
     assert.equal(manifest.version, '6.0.0');
     assert.equal('skills' in manifest, false);
     assert.equal('agents' in manifest, false);
+    assert.deepEqual(manifest.interface.defaultPrompt, [
+      'Use $spectre:spectre-scope to define a new feature, then continue through the Spectre workflow.',
+    ]);
 
     assert.equal(
       fs.existsSync(path.join(codexRoot, 'hooks', 'scripts', 'register_learning.mjs')),
@@ -596,11 +638,11 @@ test('execute resolves explicit plans through one authorized preparation path', 
   const repoRoot = path.resolve(__dirname, '..');
 
   for (const rootName of ['spectre', 'spectre-codex']) {
-    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:', 'spectre-');
+    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const planDirect = fs.readFileSync(
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-execute', 'references', 'plan-direct.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const structuredMode = execute.indexOf('`structured`');
     const planDirectMode = execute.indexOf('`plan-direct`');
 
@@ -621,8 +663,12 @@ test('execute resolves explicit plans through one authorized preparation path', 
     assert.match(execute, /`Execution Mode: direct` is a legacy coordination hint/i);
     assert.match(
       execute,
-      /Every selected readable plan, including XS\/ATOMIC, needs a closed correctness\+simplification review chain before first dispatch unless a valid closed chain is reused/i,
+      /Hash-bound observed size, never depth, decides Plan Review/i,
     );
+    assert.match(execute, /XS\/S record `review:not-required:<size>` and skip/i);
+    assert.match(execute, /M\+ reuse a closed correctness\+simplification chain/i);
+    assert.match(execute, /Review-worthy risk reclassifies M\+/i);
+    assert.match(execute, /no hidden XS\/S exception/i);
     assert.match(execute, /No selected readable plan needs a completeness\/header ceremony/i);
     assert.doesNotMatch(execute, /explicit readable plan needs no ceremonial completeness\/header gate/i);
     assert.match(execute, /No path:[^\n]*use existing same-run source evidence first/i);
@@ -651,11 +697,11 @@ test('execute detects bug reports by source shape and loads only their preparati
     const execute = fs.readFileSync(
       path.join(skillsRoot, 'spectre-execute', 'SKILL.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const fixSource = fs.readFileSync(
       path.join(skillsRoot, 'spectre-execute', 'references', 'fix-source.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const planDirect = fs.readFileSync(
       path.join(skillsRoot, 'spectre-execute', 'references', 'plan-direct.md'),
       'utf8',
@@ -707,17 +753,19 @@ test('execute preflight reuses observed assessment and proportionally creates ta
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-create_tasks', 'SKILL.md'),
       'utf8',
     );
-    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:', 'spectre-');
+    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const planDirect = fs.readFileSync(
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-execute', 'references', 'plan-direct.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const reviewIndex = execute.indexOf('Skill(spectre-plan_review) --auto-apply scope-safe --orchestrated');
     const assessmentIndex = execute.toLowerCase().indexOf('reuse applicable');
     const taskIndex = execute.indexOf('STRUCTURED invokes existing `Skill(spectre-create_tasks) --orchestrated`');
     const dispatchIndex = execute.indexOf('3. **Batch and dispatch.**');
 
-    const handoff = rootName === 'spectre' ? /\/spectre:execute/ : /spectre-execute/;
+    const handoff = rootName === 'spectre'
+      ? /\/spectre:spectre-execute/
+      : /\$spectre:spectre-execute/;
     assert.match(plan, handoff);
     assert.match(plan, /<repo-relative plan\.md> --origin plan --preflight-plan <xs\|light\|standard\|comprehensive>/);
     assert.match(plan, /XS → `Skill\(spectre-create_plan\) --depth light --no-review --execution structured`/);
@@ -736,7 +784,7 @@ test('execute preflight reuses observed assessment and proportionally creates ta
     assert.ok(reviewIndex < dispatchIndex);
     assert.match(execute, /No-path selected plans receive this preparation before dispatch/i);
     assert.match(execute, /first selected readable-plan use\/resume[^\n]*read `references\/plan-direct\.md` for preparation state/i);
-    assert.match(planDirect, /Use for selected readable plan preparation, resume, or reconciliation/i);
+    assert.match(planDirect, /Use for selected-plan preparation\/resume\/reconciliation/i);
     assert.match(
       planDirect,
       /STRUCTURED outcomes use only source\/preparation bindings[^\n]*JSON task events remain governed by structured telemetry/i,
@@ -765,7 +813,8 @@ test('execute preflight reuses observed assessment and proportionally creates ta
     assert.match(createTasks, /Execution Mode: direct/);
     assert.doesNotMatch(createTasks, /authorized Execute caller/i);
     assert.match(planDirect, /selected\/final plan\+authority hashes/i);
-    assert.match(planDirect, /refresh byte-only reviewed bindings before run creation\/dispatch/i);
+    assert.match(planDirect, /refresh applicable byte-only bindings before run creation\/dispatch/i);
+    assert.match(planDirect, /Plan Review state \(`not-required:<XS\|S>\|closed`\)/i);
     assert.match(planDirect, /Before task generation or implementation dispatch[^\n]*finalized assessment\/review bindings[^\n]*coarse map/i);
     assert.match(planDirect, /Before implementation dispatch[^\n]*resulting pair bindings[^\n]*resolved event source\/run identity[^\n]*bounded Active Wave/i);
     assert.match(planDirect, /assessment/i);
@@ -789,7 +838,7 @@ test('plan-direct execute preserves source-plan authority without a completeness
   const repoRoot = path.resolve(__dirname, '..');
 
   for (const rootName of ['spectre', 'spectre-codex']) {
-    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:', 'spectre-');
+    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
 
     assert.match(execute, /The source plan is the sole requirements authority/);
     assert.doesNotMatch(execute, /must carry its seven spine sections/i);
@@ -876,10 +925,10 @@ test('autonomous plan execution instruction envelope stays token-neutral', () =>
     ),
   };
 
-  assert.ok(totals.spectre <= 12_624, `canonical envelope exceeded: ${totals.spectre} > 12,624`);
+  assert.ok(totals.spectre <= 12_651, `canonical envelope exceeded: ${totals.spectre} > 12,651`);
   assert.ok(
-    totals['spectre-codex'] <= 12_725,
-    `Codex envelope exceeded: ${totals['spectre-codex']} > 12,725`,
+    totals['spectre-codex'] <= 12_747,
+    `Codex envelope exceeded: ${totals['spectre-codex']} > 12,747`,
   );
 });
 
@@ -983,7 +1032,7 @@ test('prove contract is one reviewed evidence pass that owns its proof path', ()
     assert.match(skill, /focused profile records affected rows `PARTIAL`/);
     assert.match(skill, /without research or a user gate/);
     assert.match(skill, /DONE means the pass completed, regardless of status/);
-    assert.match(skill, /proof status alone never gates `(?:\/)?spectre(?::|-)?ship`/);
+    assert.match(skill, /proof status alone never gates `(?:\/|\$)spectre:spectre-ship`/);
     assert.doesNotMatch(skill, /Skill\(spectre-tdd\)/);
     assert.doesNotMatch(skill, /@spectre(?::|_)dev/);
     assert.doesNotMatch(skill, /BASE_SHA.*HEAD_SHA.*DIFF_SHA256/);
@@ -1088,7 +1137,12 @@ test('planning hands off directly to execute without goal-prompt generation', ()
     assert.doesNotMatch(plan, /goal-prompts\.md/);
     assert.match(plan, /Never generate a goal prompt/i);
     assert.match(plan, /exactly one copy-ready fenced command/);
-    assert.match(plan, rootName === 'spectre' ? /\/spectre:execute <repo-relative plan\.md> --origin plan/ : /spectre-execute <repo-relative plan\.md> --origin plan/);
+    assert.match(
+      plan,
+      rootName === 'spectre'
+        ? /\/spectre:spectre-execute <repo-relative plan\.md> --origin plan/
+        : /\$spectre:spectre-execute <repo-relative plan\.md> --origin plan/,
+    );
     assert.match(plan, /--preflight-plan <xs\|light\|standard\|comprehensive>/);
     assert.match(plan, /Never pass `--orchestrated`/);
 
@@ -1109,7 +1163,7 @@ test('planning hands off directly to execute without goal-prompt generation', ()
 test('Plan and Execute emit one non-authoritative calibration lifecycle', () => {
   const repoRoot = path.resolve(__dirname, '..');
   const normalize = (value) => value
-    .replaceAll('/spectre:', 'spectre-')
+    .replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-')
     .replace(/node "\$\{PLUGIN_ROOT\}\/hooks\/scripts\/workflow-cli\.mjs"/g, 'spectre-workflow');
 
   for (const rootName of ['spectre', 'spectre-codex']) {
@@ -1322,13 +1376,13 @@ test('public guidance and compatibility preserve one adaptive XS-S-M-L-XL route'
   ];
 
   assert.match(readme, /All feature work enters through Scope[^\n]*adaptive Plan/i);
-  assert.match(readme, /bugs?[^\n]*spectre:fix/i);
+  assert.match(readme, /bugs?[^\n]*spectre:spectre-fix/i);
   assert.match(readme, /XS[^\n]*S[^\n]*M[^\n]*L[^\n]*XL/);
   assert.match(readme, /durable[^\n]*artifact/i);
   assert.match(readme, /Wait for your explicit approval before any code changes/i);
   assert.doesNotMatch(readme, /unless the feature is a one line ask/i);
   assert.doesNotMatch(readme, /Tiny or Small[^\n]*prefer[^\n]*(?:Claude Code|Codex)[^\n]*plan mode/i);
-  assert.doesNotMatch(readme, /for small, unambiguous features[^\n]*spectre:delegate/i);
+  assert.doesNotMatch(readme, /for small, unambiguous features[^\n]*spectre:spectre-delegate/i);
   assert.doesNotMatch(readme, /for COMPREHENSIVE plans/i);
 
   for (const rootName of ['spectre', 'spectre-codex']) {
@@ -1430,7 +1484,7 @@ test('Scope, UX, and prototype make Plan the canonical repository-change handoff
     const readSkill = (name) => fs.readFileSync(
       path.join(repoRoot, 'plugins', rootName, 'skills', name, 'SKILL.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const scope = readSkill('spectre-scope');
     const ux = readSkill('spectre-ux');
     const prototype = readSkill('spectre-prototype');
@@ -1450,11 +1504,11 @@ test('create_plan and create_tasks preserve XS/direct routing contracts', () => 
     const createPlan = fs.readFileSync(
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-create_plan', 'SKILL.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const createTasks = fs.readFileSync(
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-create_tasks', 'SKILL.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const minimumSolution = fs.readFileSync(
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-plan', 'references', 'minimum-solution.md'),
       'utf8',
@@ -1545,7 +1599,7 @@ test('Fix persists a complete managed repair plan and returns its Execute handof
     const fix = fs.readFileSync(
       path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-fix', 'SKILL.md'),
       'utf8',
-    ).replaceAll('/spectre:', 'spectre-');
+    ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const repairPlanIndex = fix.search(/self-locating (?:compact )?(?:managed )?repair plan/i);
     const fixExecuteIndex = fix.indexOf('spectre-execute {BUG_REPORT_PATH} --origin fix');
     assert.ok(repairPlanIndex !== -1);
@@ -1596,7 +1650,7 @@ test('workflow handoffs are task-aware, phase-aware, and orchestration-safe', ()
   const readSkill = (rootName, skillName) => fs.readFileSync(
     path.join(repoRoot, 'plugins', rootName, 'skills', skillName, 'SKILL.md'),
     'utf8',
-  ).replaceAll('/spectre:', 'spectre-');
+  ).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
 
   for (const rootName of ['spectre', 'spectre-codex']) {
     const scope = readSkill(rootName, 'spectre-scope');
@@ -1605,7 +1659,7 @@ test('workflow handoffs are task-aware, phase-aware, and orchestration-safe', ()
     const plan = readSkill(rootName, 'spectre-plan');
     const createPlan = readSkill(rootName, 'spectre-create_plan');
     const createTasks = readSkill(rootName, 'spectre-create_tasks');
-    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:', 'spectre-');
+    const execute = readExecuteContract(repoRoot, rootName).replaceAll('/spectre:spectre-', 'spectre-').replaceAll('$spectre:spectre-', 'spectre-');
     const validate = readSkill(rootName, 'spectre-validate');
     const proof = readSkill(rootName, 'spectre-prove');
     const clean = readSkill(rootName, 'spectre-clean');
@@ -1744,7 +1798,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    'c9fb5b7f8e3b95f86799240dc8dd96e5cff5710379a940857438e58031d11673',
+    'b0f988363b111fd2d04482330e574177cad1a4c5b5f22c11c251f9bd36f0aacc',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
@@ -1825,6 +1879,40 @@ test('user-facing handoffs use the compact table contract without changing inter
   }
 });
 
+test('user-facing workflow commands stay platform-qualified across generated skills', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  const canonicalRoot = path.join(repoRoot, 'plugins', 'spectre', 'skills');
+  const codexRoot = path.join(repoRoot, 'plugins', 'spectre-codex', 'skills');
+
+  for (const relativePath of markdownFiles(canonicalRoot)) {
+    const canonical = fs.readFileSync(path.join(canonicalRoot, relativePath), 'utf8');
+    const codex = fs.readFileSync(path.join(codexRoot, relativePath), 'utf8');
+    const canonicalCommands = [...canonical.matchAll(/\/spectre:(spectre-[A-Za-z0-9_-]+)/g)]
+      .map(([, name]) => name);
+    const codexCommands = [...codex.matchAll(/\$spectre:(spectre-[A-Za-z0-9_-]+)/g)]
+      .map(([, name]) => name);
+
+    assert.doesNotMatch(
+      canonical,
+      /\/spectre:(?!spectre-)[A-Za-z0-9_-]+/,
+      `${relativePath} contains legacy Claude command shorthand`,
+    );
+    assert.doesNotMatch(
+      codex,
+      /\/spectre:[A-Za-z0-9_-]+/,
+      `${relativePath} contains an untranslated Claude command`,
+    );
+    assert.deepEqual(
+      codexCommands,
+      canonicalCommands,
+      `${relativePath} does not preserve user-command references in Codex syntax`,
+    );
+  }
+
+  const readme = fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
+  assert.doesNotMatch(readme, /\/spectre:(?!spectre-)[A-Za-z0-9_-]+/);
+});
+
 test('compact handoff tables retain the pre-table routing contracts', () => {
   const repoRoot = path.resolve(__dirname, '..');
   const retainedRoutes = {
@@ -1854,12 +1942,12 @@ test('compact handoff tables retain the pre-table routing contracts', () => {
 test('workflow documentation matches proof-independent shipping', () => {
   const readme = fs.readFileSync(path.resolve(__dirname, '..', 'README.md'), 'utf8');
   const shipSection = readme.match(
-    /\*\*\/spectre:ship\*\*[\s\S]*?(?=\n\n## )/,
+    /\*\*\/spectre:spectre-ship\*\*[\s\S]*?(?=\n\n## )/,
   )?.[0];
 
   assert.match(readme, /every final agent response[^\n]*guides you to what is next/i);
-  assert.doesNotMatch(readme, /\/spectre:proof/);
-  assert.doesNotMatch(readme, /\/spectre:ship-it/);
+  assert.doesNotMatch(readme, /\/spectre:spectre-proof/);
+  assert.doesNotMatch(readme, /\/spectre:spectre-ship-it/);
   assert.ok(shipSection);
   assert.doesNotMatch(shipSection, /proof-status reporting/);
   assert.doesNotMatch(shipSection, /optional proof status/);
@@ -1906,7 +1994,7 @@ test('Ship/Clean pin one parallel cleanup boundary and a single post-rebase suit
     assert.equal((ship.match(/measure start --label "Full suite"/g) ?? []).length, 1);
     assert.match(ship, /one full suite after rebase[\s\S]*In parallel[\s\S]*Skill\(spectre-create_pr\)[\s\S]*--orchestrated[\s\S]*--pr-phase pending/i);
     assert.match(ship, /rerun only failing\/affected checks[\s\S]*never the full suite/i);
-    assert.match(execute, /else `(?:\/spectre:ship|spectre-ship)`/);
+    assert.match(execute, /else `(?:\/spectre:spectre-ship|\$spectre:spectre-ship)`/);
   }
 });
 
@@ -1927,7 +2015,7 @@ test('orchestrated create-pr preserves pending/final candidate gates', () => {
     assert.match(createPr, /factual claim is grounded[\s\S]*secret\/credential\/PII/i);
     assert.match(createPr, /repairs changed the tuple[\s\S]*refresh candidate-sensitive claims[\s\S]*freshness[\s\S]*grounding[\s\S]*secret/i);
     assert.match(ship, /EXPECTED_BASE_SHA[\s\S]*EXPECTED_HEAD_SHA[\s\S]*EXPECTED_DIFF_SHA256/i);
-    assert.match(ship, /after the suite[\s\S]*--orchestrated[\s\S]*--pr-phase final-update[\s\S]*FINAL_VERIFICATION_SUMMARY[\s\S]*Testing only/i);
+    assert.match(ship, /after suite[\s\S]*--orchestrated[\s\S]*--pr-phase final-update[\s\S]*FINAL_VERIFICATION_SUMMARY[\s\S]*Testing only/i);
     assert.match(ship, /PR_CANDIDATE_STALE[\s\S]*refresh and retry/i);
   }
 });
@@ -1979,7 +2067,7 @@ test('Ship uses the fixed measurement surface without primary bookkeeping', () =
   }
 
   // Structured-handoff tokens are reallocated inside the fixed 28-skill aggregate ceiling.
-  for (const [rootName, ceiling] of [['spectre', 10_990], ['spectre-codex', 10_985]]) {
+  for (const [rootName, ceiling] of [['spectre', 11_011], ['spectre-codex', 11_013]]) {
     const tokens = skillNames.reduce(
       (total, name) => total + repositoryTokenCount(
         repoRoot,
@@ -2027,9 +2115,9 @@ test('ship composes focused skills without a proof prerequisite', () => {
     assert.ok(sweepIndex > testIndex);
     assert.ok(rebaseIndex > sweepIndex);
     assert.ok(createPrIndex > rebaseIndex);
-    assert.match(skill, /Resolve exact current branch -> canonical work ID before Create PR/i);
+    assert.match(skill, /Resolve exact branch -> canonical work ID before Create PR/i);
     assert.match(skill, /quiet[^\n]*no recency/i);
-    assert.match(skill, /same work ID[\s\S]*pending[\s\S]*final[\s\S]*work record/i);
+    assert.match(skill, /freeze it for pending, final, work record/i);
     assert.match(skill, /Proof is optional:/);
     assert.match(skill, /do not inspect, infer, invoke, or gate on it/);
     assert.doesNotMatch(skill, /--require-proof/);
@@ -2329,12 +2417,12 @@ test('delegate replaces quick_dev, deliver, and align-and-deliver with compact a
   }
 
   const readme = fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
-  assert.match(readme, /\/spectre:delegate/);
-  assert.doesNotMatch(readme, /\/spectre:deliver/);
-  assert.doesNotMatch(readme, /\/spectre:align-and-deliver/);
-  assert.doesNotMatch(readme, /\/spectre:quick_dev/);
-  assert.match(readme, /\/spectre:ship/);
-  assert.doesNotMatch(readme, /\/spectre:ship-it/);
+  assert.match(readme, /\/spectre:spectre-delegate/);
+  assert.doesNotMatch(readme, /\/spectre:spectre-deliver/);
+  assert.doesNotMatch(readme, /\/spectre:spectre-align-and-deliver/);
+  assert.doesNotMatch(readme, /\/spectre:spectre-quick_dev/);
+  assert.match(readme, /\/spectre:spectre-ship/);
+  assert.doesNotMatch(readme, /\/spectre:spectre-ship-it/);
 });
 
 test('review gates pin route-specific opposing models and retain native fallback', () => {

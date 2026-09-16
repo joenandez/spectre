@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { toTomlAgentName } = require('./agents.cjs');
+const { rewriteUserCommandRefsForCodex } = require('./commands.cjs');
 
 function parseFrontmatter(source, filePath) {
   if (!source.startsWith('---\n')) {
@@ -58,7 +59,7 @@ function rewriteProjectSkillPaths(source) {
 }
 
 function rewriteCodexCommandRefs(source) {
-  return source
+  return rewriteUserCommandRefsForCodex(source)
     .replace(/@skill-spectre:([A-Za-z0-9_-]+)/g, (_match, skillName) => {
       return `Skill(${skillName})`;
     })
@@ -66,10 +67,7 @@ function rewriteCodexCommandRefs(source) {
       return `Skill(${skillName})`;
     })
     .replace(/@@spectre:([A-Za-z0-9_-]+)/g, '@$1')
-    .replace(/@spectre:([A-Za-z0-9_-]+)/g, '@$1')
-    .replace(/\/spectre:([A-Za-z0-9_-]+)/g, (_match, skillName) => {
-      return skillName.startsWith('spectre-') ? skillName : `spectre-${skillName}`;
-    });
+    .replace(/@spectre:([A-Za-z0-9_-]+)/g, '@$1');
 }
 
 function knownAgentNames(canonicalRoot) {

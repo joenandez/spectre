@@ -37,7 +37,7 @@ Find and remove dead code/artifacts from recent work. Conservative by default: i
 - For non-trivial sets, dispatch up to 4 read-only `@spectre:analyst` agents over file/module chunks. Return compressed in-thread verdicts only: `SAFE_TO_REMOVE`, `NEEDS_VALIDATION`, or `KEEP`, with evidence.
 - Every function/file/export deletion gets a second usage search for dynamic imports, string refs, reflection, tests, and external entrypoints. Remove only `CONFIRMED_SAFE`; downgrade uncertainty to manual review.
 - Standalone: run affected lint/tests after removals. If a cleanup edit causes failure, roll it back and document the reason.
-- No staging or commits. `/spectre:sweep` owns final hygiene and commit grouping.
+- No staging or commits. `/spectre:spectre-sweep` owns final hygiene and commit grouping.
 - ESLint-debt scan is diagnostic only: group bypasses in the working set and report a future refactor plan; do not refactor debt during prune.
 
 ## Handoff
@@ -50,7 +50,7 @@ Report analyzed/removed/excluded counts, lint/test, manual review; `--orchestrat
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone concrete coverage risk → `/spectre:test`; otherwise `/spectre:sweep`; one result-tied route.
+Standalone concrete coverage risk → `/spectre:spectre-test`; otherwise `/spectre:spectre-sweep`; one result-tied route.
 
 ## Escalate-If
 

@@ -13,7 +13,7 @@ Produce the smallest correct plan through one evidence wave, correctness review,
 ## Inputs
 
 - `$ARGUMENTS`: feature root/name or exact selected plan path; optional explicit authority sources, `--auto-apply scope-safe`, `--orchestrated`.
-- Require the selected plan or route to `spectre-create_plan`. Authority sources are `concepts/scope.md`, `specs/prd.md`, `specs/ux.md`, explicit `task_context.md` requirements, or the selected plan's explicit requirements/boundaries when no separate Scope exists. When present, pass the selected minimum-solution record from `task_context.md`; plans without a Plan-origin selection retain existing behavior. Reuse existing research.
+- Require the selected plan or route to `$spectre:spectre-create_plan`. Authority sources are `concepts/scope.md`, `specs/prd.md`, `specs/ux.md`, explicit `task_context.md` requirements, or the selected plan's explicit requirements/boundaries when no separate Scope exists. When present, pass the selected minimum-solution record from `task_context.md`; plans without a Plan-origin selection retain existing behavior. Reuse existing research.
 
 ## Working Set
 
@@ -51,7 +51,7 @@ DONE when both stages complete; research ran once at most; every mechanism trace
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Return routes/correctness/deletions/exceptions/delta/dispositions/reports/withheld scope/plan (≤1K). `--orchestrated`: return; standalone → `spectre-create_tasks` or direct `spectre-execute` resolved plan + `--origin plan`.
+Return routes/correctness/deletions/exceptions/delta/dispositions/reports/withheld scope/plan (≤1K). `--orchestrated`: return; standalone → `$spectre:spectre-create_tasks` or direct `$spectre:spectre-execute` resolved plan + `--origin plan`.
 
 ## Escalate-If
 

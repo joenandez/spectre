@@ -144,6 +144,10 @@ test("Execute owns unified plan preparation with proportional task creation", ()
     join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "SKILL.md"),
     "utf8",
   );
+  const planDirect = readFileSync(
+    join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "references", "plan-direct.md"),
+    "utf8",
+  );
   const fixSource = readFileSync(
     join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "references", "fix-source.md"),
     "utf8",
@@ -163,7 +167,7 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   );
 
   assert.match(plan, /aligned draft/i);
-  assert.match(plan, /\/spectre:execute <repo-relative plan\.md> --origin plan --preflight-plan <xs\|light\|standard\|comprehensive>/);
+  assert.match(plan, /\/spectre:spectre-execute <repo-relative plan\.md> --origin plan --preflight-plan <xs\|light\|standard\|comprehensive>/);
   assert.match(plan, /XS → xs; S → light; M\/L → standard; XL → comprehensive/);
   assert.match(plan, /observed record[\s\S]*task_context\.md[\s\S]*raw-byte hash[\s\S]*authority hash/i);
   assert.doesNotMatch(plan, /spectre-plan_review/);
@@ -188,8 +192,12 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.match(execute, /`Execution Mode: direct` is a legacy coordination hint/i);
   assert.match(
     execute,
-    /Every selected readable plan, including XS\/ATOMIC, needs a closed correctness\+simplification review chain before first dispatch unless a valid closed chain is reused/i,
+    /Hash-bound observed size, never depth, decides Plan Review/i,
   );
+  assert.match(execute, /XS\/S record `review:not-required:<size>` and skip/i);
+  assert.match(execute, /M\+ reuse a closed correctness\+simplification chain/i);
+  assert.match(execute, /Review-worthy risk reclassifies M\+/i);
+  assert.match(execute, /no hidden XS\/S exception/i);
   assert.match(execute, /No selected readable plan needs a completeness\/header ceremony/i);
   assert.doesNotMatch(execute, /explicit readable plan needs no ceremonial completeness\/header gate/i);
   assert.match(execute, /first selected readable-plan use\/resume[^\n]*read `references\/plan-direct\.md` for preparation state/i);
@@ -203,6 +211,7 @@ test("Execute owns unified plan preparation with proportional task creation", ()
     assert.doesNotMatch(execute, /Re-bind routing to finalized plan/i);
   assert.match(execute, /ATOMIC\/DIRECT use the bounded local workstream\/Active Wave pattern/i);
   assert.match(execute, /dispatch `Skill\(spectre-plan_review\) --auto-apply scope-safe --orchestrated` once for the selected path to a fresh child agent/i);
+  assert.match(planDirect, /Plan Review state \(`not-required:<XS\|S>\|closed`\)/i);
   assert.match(execute, /STRUCTURED invokes existing `Skill\(spectre-create_tasks\) --orchestrated` by fresh child-agent dispatch/i);
   assert.match(execute, /finalized plan path\/hash[\s\S]*closed review evidence[\s\S]*Skill\(spectre-create_tasks\)/i);
   assert.match(execute, /L → standard, XL → comprehensive/i);

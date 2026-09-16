@@ -13,6 +13,13 @@ const TEMPLATE_PATH = path.join(
   'references',
   'recall-template.md',
 );
+const TAGGING_POLICY_PATH = path.join(
+  PLUGIN_ROOT,
+  'skills',
+  'spectre-capture',
+  'references',
+  'tagging-policy.md',
+);
 
 function skill(name) {
   return fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', name, 'SKILL.md'), 'utf8');
@@ -29,6 +36,8 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   const learn = skill('spectre-learn');
   const capture = skill('spectre-capture');
   const workRecord = skill('spectre-work-record');
+  assert.equal(fs.existsSync(TAGGING_POLICY_PATH), true);
+  const taggingPolicy = fs.readFileSync(TAGGING_POLICY_PATH, 'utf8');
 
   assert.match(description(capture), /project must still know next week[\s\S]*immediately and unasked/i);
   assert.match(description(capture), /decision made, reaffirmed, or reversed[\s\S]*correction[\s\S]*gotcha, root cause, version pin, constraint, or convention/i);
@@ -39,6 +48,7 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(capture, /capture --kind knowledge --input -/);
   assert.match(capture, /recordPath/);
   assert.match(capture, /recoveryInput[\s\S]*manual|manual[\s\S]*recoveryInput/i);
+  assert.match(capture, /references\/tagging-policy\.md/);
   assert.doesNotMatch(capture, /work-capture-input\.json|capture --kind knowledge\|work/);
 
   assert.match(description(workRecord), /Execute start[\s\S]*blocked[\s\S]*completion/i);
@@ -53,6 +63,13 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(workRecord, /gh pr view[\s\S]*--branch-pr-state[\s\S]*merged[\s\S]*closed/i);
   assert.match(workRecord, /git rev-parse --abbrev-ref HEAD[\s\S]*(?:skip|recovery)/i);
   assert.match(workRecord, /unavailable[\s\S]*(?:skip|recovery)[\s\S]*does not block/i);
+  assert.match(workRecord, /spectre-capture\/references\/tagging-policy\.md/);
+
+  assert.match(taggingPolicy, /broadest stable level/i);
+  assert.match(taggingPolicy, /independently browsable wiki page/i);
+  assert.match(taggingPolicy, /multiple independent records/i);
+  assert.match(taggingPolicy, /task[\s\S]*branch[\s\S]*bug[\s\S]*individual record/i);
+  assert.match(taggingPolicy, /create a new canonical tag/i);
 
   assert.match(execute, /exact run[\s\S]*Skill\(spectre-work-record\)[\s\S]*start/i);
   assert.match(execute, /meaningful blocked[\s\S]*resolved[\s\S]*Skill\(spectre-work-record\)/i);

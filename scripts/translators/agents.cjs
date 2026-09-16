@@ -6,6 +6,7 @@ const {
   codexDefaultsForClaudeModel,
   defaultsForAgent,
 } = require('./model-map.cjs');
+const { rewriteUserCommandRefsForCodex } = require('./commands.cjs');
 
 const REQUIRED_FIELDS = [
   'name',
@@ -140,10 +141,10 @@ function buildAgentToml(source, filePath) {
   const codexDefaults = codexDefaultsForClaudeModel(frontmatter.model);
   return renderToml({
     name: toTomlAgentName(sourceName),
-    description: frontmatter.description,
+    description: rewriteUserCommandRefsForCodex(frontmatter.description),
     ...codexDefaults,
     sandbox_mode: frontmatter.codex_sandbox_mode || defaults.sandbox_mode,
-    developer_instructions: body.trim(),
+    developer_instructions: rewriteUserCommandRefsForCodex(body.trim()),
   });
 }
 

@@ -43,7 +43,7 @@ function buildPluginManifest(repoRoot) {
       capabilities: ['Interactive', 'Write'],
       websiteURL: metadata.homepage || 'https://github.com/joenandez/spectre',
       defaultPrompt: [
-        'Use spectre-scope to define a new feature, then continue through the Spectre workflow.',
+        'Use $spectre:spectre-scope to define a new feature, then continue through the Spectre workflow.',
       ],
       brandColor: '#2F5D50',
     },

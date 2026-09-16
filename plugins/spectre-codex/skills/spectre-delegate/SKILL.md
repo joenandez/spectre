@@ -18,7 +18,7 @@ Run Spectre autonomously from inferred scope through TDD, adversarial review, pr
 ## Working Set
 
 - Late-bind checkout, diff, commands, and target.
-- **Mini eligibility:** ≤2 dependency-safe workstreams; no auth/payment/permissions, migration/data-loss, public-contract breakage, concurrency/order/retry, destructive operation, new infrastructure, or unresolved product/UX choice. If ineligible, stop before more mutation: fix → `spectre-fix`; feature → `spectre-plan`.
+- **Mini eligibility:** ≤2 dependency-safe workstreams; no auth/payment/permissions, migration/data-loss, public-contract breakage, concurrency/order/retry, destructive operation, new infrastructure, or unresolved product/UX choice. If ineligible, stop before more mutation: fix → `$spectre:spectre-fix`; feature → `$spectre:spectre-plan`.
 
 ## Feature root contract
 
@@ -54,6 +54,6 @@ Return scope/evidence/review/proof/tuple/rebase/limits/PR. Next: review proof an
 
 ## Escalate-If
 
-- Mini eligibility fails → `spectre-fix` for fixes or `spectre-plan` for features; unclear boundaries → `spectre-scope`.
+- Mini eligibility fails → `$spectre:spectre-fix` for fixes or `$spectre:spectre-plan` for features; unclear boundaries → `$spectre:spectre-scope`.
 - Conflicting acceptance, scope-changing repair, missing authority/capability, unsafe checkout/rebase/remote, or secrets/PII.
 - Never escalate solely for repairable/disclosable check, review, proof, or candidate-drift failures.

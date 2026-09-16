@@ -76,7 +76,7 @@ Return `PROOF_RESULT`: profile/status/candidate/rows/fingerprints/evidence/limit
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone `PASS` → `/spectre:ship`; non-PASS → Fix/Scope/UX/prerequisite; proof status alone never gates `/spectre:ship`. `NEEDS_AUTHORITY` pause → Handoff rows/evidence/resume.
+Standalone `PASS` → `/spectre:spectre-ship`; non-PASS → Fix/Scope/UX/prerequisite; proof status alone never gates `/spectre:spectre-ship`. `NEEDS_AUTHORITY` pause → Handoff rows/evidence/resume.
 
 ## Escalate-If
 

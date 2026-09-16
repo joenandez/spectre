@@ -151,7 +151,7 @@ for (const dir of skillDirs) {
   const skillPath = path.join(SKILLS, dir, 'SKILL.md');
   if (!fs.existsSync(skillPath)) continue;
 
-  // Prompts contain fill-in-the-blank templates like `{/spectre:command or action}`.
+  // Prompts contain fill-in-the-blank templates like `{/spectre:spectre-command or action}`.
   // Those braces mean "substitute something here", not "call this" — stripping
   // them first is what keeps this check from crying wolf on every output template.
   const body = fs.readFileSync(skillPath, 'utf8').replace(/\{[^{}\n]*\}/g, '');
@@ -160,7 +160,11 @@ for (const dir of skillDirs) {
     if (!skillNames.has(name)) dangling.push(`${dir}: Skill(${name})`);
   }
   for (const [, name] of body.matchAll(/\/spectre:([a-z0-9_-]+)/g)) {
-    if (!skillNames.has(`spectre-${name}`)) dangling.push(`${dir}: /spectre:${name}`);
+    if (!name.startsWith('spectre-')) {
+      dangling.push(`${dir}: legacy /spectre:${name} (use /spectre:spectre-${name})`);
+    } else if (!skillNames.has(name)) {
+      dangling.push(`${dir}: /spectre:${name}`);
+    }
   }
   // `@spectre:` addresses an *agent*. Pointing it at a skill name is a real bug:
   // the dispatch silently resolves to nothing.

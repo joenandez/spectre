@@ -40,7 +40,7 @@ Guidance for coding agents working in this repository.
 
 The sync translator rewrites Claude-style references for Codex:
 
-- `/spectre:foo` -> `spectre-foo`
+- `/spectre:spectre-foo` -> `$spectre:spectre-foo`
 - `@skill-spectre:spectre-foo` -> `Skill(spectre-foo)`
 - `@spectre:tester` -> `@tester`
 - `.claude/skills/` paths -> `.agents/skills/`
