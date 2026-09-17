@@ -61,8 +61,20 @@ function writeProposal(workspace, record) {
   return proposal;
 }
 
+/**
+ * Writes a package the association index never saw. That restored-store shape is the only way
+ * one exact source run ends up owned by two verified records, so it is the fixture for the
+ * duplicate-identity recovery that fold still serves.
+ */
+function writeStoreRecord(storePath, record) {
+  const directory = path.join(storePath, 'knowledge', record.id);
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'record.json'), `${JSON.stringify(record, null, 2)}\n`);
+  return directory;
+}
+
 describe('stable work identity', () => {
-  it('reuses one branch work id for distinct Execute source runs', async (t) => {
+  it('allocates a distinct work id for each exact Execute source run on one branch', async (t) => {
     const workspace = makeWorkspace(t);
     const first = await resolveOrAllocateWorkIdentity(options(workspace, {
       branch: 'feature/delivery-group', sourceRunId: 'run-a',
@@ -71,30 +83,33 @@ describe('stable work identity', () => {
       branch: 'feature/delivery-group', sourceRunId: 'run-b',
     }));
 
-    assert.equal(second.workId, first.workId);
-    assert.deepEqual(
-      await resolveWorkIdentity(options(workspace, { branch: 'feature/delivery-group' })),
-      { status: 'resolved', workId: first.workId },
-    );
-    assert.deepEqual(
-      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-b' })),
-      { status: 'resolved', workId: first.workId },
-    );
-  });
-
-  it('does not let a branch pointer select work from another branch', async (t) => {
-    const workspace = makeWorkspace(t);
-    const first = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/one', sourceRunId: 'run-one',
-    }));
-    const second = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/two', sourceRunId: 'run-two',
-    }));
-
     assert.notEqual(second.workId, first.workId);
+    for (const [sourceRunId, identity] of [['run-a', first], ['run-b', second]]) {
+      assert.deepEqual(
+        await resolveWorkIdentity(options(workspace, { sourceRunId })),
+        { status: 'resolved', workId: identity.workId },
+      );
+      const resumed = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId }));
+      assert.equal(resumed.workId, identity.workId, 'resuming one exact run must stay idempotent');
+      assert.equal(resumed.status, 'noop');
+    }
   });
 
-  it('rotates a branch pointer after its registered PR is terminal', async (t) => {
+  it('never resolves a work identity from a branch and writes no branch pointer', async (t) => {
+    const workspace = makeWorkspace(t);
+    const allocated = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/no-pointer', sourceRunId: 'run-no-pointer',
+    }));
+    const associations = JSON.parse(fs.readFileSync(work.workAssociationPath(allocated.storePath), 'utf8'));
+
+    assert.deepEqual(associations.branches, {});
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { branch: 'feature/no-pointer' })),
+      { status: 'unresolved', workId: null },
+    );
+  });
+
+  it('allocates a new record for a later run instead of rolling over a terminal PR record', async (t) => {
     const workspace = makeWorkspace(t);
     const initial = await resolveOrAllocateWorkIdentity(options(workspace, {
       branch: 'feature/terminal', sourceRunId: 'run-before-merge',
@@ -111,64 +126,44 @@ describe('stable work identity', () => {
       branch: 'feature/terminal', sourceRunId: 'run-after-merge',
     }));
     assert.notEqual(next.workId, initial.workId);
+    assert.equal(next.status, 'created');
+    assert.equal(next.rolledOver, undefined);
     assert.deepEqual(
       await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-before-merge' })),
       { status: 'resolved', workId: initial.workId },
     );
   });
 
-  it('rotates a draft branch record when validated external PR state is terminal', async (t) => {
-    const workspace = makeWorkspace(t);
-    const initial = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/external-terminal', sourceRunId: 'run-before-external-merge',
-    }));
-    const draft = workRecord(initial.workId, {
-      sourceRunIds: ['run-before-external-merge'], pullRequestIds: ['github:example/spectre#2'], candidates: [],
-    });
-    draft.work.pullRequest = { state: 'draft-open', identity: 'github:example/spectre#2' };
-    await registerCanonicalKnowledge({
-      ...options(workspace), recordPath: writeProposal(workspace, draft),
-    });
-
-    const next = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/external-terminal', sourceRunId: 'run-after-external-merge', branchPrState: 'merged',
-    }));
-
-    assert.notEqual(next.workId, initial.workId);
-    assert.deepEqual(
-      await resolveWorkIdentity(options(workspace, { branch: 'feature/external-terminal' })),
-      { status: 'resolved', workId: next.workId },
-    );
-  });
-
-  it('folds a named provisional work id into its canonical branch record with a redirect', async (t) => {
+  it('folds a duplicate record of one exact source run into its canonical id with a redirect', async (t) => {
     const workspace = makeWorkspace(t);
     assert.equal(typeof work.foldWorkIdentities, 'function');
     const canonical = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/fold', sourceRunId: 'run-canonical',
+      branch: 'feature/fold', sourceRunId: 'run-duplicated',
     }));
-    const provisional = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-provisional' }));
     const registeredCanonical = await registerCanonicalKnowledge({
       ...options(workspace), recordPath: writeProposal(workspace, workRecord(canonical.workId, {
-        sourceRunIds: ['run-canonical'], pullRequestIds: [], candidates: [],
+        sourceRunIds: ['run-duplicated'], pullRequestIds: [], candidates: [],
       })),
     });
-    await registerCanonicalKnowledge({
-      ...options(workspace), recordPath: writeProposal(workspace, workRecord(provisional.workId, {
-        sourceRunIds: ['run-provisional'], pullRequestIds: [], candidates: [],
-      })),
+    const duplicate = workRecord('work-restored-duplicate', {
+      sourceRunIds: ['run-duplicated'], pullRequestIds: [], candidates: [],
     });
+    writeStoreRecord(registeredCanonical.storePath, duplicate);
+    await assert.rejects(
+      () => resolveWorkIdentity(options(workspace, { sourceRunId: 'run-duplicated' })),
+      (error) => error.code === 'WORK_IDENTITY_AMBIGUOUS',
+    );
 
     const folded = await work.foldWorkIdentities(options(workspace, {
-      branch: 'feature/fold', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
+      canonicalWorkId: canonical.workId, oldWorkIds: [duplicate.id],
     }));
     assert.equal(folded.workId, canonical.workId);
     assert.deepEqual(
-      await resolveWorkIdentity(options(workspace, { workId: provisional.workId })),
-      { status: 'resolved', workId: canonical.workId, redirectedFrom: provisional.workId },
+      await resolveWorkIdentity(options(workspace, { workId: duplicate.id })),
+      { status: 'resolved', workId: canonical.workId, redirectedFrom: duplicate.id },
     );
     assert.deepEqual(
-      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-provisional' })),
+      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-duplicated' })),
       { status: 'resolved', workId: canonical.workId },
     );
     const canonicalBytes = fs.readFileSync(registeredCanonical.recordPath);
@@ -176,39 +171,35 @@ describe('stable work identity', () => {
     const associationBytes = fs.readFileSync(associationPath);
     assert.deepEqual(
       await work.foldWorkIdentities(options(workspace, {
-        branch: 'feature/fold', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
+        canonicalWorkId: canonical.workId, oldWorkIds: [duplicate.id],
       })),
-      { ok: true, status: 'noop', workId: canonical.workId, foldedWorkIds: [provisional.workId] },
+      { ok: true, status: 'noop', workId: canonical.workId, foldedWorkIds: [duplicate.id] },
     );
     assert.deepEqual(fs.readFileSync(registeredCanonical.recordPath), canonicalBytes);
     assert.deepEqual(fs.readFileSync(associationPath), associationBytes);
   });
 
-  it('rejects a PR-bound provisional record without mutating the branch fold', async (t) => {
+  it('rejects a PR-bound duplicate record without mutating the canonical fold', async (t) => {
     const workspace = makeWorkspace(t);
     const canonical = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/fold-history', sourceRunId: 'run-canonical-history',
-    }));
-    const provisional = await resolveOrAllocateWorkIdentity(options(workspace, {
-      sourceRunId: 'run-provisional-history', pullRequestId: 'github:example/spectre#99',
+      branch: 'feature/fold-history', sourceRunId: 'run-duplicated-history',
     }));
     const registeredCanonical = await registerCanonicalKnowledge({
       ...options(workspace), recordPath: writeProposal(workspace, workRecord(canonical.workId, {
-        sourceRunIds: ['run-canonical-history'], pullRequestIds: [], candidates: [],
+        sourceRunIds: ['run-duplicated-history'], pullRequestIds: [], candidates: [],
       })),
     });
-    await registerCanonicalKnowledge({
-      ...options(workspace), recordPath: writeProposal(workspace, workRecord(provisional.workId, {
-      sourceRunIds: ['run-provisional-history'], pullRequestIds: ['github:example/spectre#99'], candidates: [],
-    })),
+    const duplicate = workRecord('work-restored-pr-duplicate', {
+      sourceRunIds: ['run-duplicated-history'], pullRequestIds: ['github:example/spectre#99'], candidates: [],
     });
+    writeStoreRecord(registeredCanonical.storePath, duplicate);
 
     const canonicalBytes = fs.readFileSync(registeredCanonical.recordPath);
     const associationPath = work.workAssociationPath(registeredCanonical.storePath);
     const associationBytes = fs.readFileSync(associationPath);
     await assert.rejects(
       () => work.foldWorkIdentities(options(workspace, {
-        branch: 'feature/fold-history', canonicalWorkId: canonical.workId, oldWorkIds: [provisional.workId],
+        canonicalWorkId: canonical.workId, oldWorkIds: [duplicate.id],
       })),
       (error) => error.code === 'WORK_FOLD_PERMANENT_BOUNDARY',
     );
@@ -233,6 +224,9 @@ describe('stable work identity', () => {
     const tamperedWork = await resolveOrAllocateWorkIdentity(options(workspace, {
       sourceRunId: 'run-tampered-rejects',
     }));
+    const distinctWork = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-distinct-rejects',
+    }));
     const registeredCanonical = await registerCanonicalKnowledge({
       ...options(workspace), recordPath: writeProposal(workspace, workRecord(canonical.workId, {
         sourceRunIds: ['run-canonical-rejects'], pullRequestIds: [], candidates: [],
@@ -253,6 +247,11 @@ describe('stable work identity', () => {
         sourceRunIds: ['run-tampered-rejects'], pullRequestIds: [], candidates: [],
       })),
     });
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(distinctWork.workId, {
+        sourceRunIds: ['run-distinct-rejects'], pullRequestIds: [], candidates: [],
+      })),
+    });
     const tamperedRecord = JSON.parse(fs.readFileSync(tampered.recordPath, 'utf8'));
     tamperedRecord.summary = 'These bytes no longer match the recorded revision.';
     fs.writeFileSync(tampered.recordPath, `${JSON.stringify(tamperedRecord, null, 2)}\n`);
@@ -265,10 +264,11 @@ describe('stable work identity', () => {
       [candidateWork.workId, 'WORK_FOLD_CANDIDATE_BOUNDARY'],
       [terminalWork.workId, 'WORK_FOLD_PERMANENT_BOUNDARY'],
       [tamperedWork.workId, 'WORK_IDENTITY_UNVERIFIED'],
+      [distinctWork.workId, 'WORK_FOLD_DISTINCT_RUNS'],
     ]) {
       await assert.rejects(
         () => work.foldWorkIdentities(options(workspace, {
-          branch: 'feature/fold-rejects', canonicalWorkId: canonical.workId, oldWorkIds: [oldWorkId],
+          canonicalWorkId: canonical.workId, oldWorkIds: [oldWorkId],
         })),
         (error) => error.code === code,
       );
@@ -279,17 +279,18 @@ describe('stable work identity', () => {
 
   it('keeps chained redirects one hop and rejects a redirected canonical target without mutation', async (t) => {
     const workspace = makeWorkspace(t);
-    const first = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-fold-first' }));
-    const second = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-fold-second' }));
-    const third = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-fold-third' }));
-    for (const [identity, sourceRunId] of [
-      [first, 'run-fold-first'], [second, 'run-fold-second'], [third, 'run-fold-third'],
-    ]) {
-      await registerCanonicalKnowledge({
-        ...options(workspace), recordPath: writeProposal(workspace, workRecord(identity.workId, {
-          sourceRunIds: [sourceRunId], pullRequestIds: [], candidates: [],
-        })),
-      });
+    const third = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-fold-chain' }));
+    const registered = await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(third.workId, {
+        sourceRunIds: ['run-fold-chain'], pullRequestIds: [], candidates: [],
+      })),
+    });
+    const first = { workId: 'work-chain-duplicate-one' };
+    const second = { workId: 'work-chain-duplicate-two' };
+    for (const identity of [first, second]) {
+      writeStoreRecord(registered.storePath, workRecord(identity.workId, {
+        sourceRunIds: ['run-fold-chain'], pullRequestIds: [], candidates: [],
+      }));
     }
 
     await work.foldWorkIdentities(options(workspace, {
@@ -299,9 +300,7 @@ describe('stable work identity', () => {
       canonicalWorkId: third.workId, oldWorkIds: [second.workId],
     }));
 
-    const associationPath = work.workAssociationPath((await resolveOrAllocateWorkIdentity(options(workspace, {
-      sourceRunId: 'run-fold-third',
-    }))).storePath);
+    const associationPath = work.workAssociationPath(registered.storePath);
     const associations = JSON.parse(fs.readFileSync(associationPath, 'utf8'));
     assert.deepEqual(associations.redirects, {
       [first.workId]: third.workId,
@@ -322,13 +321,13 @@ describe('stable work identity', () => {
     assert.deepEqual(fs.readFileSync(associationPath), before);
   });
 
-  it('rejects a fold that would absorb another branch pointer without mutation', async (t) => {
+  it('rejects a fold of distinct runs that share only a branch without mutation', async (t) => {
     const workspace = makeWorkspace(t);
     const canonical = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/fold-owner', sourceRunId: 'run-fold-owner',
+      branch: 'feature/fold-shared-branch', sourceRunId: 'run-fold-owner',
     }));
     const other = await resolveOrAllocateWorkIdentity(options(workspace, {
-      branch: 'feature/fold-other', sourceRunId: 'run-fold-other',
+      branch: 'feature/fold-shared-branch', sourceRunId: 'run-fold-other',
     }));
     for (const [identity, sourceRunId] of [[canonical, 'run-fold-owner'], [other, 'run-fold-other']]) {
       await registerCanonicalKnowledge({
@@ -344,14 +343,14 @@ describe('stable work identity', () => {
     const before = fs.readFileSync(associationPath);
     await assert.rejects(
       () => work.foldWorkIdentities(options(workspace, {
-        branch: 'feature/fold-owner', canonicalWorkId: canonical.workId, oldWorkIds: [other.workId],
+        branch: 'feature/fold-shared-branch', canonicalWorkId: canonical.workId, oldWorkIds: [other.workId],
       })),
-      (error) => error.code === 'WORK_FOLD_CONFLICT',
+      (error) => error.code === 'WORK_FOLD_DISTINCT_RUNS',
     );
     assert.deepEqual(fs.readFileSync(associationPath), before);
   });
 
-  it('keeps an explicitly named terminal branch work id and rejects invalid lifecycle hints without mutation', async (t) => {
+  it('keeps an explicitly named terminal work id and never rolls it over for a later run', async (t) => {
     const workspace = makeWorkspace(t);
     const initial = await resolveOrAllocateWorkIdentity(options(workspace, {
       branch: 'feature/explicit-terminal', sourceRunId: 'run-explicit-terminal',
@@ -378,17 +377,17 @@ describe('stable work identity', () => {
         associationPath,
       },
     );
-    for (const branchPrState of ['open', 'invalid']) {
-      await assert.rejects(
-        () => resolveOrAllocateWorkIdentity(options(workspace, {
-          branch: 'feature/explicit-terminal', sourceRunId: `run-${branchPrState}`, branchPrState,
-        })),
-        (error) => error.code === (branchPrState === 'open'
-          ? 'WORK_BRANCH_PR_STATE_CONFLICT'
-          : 'WORK_BRANCH_PR_STATE_INVALID'),
-      );
-      assert.deepEqual(fs.readFileSync(associationPath), before);
-    }
+    assert.deepEqual(fs.readFileSync(associationPath), before);
+
+    const later = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch: 'feature/explicit-terminal', sourceRunId: 'run-after-explicit-terminal',
+    }));
+    assert.notEqual(later.workId, initial.workId);
+    assert.equal(later.rolledOver, undefined);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { workId: initial.workId })),
+      { status: 'resolved', workId: initial.workId },
+    );
   });
 
   it('resolves concurrent captures for one exact source run to one work id', async (t) => {

@@ -187,7 +187,7 @@ async function registerResourceWork(value, id, input, { legacyImport = false, ex
 }
 
 describe('semantic knowledge capture', () => {
-  it('uses one branch work id for distinct Execute captures through both public CLIs', async (t) => {
+  it('gives distinct Execute captures on one branch distinct work ids through both public CLIs', async (t) => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);
       const firstInput = inputPath(value, `branch-first-${kind}.json`, workInput());
@@ -197,39 +197,48 @@ describe('semantic knowledge capture', () => {
       ], value);
       assert.equal(first.status, 0, first.stderr);
       const secondInput = inputPath(value, `branch-second-${kind}.json`, workInput({
-        summary: 'The second Execute boundary updates the same branch work record.',
+        summary: 'The second Execute boundary owns its own work record.',
       }));
       const second = run(kind, [
         'capture', '--kind', 'work', '--input', secondInput,
         '--source-run-id', `run-branch-b-${kind}`, '--branch', 'feature/branch-work',
-        '--expected-revision', output(first).revisionToken,
       ], value);
       assert.equal(second.status, 0, second.stderr);
-      assert.equal(output(second).workId, output(first).workId);
+      assert.notEqual(output(second).workId, output(first).workId);
+
+      for (const result of [first, second]) {
+        const record = JSON.parse(fs.readFileSync(
+          path.join(value.storePath, 'knowledge', output(result).workId, 'record.json'), 'utf8',
+        ));
+        assert.equal(record.provenance.sourceBranch, 'feature/branch-work');
+      }
+      const associations = JSON.parse(fs.readFileSync(path.join(value.storePath, 'work-associations.json'), 'utf8'));
+      assert.deepEqual(associations.branches, {}, 'branch is evidence on each record, never a pointer');
     }
   });
 
-  it('rotates a branch capture after a validated external terminal PR lifecycle through both public CLIs', async (t) => {
+  it('keeps a later branch capture independent of a terminal PR record through both public CLIs', async (t) => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);
       const first = run(kind, [
         'capture', '--kind', 'work', '--input', inputPath(value, `terminal-first-${kind}.json`, workInput({
-          pullRequest: { state: 'draft-open', identity: 'github:example/spectre#2' },
+          pullRequest: { state: 'merged', identity: 'github:example/spectre#2' },
         })), '--source-run-id', `run-terminal-a-${kind}`, '--pull-request-id', 'github:example/spectre#2', '--branch', 'feature/external-terminal',
       ], value);
       assert.equal(first.status, 0, first.stderr);
 
       const next = run(kind, [
         'capture', '--kind', 'work', '--input', inputPath(value, `terminal-next-${kind}.json`, workInput()),
-        '--source-run-id', `run-terminal-b-${kind}`, '--branch', 'feature/external-terminal', '--branch-pr-state', 'merged',
+        '--source-run-id', `run-terminal-b-${kind}`, '--branch', 'feature/external-terminal',
       ], value);
       assert.equal(next.status, 0, next.stderr);
       assert.notEqual(output(next).workId, output(first).workId);
-      assert.equal(output(next).workLifecycle.pullRequest, 'none');
+      assert.equal(output(next).workLifecycle.pullRequest, 'unknown', 'a later run never inherits PR state');
+      assert.equal(output(first).workLifecycle.pullRequest, 'merged');
     }
   });
 
-  it('requires explicit tags for a post-terminal branch capture through both public CLIs', async (t) => {
+  it('requires explicit tags for a new same-branch capture through both public CLIs', async (t) => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);
       const first = run(kind, [
@@ -241,12 +250,14 @@ describe('semantic knowledge capture', () => {
 
       const next = run(kind, [
         'capture', '--kind', 'work', '--input', inputPath(value, `untagged-terminal-${kind}.json`, workInput({ tags: undefined })),
-        '--source-run-id', `run-untagged-terminal-${kind}`, '--branch', 'feature/post-terminal-tags', '--branch-pr-state', 'merged',
+        '--source-run-id', `run-untagged-terminal-${kind}`, '--branch', 'feature/post-terminal-tags',
       ], value);
       assert.equal(next.status, 1);
       assert.equal(output(next).code, 'CAPTURE_INPUT_INVALID');
-      const associations = JSON.parse(fs.readFileSync(path.join(value.storePath, 'work-associations.json'), 'utf8'));
-      assert.equal(associations.branches['feature/post-terminal-tags'], output(first).workId);
+      const record = JSON.parse(fs.readFileSync(
+        path.join(value.storePath, 'knowledge', output(first).workId, 'record.json'), 'utf8',
+      ));
+      assert.equal(record.provenance.sourceBranch, 'feature/post-terminal-tags');
     }
   });
 

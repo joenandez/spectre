@@ -226,6 +226,7 @@ function constructWork(input, current, workId, tags, associations, options) {
   const runIds = mergeUnique(current?.applicability.runIds, sourceRunIds);
   const applicability = current?.applicability || { scope: 'work', workId };
   const provenance = current?.provenance || { origin: 'captured', capturedAt: nowIso(options) };
+  const sourceBranch = options.branch === undefined ? provenance.sourceBranch : options.branch;
   return {
     schemaVersion: 1,
     id: workId,
@@ -234,14 +235,18 @@ function constructWork(input, current, workId, tags, associations, options) {
     summary: input.summary,
     tags,
     applicability: { ...applicability, ...(runIds.length ? { runIds } : {}) },
-    provenance: { ...provenance, ...(sourceRunIds.length ? { sourceRunIds } : {}) },
+    provenance: {
+      ...provenance,
+      ...(sourceRunIds.length ? { sourceRunIds } : {}),
+      ...(sourceBranch ? { sourceBranch } : {}),
+    },
     relatedRecordIds: input.relatedRecordIds || current?.relatedRecordIds || [],
     ...(current?.importedSource ? { importedSource: current.importedSource } : {}),
     work: {
       ...Object.fromEntries(WORK_FIELDS.map((field) => [field, input[field]])),
       execution: input.execution || current?.work.execution || UNKNOWN_STATE,
       verificationState: input.verificationState || current?.work.verificationState || UNKNOWN_STATE,
-      pullRequest: options.resetPullRequest ? { state: 'none' } : input.pullRequest || current?.work.pullRequest || UNKNOWN_STATE,
+      pullRequest: input.pullRequest || current?.work.pullRequest || UNKNOWN_STATE,
       associations: mergedAssociations,
     },
   };
@@ -302,6 +307,9 @@ export async function captureCanonicalKnowledge(options) {
   if (kind === 'work' && options.recordId !== undefined) {
     throw codedError('CAPTURE_INPUT_INVALID', '--record-id is only valid for knowledge capture.');
   }
+  if (options.branch !== undefined && !isNonEmptyString(options.branch)) {
+    throw codedError('CAPTURE_INPUT_INVALID', '--branch must be a non-empty exact branch name.');
+  }
   if (kind === 'knowledge' && options.recordId !== undefined && input.id !== options.recordId) {
     throw codedError('CAPTURE_INPUT_INVALID', '--record-id must match the semantic knowledge input id.');
   }
@@ -319,25 +327,15 @@ export async function captureCanonicalKnowledge(options) {
   assertAllowedInput(input, kind, { tagsRequired: false });
   if (kind === 'knowledge') current = existingRecord(resolved.storePath, input.id);
   if (kind === 'work' && options.workId) current = existingRecord(resolved.storePath, options.workId);
-  if (kind === 'work' && !current && (hasExactAssociation(requested) || options.branch !== undefined)) {
+  if (kind === 'work' && !current && hasExactAssociation(requested)) {
     const existingIdentity = await resolveWorkIdentity({
       projectDir: options.projectDir, workId: options.workId, sourceRunId: options.sourceRunId,
-      pullRequestId: options.pullRequestId, candidate: options.candidate, branch: options.branch, lockOptions: options.lockOptions,
+      pullRequestId: options.pullRequestId, candidate: options.candidate, lockOptions: options.lockOptions,
       ...storeOptions(options),
     });
     if (existingIdentity.status === 'resolved') current = existingRecord(resolved.storePath, existingIdentity.workId);
   }
-  const sourceRunIdentity = kind === 'work' && current && options.sourceRunId !== undefined
-    ? await resolveWorkIdentity({
-      projectDir: options.projectDir, sourceRunId: options.sourceRunId, lockOptions: options.lockOptions,
-      ...storeOptions(options),
-    })
-    : null;
-  const rolloverCreatesNewRecord = kind === 'work' && !options.workId && current &&
-    (!sourceRunIdentity || sourceRunIdentity.workId !== current.record.id) &&
-    (['merged', 'closed'].includes(current.record.work.pullRequest.state) ||
-      ['merged', 'closed'].includes(options.branchPrState));
-  if ((!current || rolloverCreatesNewRecord) && input.tags === undefined) {
+  if (!current && input.tags === undefined) {
     throw codedError('CAPTURE_INPUT_INVALID', 'New captures require a non-empty tags array.');
   }
   if (current && current.record.kind !== kind) {
@@ -361,16 +359,14 @@ export async function captureCanonicalKnowledge(options) {
       }
       workIdentity = await resolveOrAllocateWorkIdentity({
         projectDir: options.projectDir, workId: options.workId, sourceRunId: options.sourceRunId,
-        pullRequestId: options.pullRequestId, candidate: options.candidate, branch: options.branch, branchPrState: options.branchPrState, lockOptions: options.lockOptions,
+        pullRequestId: options.pullRequestId, candidate: options.candidate, lockOptions: options.lockOptions,
         ...storeOptions(options),
       });
       current = existingRecord(resolved.storePath, workIdentity.workId);
     }
     record = kind === 'knowledge'
       ? constructKnowledge(input, current?.record, tagResult.tags, options)
-      : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, {
-        ...options, resetPullRequest: workIdentity.rolledOver,
-      });
+      : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, options);
     validateKnowledgeRecord(record, path.join('<semantic-capture>', record.id, 'record.json'), { expectedId: record.id });
     assertWorkRecordTokenLimit(record);
     if (current && !options.expectedRevision && current.revisionToken !== revisionTokenFor(record, current.resourceDigests)) {

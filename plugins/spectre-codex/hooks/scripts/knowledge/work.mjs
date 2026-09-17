@@ -9,7 +9,6 @@ import { atomicWriteJson, resolveProjectStore, withStoreLock } from './store.mjs
 const WORK_ASSOCIATION_FILE_NAME = 'work-associations.json';
 const WORK_ASSOCIATION_SCHEMA_VERSION = 1;
 const WORK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const BRANCH_PR_STATES = new Set(['open', 'merged', 'closed']);
 
 function codedError(code, message, details = {}) {
   const error = new Error(message);
@@ -46,14 +45,6 @@ function validateWorkId(workId) {
     throw codedError('WORK_ID_INVALID', `Not a canonical work id: ${JSON.stringify(workId)}`);
   }
   return workId;
-}
-
-function branchPrState(options) {
-  if (options.branchPrState === undefined) return null;
-  if (!BRANCH_PR_STATES.has(options.branchPrState)) {
-    throw codedError('WORK_BRANCH_PR_STATE_INVALID', 'branchPrState must be open, merged, or closed.');
-  }
-  return options.branchPrState;
 }
 
 function validateCandidate(candidate) {
@@ -95,12 +86,6 @@ function requestedAssociations(options) {
   }
   if (options.candidate !== undefined) {
     associations.push(['candidates', candidateAssociationKey(options.candidate)]);
-  }
-  if (options.branch !== undefined) {
-    if (!isNonEmptyString(options.branch)) {
-      throw codedError('WORK_ASSOCIATION_INVALID', 'branch must be a non-empty exact branch name.');
-    }
-    associations.push(['branches', options.branch]);
   }
   return associations;
 }
@@ -334,33 +319,19 @@ export async function resolveWorkIdentity(options) {
 /**
  * Associates an explicit work id or allocates one once. The lock makes a repeated source
  * run or unchanged candidate converge on one identity without branch or recency guesses.
+ * A new exact source run always allocates its own id, so an unrelated run on the same
+ * branch can never inherit or overwrite another run's record.
  */
 export async function resolveOrAllocateWorkIdentity(options) {
   const resolved = await resolveStore(options, false);
   return withStoreLock(resolved.storePath, 'resolve-work-identity', async () => {
     const { view, pending } = associationView(resolved.storePath);
     const identity = resolveFromIndex(view, pending, options);
-    const branchWorkId = options.branch === undefined ? null : identity.workId;
-    const runWorkId = options.sourceRunId === undefined ? null : [...(view.sourceRuns.get(options.sourceRunId) || [])][0];
-    const pointedRecord = branchWorkId ? view.verifiedWorkRecords.get(branchWorkId) : null;
-    const observedBranchPrState = branchPrState(options);
-    const storedBranchTerminal = pointedRecord && ['merged', 'closed'].includes(pointedRecord.work.pullRequest.state);
-    if (observedBranchPrState === 'open' && storedBranchTerminal) {
-      throw codedError(
-        'WORK_BRANCH_PR_STATE_CONFLICT',
-        'Validated open PR state conflicts with the terminal state stored for the branch work record.',
-        { workId: branchWorkId, storedState: pointedRecord.work.pullRequest.state },
-      );
-    }
-    const terminalBranch = Boolean(branchWorkId) && (storedBranchTerminal || ['merged', 'closed'].includes(observedBranchPrState));
-    const rolledOver = terminalBranch && runWorkId !== branchWorkId && identity.suppliedWorkId !== branchWorkId;
-    const workId = rolledOver
-      ? `work-${crypto.randomUUID()}`
-      : identity.workId || `work-${crypto.randomUUID()}`;
+    const workId = identity.workId || `work-${crypto.randomUUID()}`;
     let changed = false;
     for (const [type, key] of identity.associations) {
       const existing = view[type].get(key) || new Set();
-      const conflicts = type === 'branches' ? [] : [...existing].filter((current) => current !== workId);
+      const conflicts = [...existing].filter((current) => current !== workId);
       if (conflicts.length > 0) {
         throw codedError(
           'WORK_IDENTITY_CONFLICT',
@@ -368,10 +339,7 @@ export async function resolveOrAllocateWorkIdentity(options) {
           { workId, conflictingWorkIds: conflicts },
         );
       }
-      if (type === 'branches' && pending[type][key] !== workId) {
-        pending[type][key] = workId;
-        changed = true;
-      } else if (!pending[type][key] && existing.size === 0) {
+      if (!pending[type][key] && existing.size === 0) {
         pending[type][key] = workId;
         changed = true;
       }
@@ -379,31 +347,24 @@ export async function resolveOrAllocateWorkIdentity(options) {
     if (changed) atomicWriteJson(workAssociationPath(resolved.storePath), sortedAssociationIndex(pending));
     return {
       ok: true,
-      status: rolledOver ? 'created' : identity.status === 'resolved' && !changed ? 'noop' : identity.status === 'resolved' ? 'updated' : 'created',
+      status: identity.status === 'resolved' && !changed ? 'noop' : identity.status === 'resolved' ? 'updated' : 'created',
       workId,
-      ...(rolledOver ? { rolledOver: true } : {}),
       storePath: resolved.storePath,
       associationPath: workAssociationPath(resolved.storePath),
     };
   }, options.lockOptions);
 }
 
-function applyFoldToPending(storePath, options, canonicalWorkId, oldWorkIds) {
+function applyFoldToPending(storePath, canonicalWorkId, oldWorkIds) {
   const pending = readAssociationIndex(storePath);
   pending.branches ||= {};
   pending.redirects ||= {};
-  if (options.branch !== undefined && pending.branches[options.branch] !== canonicalWorkId) {
-    throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
-  }
   if (pending.redirects[canonicalWorkId] !== undefined) {
     throw codedError('WORK_FOLD_CONFLICT', `Canonical work id ${canonicalWorkId} already redirects elsewhere.`);
   }
   for (const oldWorkId of oldWorkIds) {
     if (pending.redirects[oldWorkId] && pending.redirects[oldWorkId] !== canonicalWorkId) {
       throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} already redirects elsewhere.`);
-    }
-    if (Object.values(pending.branches).includes(oldWorkId)) {
-      throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} remains the pointer for another branch.`);
     }
   }
   let changed = false;
@@ -429,7 +390,8 @@ function applyFoldToPending(storePath, options, canonicalWorkId, oldWorkIds) {
   return changed;
 }
 
-function assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldWorkIds) {
+/** Fold is duplicate-identity recovery: every folded record must already claim one of the canonical record's exact runs. */
+function assertFoldableWorkRecords(view, pending, canonicalWorkId, oldWorkIds) {
   const requestedWorkIds = [canonicalWorkId, ...oldWorkIds];
   const unverifiedWorkIds = requestedWorkIds.filter((workId) => view.unverifiedWorkIds.has(workId));
   if (unverifiedWorkIds.length > 0) {
@@ -447,19 +409,16 @@ function assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldW
       { workIds: missingWorkIds.sort() },
     );
   }
-  if (options.branch !== undefined && pending.branches?.[options.branch] !== canonicalWorkId) {
-    throw codedError('WORK_FOLD_CONFLICT', 'The exact branch does not point to the named canonical work id.');
-  }
   if (pending.redirects?.[canonicalWorkId] !== undefined) {
     throw codedError('WORK_FOLD_CONFLICT', `Canonical work id ${canonicalWorkId} already redirects elsewhere.`);
   }
+  const canonicalSourceRunIds = new Set(
+    view.verifiedWorkRecords.get(canonicalWorkId).work.associations.sourceRunIds,
+  );
   for (const oldWorkId of oldWorkIds) {
     const record = view.verifiedWorkRecords.get(oldWorkId);
     if (pending.redirects?.[oldWorkId] && pending.redirects[oldWorkId] !== canonicalWorkId) {
       throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} already redirects elsewhere.`);
-    }
-    if (Object.values(pending.branches || {}).includes(oldWorkId)) {
-      throw codedError('WORK_FOLD_CONFLICT', `Work id ${oldWorkId} remains the pointer for another branch.`);
     }
     if (record.work.associations.pullRequestIds.length > 0 ||
       !['none', 'unknown'].includes(record.work.pullRequest.state)) {
@@ -474,6 +433,13 @@ function assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldW
         'WORK_FOLD_CANDIDATE_BOUNDARY',
         `Work id ${oldWorkId} has a candidate association and cannot be folded.`,
         { workId: oldWorkId },
+      );
+    }
+    if (!record.work.associations.sourceRunIds.some((sourceRunId) => canonicalSourceRunIds.has(sourceRunId))) {
+      throw codedError(
+        'WORK_FOLD_DISTINCT_RUNS',
+        `Work id ${oldWorkId} shares no exact source run with ${canonicalWorkId}; fold only recovers duplicate records of one exact run.`,
+        { workId: oldWorkId, canonicalWorkId },
       );
     }
   }
@@ -519,7 +485,7 @@ export async function foldWorkIdentities(options) {
   const resolved = await resolveStore(options, false);
   const prepared = await withStoreLock(resolved.storePath, 'prepare-fold-work-identities', async () => {
     const { view, pending } = associationView(resolved.storePath);
-    assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldWorkIds);
+    assertFoldableWorkRecords(view, pending, canonicalWorkId, oldWorkIds);
     return {
       record: foldedWorkRecord(view, canonicalWorkId, oldWorkIds),
       expectedRevision: readRecordRevision(path.join(resolved.storePath, 'knowledge', canonicalWorkId)),
@@ -529,8 +495,8 @@ export async function foldWorkIdentities(options) {
   if (!record) {
     return withStoreLock(resolved.storePath, 'fold-work-identities', async () => {
       const { view, pending } = associationView(resolved.storePath);
-      assertFoldableWorkRecords(view, pending, options, canonicalWorkId, oldWorkIds);
-      const changed = applyFoldToPending(resolved.storePath, options, canonicalWorkId, oldWorkIds);
+      assertFoldableWorkRecords(view, pending, canonicalWorkId, oldWorkIds);
+      const changed = applyFoldToPending(resolved.storePath, canonicalWorkId, oldWorkIds);
       return { ok: true, status: changed ? 'updated' : 'noop', workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
     }, options.lockOptions);
   }
@@ -545,9 +511,8 @@ export async function foldWorkIdentities(options) {
       recordPath: proposal.proposal,
       expectedRevision: prepared.expectedRevision,
       foldFromWorkIds: oldWorkIds,
-      foldBranch: options.branch,
       lockOptions: options.lockOptions,
-      afterIndexRefresh: () => applyFoldToPending(resolved.storePath, options, canonicalWorkId, oldWorkIds),
+      afterIndexRefresh: () => applyFoldToPending(resolved.storePath, canonicalWorkId, oldWorkIds),
     });
     return { ok: true, status: registration.status, workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
   } finally {
@@ -560,13 +525,7 @@ export function assertWorkRecordAssociations(storePath, record, options = {}) {
   if (record.kind !== 'work') return;
   const { view, pending } = associationView(storePath);
   if (options.foldFromWorkIds?.length > 0) {
-    assertFoldableWorkRecords(
-      view,
-      pending,
-      { branch: options.foldBranch },
-      record.id,
-      options.foldFromWorkIds,
-    );
+    assertFoldableWorkRecords(view, pending, record.id, options.foldFromWorkIds);
   }
   const prior = view.verifiedWorkRecords.get(record.id);
   if (prior) {
