@@ -1,11 +1,11 @@
 # Correctness Review
 
-Determine whether the plan will deliver the approved Scope through the actual repository. Scope behavior, success criteria, and constraints are binding; implementation means are revisable. Keep Scope unchanged and classify necessary boundary changes as `Scope Change Required`.
+Decide whether plan delivers approved Scope in the repository. Scope behavior/success/constraints bind; means are revisable. Keep Scope; label boundary changes `Scope Change Required`.
 
 Check:
 
 - Every requirement reaches a planned change, its integration or consumer, and executable verification.
-- Referenced paths, patterns, reuse claims, dependencies, ordering, ownership, and material assumptions match repository evidence.
+- Paths, patterns, reuse, dependencies, ordering, ownership, assumptions match evidence.
 - Verification covers one representative happy path and primary failure per distinct required behavior; additional cases require another requirement, public boundary, credible regression, or materially different present risk.
 - Planned safeguards address concrete risks created by the changed boundaries.
 
@@ -17,6 +17,6 @@ Finding schema:
 
 `# | Severity | Category | Location | Finding | Consequence | Suggested Edit`
 
-Include metadata/hashes, evidence/unknowns, retained constraints/tests, findings, dispositions/resulting edits, and the post-edit plan hash. Write the report before authorized plan edits.
+Include metadata/hashes, evidence, constraints/tests, findings/dispositions/resulting edits, post-plan hash. Return envelope: verbatim report, route, plan/protected hashes, exact unified selected-plan patch/no-op. Don't write.
 
 DONE when every finding is disposed, no Blocker/High remains, scope changes are withheld, and hashes/write bounds pass.

@@ -1,6 +1,6 @@
 # Simplification Review
 
-Produce smallest plan equivalent to corrected plan and Scope. Scope and retained constraints bind.
+Produce smallest plan equivalent to corrected plan and Scope; both bind.
 
 With a Plan-origin `## Minimum Solution Selection`, make the first trace compare the corrected plan to it. Undeclared owned complexity is `High`: delete, or require minimum-solution reselection if removal fails a requirement. Without a selection, retain current review behavior.
 
@@ -18,6 +18,6 @@ Finding schema:
 
 `# | Severity | Action | Location | Finding | Why Safe | Suggested Edit`
 
-Include metadata/hashes, Must Delete, Collapse/Reuse/Defer, retained complexity exceptions, test reductions, findings/dispositions, structural Before → After, and the post-edit plan hash. Write the report before authorized plan edits.
+Include hashes, delete/reuse/defer, exceptions/tests, findings/dispositions, Before → After, post hash. Return envelope: verbatim report, route, plan/protected hashes, exact unified selected-plan patch/no-op. Don't write.
 
 DONE when the plan is smaller in mechanisms, surfaces, process, or tests—or every retained complexity boundary proves no safe reduction—while behavior, constraints, hashes, and write bounds survive.

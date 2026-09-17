@@ -108,7 +108,13 @@ test("review gates retain their route-specific models and efforts", () => {
   assert.match(planReview, /high effort \(20-minute limit\)/);
   assert.match(planReview, /Codex (?:→|->) Claude Code `opus`/);
   assert.match(planReview, /Claude Code (?:→|->) Codex `gpt-5\.6-sol`/);
-  assert.match(planReview, /Reviewers write only their report and the selected plan/);
+  assert.match(planReview, /claude -p --model opus --effort high/);
+  assert.match(planReview, /codex exec -C "\$PWD" -m gpt-5\.6-sol -c 'model_reasoning_effort="high"'/);
+  assert.match(planReview, /missing, non-zero, absent\/malformed envelope, hash mismatch, or out-of-bounds/i);
+  assert.match(planReview, /record.*failure.*before one.*native/i);
+  assert.match(planReview, /returns.*verbatim report body.*exact unified patch\/no-op/i);
+  assert.match(planReview, /orchestrator.*persists.*verbatim.*mechanically applies/i);
+  assert.doesNotMatch(planReview, /Reviewers write only their report and the selected plan/);
   assert.match(codeReview, /claude -p --model opus --effort high/);
   assert.match(
     codeReview,
@@ -195,7 +201,8 @@ test("Execute owns unified plan preparation with proportional task creation", ()
     /Hash-bound observed size, never depth, decides Plan Review/i,
   );
   assert.match(execute, /XS\/S record `review:not-required:<size>` and skip/i);
-  assert.match(execute, /M\+ reuse a closed correctness\+simplification chain/i);
+  assert.match(execute, /M\+ reuse a closed correctness\+simplification chain only/i);
+  assert.match(execute, /external-attempt\/recorded-failure\+fallback provenance/i);
   assert.match(execute, /Review-worthy risk reclassifies M\+/i);
   assert.match(execute, /no hidden XS\/S exception/i);
   assert.match(execute, /No selected readable plan needs a completeness\/header ceremony/i);
@@ -210,8 +217,8 @@ test("Execute owns unified plan preparation with proportional task creation", ()
     assert.match(execute, /topology\/uncertainty is unchanged/i);
     assert.doesNotMatch(execute, /Re-bind routing to finalized plan/i);
   assert.match(execute, /ATOMIC\/DIRECT use the bounded local workstream\/Active Wave pattern/i);
-  assert.match(execute, /dispatch `Skill\(spectre-plan_review\) --auto-apply scope-safe --orchestrated` once for the selected path to a fresh child agent/i);
-  assert.match(planDirect, /Plan Review state \(`not-required:<XS\|S>\|closed`\)/i);
+  assert.match(execute, /dispatch `Skill\(spectre-plan_review\) --auto-apply scope-safe --orchestrated` once to fresh child/i);
+  assert.match(planDirect, /Plan Review state \(`not-required:<XS\|S>\|closed`\).*external-attempt/i);
   assert.match(execute, /STRUCTURED invokes existing `Skill\(spectre-create_tasks\) --orchestrated` by fresh child-agent dispatch/i);
   assert.match(execute, /finalized plan path\/hash[\s\S]*closed review evidence[\s\S]*Skill\(spectre-create_tasks\)/i);
   assert.match(execute, /L → standard, XL → comprehensive/i);
@@ -237,26 +244,26 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.match(planReview, /selected plan/i);
   assert.match(planReview, /exact selected plan path/i);
   assert.match(planReview, /authority sources/i);
-  assert.match(planReview, /post-edit hash matches the selected plan/i);
+  assert.match(planReview, /verifies post-hashes\/bounds/i);
   assert.match(planReview, /references\/correctness-review\.md/);
   assert.match(planReview, /references\/simplification-review\.md/);
   assert.match(planReview, /send it verbatim to a fresh reviewer/i);
-  assert.match(planReview, /report written before plan edits/i);
-  assert.match(correctness, /Write the report before authorized plan edits/i);
-  assert.match(simplification, /Write the report before authorized plan edits/i);
-  assert.match(planReview, /Reviewers write only their report and the selected plan/i);
+  assert.match(planReview, /correctness.*closes before.*simplification/i);
+  assert.match(correctness, /Return envelope/i);
+  assert.match(simplification, /Return envelope/i);
+  assert.match(planReview, /plan\/protected hashes[\s\S]*pre-hashes\/bounds/i);
   assert.match(planReview, /addressed.*skipped.*unresolved.*scope-change/is);
   assert.match(correctness, /dispositions\/resulting edits/i);
-  assert.match(planReview, /continue on the same route/i);
+  assert.match(planReview, /continue on same route/i);
   assert.match(planReview, /failed schema\/hash\/scope\/Out-of-Bounds checks/i);
-  assert.match(planReview, /primary may normalize mechanics, never semantics/i);
+  assert.match(planReview, /never invents findings.*semantic edits/i);
   assert.match(planReview, /A usable review is terminal/i);
   assert.match(planReview, /Reports are deltas; never restate the plan/i);
   assert.match(correctness, /concrete risks created by the changed boundaries/i);
   assert.match(correctness, /required now by \| simpler local option \| why it fails now \| verification/i);
   assert.match(simplification, /delete, collapse, reuse, or defer/i);
   assert.match(simplification, /High` for untraceable complexity or an invalid exception/i);
-  assert.match(planReview, /plan is smaller in mechanisms, surfaces, process, or tests/i);
+  assert.match(planReview, /plan smaller or no safe reduction/i);
   assert.doesNotMatch(planReview, /Shrinkage is optional/i);
   assert.doesNotMatch(planReview, /same-route report-only repair/i);
   assert.doesNotMatch(planReview, /primary directly edits `plan\.md`/i);
@@ -277,7 +284,7 @@ test("usable review reports are normalized by the primary without reviewer repai
     const review = skill(name);
     if (name === "spectre-plan_review") {
       assert.match(review, /A usable review is terminal/i);
-      assert.match(review, /primary may normalize mechanics, never semantics/i);
+      assert.match(review, /never invents findings.*semantic edits/i);
       assert.doesNotMatch(review, /same-route report-only repair/i);
       continue;
     } else if (name === "spectre-task_review") {
