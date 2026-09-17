@@ -76,6 +76,41 @@ const DELIVERY_LIFECYCLE_REMAINING_WORK = new RegExp(
 );
 const VERIFICATION_STATES = new Set(['unknown', 'not-run', 'checked', 'passed', 'failed']);
 const PULL_REQUEST_STATES = new Set(['unknown', 'none', 'draft-open', 'closed', 'merged']);
+
+/**
+ * The bounded per-run delivery receipt persisted on a work record.
+ *
+ * Two lists govern two different concerns, and they are deliberately not the same list:
+ *
+ *   - THIS schema governs what must be PERSISTED at capture. `startHead` is required here
+ *     because it is real, cheap provenance of where the run began.
+ *   - `DELIVERY_RECEIPT_FIELDS.required` in `workflow/membership.mjs` governs what must be
+ *     present to DECIDE membership. `startHead` is optional there on purpose: gating a verdict
+ *     on a start head would fail closed after a history rewrite for no decision value.
+ *
+ * Do not "reconcile" the two lists into one. Persisting more than the evaluator reads is the
+ * intended asymmetry.
+ *
+ * Only hashes and ids are representable. There is no field a patch, a log, or prose can be
+ * written into, and every token is length-capped and whitespace-free, so a completed receipt
+ * stays inside the rendered work-record token limit.
+ */
+export const DELIVERY_RECEIPT_SCHEMA = Object.freeze({
+  required: Object.freeze(['runId', 'branch', 'startHead']),
+  terminal: Object.freeze(['terminalHead', 'acceptedCommits', 'acceptedPatchIds']),
+  roles: Object.freeze({
+    runId: 'Exact Execute run identity that owns this record.',
+    branch: 'Branch the run executed on; membership evidence, never a selector.',
+    startHead: 'HEAD at run start. Required to persist as provenance; never a decision input.',
+    terminalHead: 'HEAD at the terminal or blocked capture; absent marks a start-only receipt.',
+    acceptedCommits: 'Accepted task commit ids from the Execute event log. Order is not load-bearing: apply order is derived from `git rev-list --topo-order`.',
+    acceptedPatchIds: 'Stable `git patch-id --stable` per accepted commit, index-aligned, persisted so a rebased-away object is still provable. `null` marks an accepted commit that genuinely has no patch (a merge or an empty commit); the evaluator then fails closed rather than never seeing the commit.',
+  }),
+});
+const RECEIPT_SHA_PATTERN = /^[0-9a-f]{7,64}$/i;
+const RECEIPT_PATCH_ID_PATTERN = /^[0-9a-f]{40,64}$/i;
+const RECEIPT_RUN_ID_LIMIT = 120;
+const RECEIPT_BRANCH_LIMIT = 255;
 const AGENT_SKILLS_FIELDS = new Set([
   'name',
   'description',
@@ -386,6 +421,94 @@ function validateRemainingWork(work, recordPath) {
   }
 }
 
+function isBoundedToken(value, limit) {
+  return isNonEmptyString(value) && value.length <= limit && !/\s/.test(value);
+}
+
+function assertReceiptField(condition, field, requirement, recordPath) {
+  if (condition) return;
+  throw recordError(recordPath, `work.deliveryReceipt.${field} ${requirement}`);
+}
+
+/** Bounded delivery evidence: hashes and ids only, never a patch, a log, or prose. */
+function validateDeliveryReceipt(receipt, recordPath) {
+  if (!isPlainObject(receipt)) {
+    throw recordError(recordPath, 'work.deliveryReceipt must be an object');
+  }
+  const allowed = new Set([...DELIVERY_RECEIPT_SCHEMA.required, ...DELIVERY_RECEIPT_SCHEMA.terminal]);
+  for (const key of Object.keys(receipt)) {
+    if (!allowed.has(key)) throw recordError(recordPath, `unknown field work.deliveryReceipt.${key}`);
+  }
+  assertReceiptField(
+    isBoundedToken(receipt.runId, RECEIPT_RUN_ID_LIMIT),
+    'runId', 'must be the exact Execute run id', recordPath,
+  );
+  assertReceiptField(
+    isBoundedToken(receipt.branch, RECEIPT_BRANCH_LIMIT),
+    'branch', 'must be a single branch name', recordPath,
+  );
+  assertReceiptField(
+    RECEIPT_SHA_PATTERN.test(receipt.startHead || ''),
+    'startHead', 'must be the commit hash at run start', recordPath,
+  );
+  assertReceiptField(
+    receipt.terminalHead === undefined || RECEIPT_SHA_PATTERN.test(receipt.terminalHead || ''),
+    'terminalHead', 'must be the commit hash at terminal capture', recordPath,
+  );
+  if (receipt.acceptedCommits === undefined && receipt.acceptedPatchIds === undefined) return;
+  assertReceiptField(
+    isUniqueStringArray(receipt.acceptedCommits, RECEIPT_SHA_PATTERN),
+    'acceptedCommits', 'must be unique accepted commit hashes', recordPath,
+  );
+  assertReceiptField(
+    Array.isArray(receipt.acceptedPatchIds)
+    && receipt.acceptedPatchIds.length === receipt.acceptedCommits.length
+    && receipt.acceptedPatchIds.every((id) => id === null || RECEIPT_PATCH_ID_PATTERN.test(id || '')),
+    'acceptedPatchIds',
+    'must carry one stable patch id per accepted commit, null only where a commit has no patch',
+    recordPath,
+  );
+}
+
+/** `start-only` is the one incomplete-receipt state, named for its dominant cause. */
+export const DELIVERY_RECEIPT_STATES = Object.freeze(['legacy', 'start-only', 'complete']);
+
+function receiptState(state, reason) {
+  return { state, complete: state === 'complete', reason };
+}
+
+/**
+ * Classify one work record's delivery receipt. Total by construction: every input, including
+ * a non-record, returns exactly one of `DELIVERY_RECEIPT_STATES` and never throws.
+ *
+ * Only `complete` means the receipt carries enough evidence for the membership evaluator to
+ * reach a verdict. A receipt-less record captured before receipts existed is `legacy`, and an
+ * unusable receipt is `legacy` too: both are readable, and neither is ever auto-promoted.
+ */
+export function classifyDeliveryReceipt(record) {
+  let receipt;
+  try {
+    receipt = record?.work?.deliveryReceipt;
+  } catch {
+    // A record that cannot even be read is reported as unreadable, never as evidence.
+    return receiptState('legacy', 'receipt-unreadable');
+  }
+  if (receipt === undefined || receipt === null) return receiptState('legacy', 'no-receipt');
+  if (!isPlainObject(receipt)) return receiptState('legacy', 'receipt-unusable');
+  if (!DELIVERY_RECEIPT_SCHEMA.required.every((field) => isNonEmptyString(receipt[field]))) {
+    return receiptState('legacy', 'receipt-unusable');
+  }
+  if (!isNonEmptyString(receipt.terminalHead)) {
+    return receiptState('start-only', 'no-terminal-evidence');
+  }
+  const accepted = receipt.acceptedCommits;
+  const patchIds = receipt.acceptedPatchIds;
+  const decidable = Array.isArray(accepted) && accepted.length > 0
+    && Array.isArray(patchIds) && patchIds.length === accepted.length;
+  if (!decidable) return receiptState('start-only', 'incomplete-terminal-evidence');
+  return receiptState('complete', 'terminal-evidence-present');
+}
+
 function validateWorkFields(record, recordPath) {
   const work = record.work;
   const allowed = new Set([
@@ -394,6 +517,7 @@ function validateWorkFields(record, recordPath) {
     'verificationState',
     'pullRequest',
     'associations',
+    'deliveryReceipt',
   ]);
   if (!isPlainObject(work) || Object.keys(work).some((key) => !allowed.has(key))) {
     throw recordError(recordPath, 'work must contain only the work template and lifecycle fields');
@@ -415,6 +539,8 @@ function validateWorkFields(record, recordPath) {
     throw recordError(recordPath, 'work.associations must contain exact source run, PR, and candidate arrays');
   }
   for (const candidate of work.associations.candidates) validateCandidate(candidate, recordPath);
+  // Absent by design on every record captured before receipts existed: those stay readable.
+  if (work.deliveryReceipt !== undefined) validateDeliveryReceipt(work.deliveryReceipt, recordPath);
   validateImportedSource(record, recordPath);
 }
 
@@ -479,6 +605,27 @@ function provenanceLines(provenance) {
   ];
 }
 
+const RENDERED_SHA_LENGTH = 12;
+
+/**
+ * Receipt evidence renders as header metadata, never as an eighth work section. Commit hashes
+ * render abbreviated and patch ids not at all, so the rendered size stays proportional to the
+ * number of accepted commits and `assertRenderedWorkRecordTokenLimit` keeps binding the receipt.
+ */
+function deliveryReceiptLines(receipt) {
+  if (!receipt) return [];
+  const short = (sha) => (typeof sha === 'string' ? sha.slice(0, RENDERED_SHA_LENGTH) : 'none');
+  const terminal = receipt.terminalHead ? short(receipt.terminalHead) : 'none (start-only)';
+  const accepted = receipt.acceptedCommits?.length
+    ? receipt.acceptedCommits.map(short).join(', ')
+    : 'none';
+  return [
+    `- Delivery receipt: ${receipt.runId} on ${receipt.branch}`
+    + ` (start ${short(receipt.startHead)} to terminal ${terminal})`,
+    `- Accepted commits: ${accepted}`,
+  ];
+}
+
 function section(heading, body) {
   return [`## ${heading}`, '', body, ''];
 }
@@ -502,6 +649,7 @@ export function renderKnowledgeRecord(record) {
       ? [`- Related records: ${record.relatedRecordIds.join(', ')}`]
       : []),
     ...provenanceLines(record.provenance),
+    ...(isKnowledge ? [] : deliveryReceiptLines(record.work.deliveryReceipt)),
     '',
     ...(isKnowledge ? [] : [HISTORICAL_WORK_NOTICE, '']),
     ...section('Summary', record.summary),
