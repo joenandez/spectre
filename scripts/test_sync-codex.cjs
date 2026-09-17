@@ -1798,7 +1798,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    'dc6a2c00c3d755c1d6383c50d51c3c3056ccb53ccddf54db2b0ef5292eaa2604',
+    'ba79d21be2b3086416219a82b8b0bc6f82ba5d2366d272f04bfc5d418ed14d99',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
@@ -2467,6 +2467,15 @@ test('review gates pin route-specific opposing models and retain native fallback
         assert.match(skill, /native `@spectre(?::|_)reviewer`/);
         assert.match(skill, /returns.*verbatim report body.*exact unified patch\/no-op/i);
         assert.match(skill, /orchestrator.*persists.*verbatim.*mechanically applies/i);
+        assert.match(skill, /--allowedTools "Read,Grep,Glob,LS"/);
+        assert.match(skill, /external attempt.*launch route\/status.*failure class.*fallback-used/i);
+        assert.match(skill, /HASHES.*only injected pre-edit hashes/i);
+        assert.match(skill, /persists report verbatim before applying (?:the|its) patch/i);
+        assert.match(skill, /computes\/records post-write hashes\/bounds, verifies them/i);
+        assert.match(skill, /only two canonical reports and selected plan may change/i);
+        assert.match(skill, /patch targets only selected plan/i);
+        assert.match(skill, /execution state\/all other artifacts immutable/i);
+        assert.match(skill, /Quiet output is not failure/);
         assert.doesNotMatch(skill, /at least 20 minutes/);
       } else if (skillName === 'spectre-task_review') {
         assert.match(skill, /pinned medium effort/);
@@ -2550,14 +2559,18 @@ test('plan review bounds correctness and enforces subtraction-only simplificatio
     assert.match(correctness, /another requirement, public boundary, credible regression, or materially different present risk/);
     assert.match(correctness, /concrete risks created by the changed boundaries/i);
     assert.match(correctness, /required now by \| simpler local option \| why it fails now \| verification/i);
-    assert.match(correctness, /Return envelope/i);
+    assert.match(correctness, /exact envelope/i);
+    assert.match(correctness, /only pre-edit hashes/i);
+    assert.doesNotMatch(correctness, /post(?:-plan)? hash/i);
     assert.match(simplification, /delete, collapse, reuse, or defer/i);
     assert.match(simplification, /High` for untraceable complexity or an invalid exception/i);
     assert.match(simplification, /minimum replacement detail needed by a larger net reduction/i);
     assert.match(simplification, /required now by \| simpler local option \| why it fails now \| removal failure/i);
-    assert.match(simplification, /Return envelope/i);
+    assert.match(simplification, /exact envelope/i);
+    assert.match(simplification, /only pre-edit hashes/i);
+    assert.doesNotMatch(simplification, /post(?:-plan)? hash/i);
     assert.match(skill, /plan smaller or no safe reduction/i);
-    assert.match(skill, /Reports are deltas; never restate the plan/i);
+    assert.match(skill, /Reports are deltas; never restate plan/i);
     assert.match(skill, /direct-mode Verification is executable/i);
     assert.match(skill, /Run each stage fresh at high effort/);
     assert.match(skill, /correctness.*closes before.*simplification/i);
@@ -2740,8 +2753,8 @@ test('planning artifact ownership confines reviewer-authored scope-safe writebac
 
     assert.match(planReview, /orchestrator.*persists.*verbatim.*mechanically applies/i);
     assert.match(planReview, /correctness.*closes before.*simplification/i);
-    assert.match(planCorrectnessTemplate, /Return envelope/i);
-    assert.match(planSimplificationTemplate, /Return envelope/i);
+    assert.match(planCorrectnessTemplate, /exact envelope/i);
+    assert.match(planSimplificationTemplate, /exact envelope/i);
     assert.match(planCorrectnessTemplate, /dispositions\/resulting edits/i);
     assert.doesNotMatch(planReview, /primary directly edits `plan\.md`/i);
     assert.match(planReview, /HASHES <name>=sha256:<hex>[\s\S]*pre-hashes\/bounds/i);

@@ -155,6 +155,37 @@ test("Plan Review requires one machine-readable envelope for both external stage
   }
 });
 
+test("Plan Review persists auditable, read-only, pre-hash-bound writeback", () => {
+  const planReviewDir = join(
+    repositoryRoot,
+    "plugins",
+    "spectre",
+    "skills",
+    "spectre-plan_review",
+  );
+  const planReview = readFileSync(join(planReviewDir, "SKILL.md"), "utf8");
+  const execute = readFileSync(
+    join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "SKILL.md"),
+    "utf8",
+  );
+
+  assert.match(planReview, /--allowedTools "Read,Grep,Glob,LS"/);
+  assert.match(planReview, /external attempt.*launch route\/status.*failure class.*fallback-used/i);
+  assert.match(planReview, /HASHES.*only injected pre-edit hashes/i);
+  assert.match(planReview, /persists report verbatim before applying (?:the|its) patch/i);
+  assert.match(planReview, /computes\/records post-write hashes\/bounds, verifies them/i);
+  assert.match(planReview, /only two canonical reports and selected plan may change/i);
+  assert.match(planReview, /patch targets only selected plan/i);
+  assert.match(planReview, /execution state\/all other artifacts immutable/i);
+  assert.match(planReview, /Quiet output is not failure/);
+  assert.match(execute, /resume hash-valid partial correctness/i);
+  for (const name of ["correctness-review.md", "simplification-review.md"]) {
+    const prompt = readFileSync(join(planReviewDir, "references", name), "utf8");
+    assert.match(prompt, /only pre-edit hashes/i);
+    assert.doesNotMatch(prompt, /post(?:-plan)? hash/i);
+  }
+});
+
 test("Execute owns unified plan preparation with proportional task creation", () => {
   const plan = readFileSync(
     join(repositoryRoot, "plugins", "spectre", "skills", "spectre-plan", "SKILL.md"),
@@ -265,21 +296,21 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.match(planReview, /selected plan/i);
   assert.match(planReview, /exact selected plan path/i);
   assert.match(planReview, /authority sources/i);
-  assert.match(planReview, /verifies post-hashes\/bounds/i);
+  assert.match(planReview, /post-write hashes\/bounds, verifies them/i);
   assert.match(planReview, /references\/correctness-review\.md/);
   assert.match(planReview, /references\/simplification-review\.md/);
   assert.match(planReview, /send it verbatim to a fresh reviewer/i);
   assert.match(planReview, /correctness.*closes before.*simplification/i);
-  assert.match(correctness, /Return envelope/i);
-  assert.match(simplification, /Return envelope/i);
+  assert.match(correctness, /exact envelope/i);
+  assert.match(simplification, /exact envelope/i);
   assert.match(planReview, /HASHES <name>=sha256:<hex>[\s\S]*pre-hashes\/bounds/i);
   assert.match(planReview, /addressed.*skipped.*unresolved.*scope-change/is);
   assert.match(correctness, /dispositions\/resulting edits/i);
   assert.match(planReview, /continue same route/i);
-  assert.match(planReview, /failed schema\/hash\/scope\/Out-of-Bounds checks/i);
+  assert.match(planReview, /failed schema\/hash\/scope\/bounds/i);
   assert.match(planReview, /never invents findings.*semantic edits/i);
   assert.match(planReview, /A usable review is terminal/i);
-  assert.match(planReview, /Reports are deltas; never restate the plan/i);
+  assert.match(planReview, /Reports are deltas; never restate plan/i);
   assert.match(correctness, /concrete risks created by the changed boundaries/i);
   assert.match(correctness, /required now by \| simpler local option \| why it fails now \| verification/i);
   assert.match(simplification, /delete, collapse, reuse, or defer/i);

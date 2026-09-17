@@ -17,6 +17,6 @@ Finding schema:
 
 `# | Severity | Category | Location | Finding | Consequence | Suggested Edit`
 
-Include metadata/hashes, evidence, constraints/tests, findings/dispositions/resulting edits, post-plan hash. Return envelope: Use the injected exact envelope. Don't write.
+Include metadata/hashes, evidence, constraints/tests, findings/dispositions/resulting edits. Use the injected exact envelope with only pre-edit hashes. Don't write.
 
 DONE when every finding is disposed, no Blocker/High remains, scope changes are withheld, and hashes/write bounds pass.
