@@ -134,6 +134,27 @@ test("review gates retain their route-specific models and efforts", () => {
   );
 });
 
+test("Plan Review requires one machine-readable envelope for both external stages", () => {
+  const planReviewDir = join(
+    repositoryRoot,
+    "plugins",
+    "spectre",
+    "skills",
+    "spectre-plan_review",
+  );
+  const planReview = readFileSync(join(planReviewDir, "SKILL.md"), "utf8");
+  const envelope =
+    "REPORT_BEGIN\\n<verbatim report>\\nREPORT_END\\nROUTE <stage|runtime|model|effort>\\nHASHES <name>=sha256:<hex>[,...]\\nPATCH_BEGIN\\n<exact unified diff|NOOP>\\nPATCH_END";
+
+  assert.match(planReview, new RegExp(envelope.replace(/[|()[\]<>]/g, "\\$&")));
+  assert.match(planReview, /2\. \*\*Correctness\.\*\*[\s\S]*inject exact envelope below into `REVIEW_PROMPT`/);
+  assert.match(planReview, /3\. \*\*Simplification\.\*\*[\s\S]*inject exact envelope below into `REVIEW_PROMPT`/);
+  for (const name of ["correctness-review.md", "simplification-review.md"]) {
+    const prompt = readFileSync(join(planReviewDir, "references", name), "utf8");
+    assert.match(prompt, /Use the injected exact envelope/i);
+  }
+});
+
 test("Execute owns unified plan preparation with proportional task creation", () => {
   const plan = readFileSync(
     join(repositoryRoot, "plugins", "spectre", "skills", "spectre-plan", "SKILL.md"),
@@ -251,10 +272,10 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.match(planReview, /correctness.*closes before.*simplification/i);
   assert.match(correctness, /Return envelope/i);
   assert.match(simplification, /Return envelope/i);
-  assert.match(planReview, /plan\/protected hashes[\s\S]*pre-hashes\/bounds/i);
+  assert.match(planReview, /HASHES <name>=sha256:<hex>[\s\S]*pre-hashes\/bounds/i);
   assert.match(planReview, /addressed.*skipped.*unresolved.*scope-change/is);
   assert.match(correctness, /dispositions\/resulting edits/i);
-  assert.match(planReview, /continue on same route/i);
+  assert.match(planReview, /continue same route/i);
   assert.match(planReview, /failed schema\/hash\/scope\/Out-of-Bounds checks/i);
   assert.match(planReview, /never invents findings.*semantic edits/i);
   assert.match(planReview, /A usable review is terminal/i);

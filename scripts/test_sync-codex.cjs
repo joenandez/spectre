@@ -2540,10 +2540,12 @@ test('plan review bounds correctness and enforces subtraction-only simplificatio
     assert.match(skill, /references\/correctness-review\.md/);
     assert.match(skill, /references\/simplification-review\.md/);
     assert.match(skill, /send it verbatim to a fresh reviewer/i);
-    assert.match(skill, /plan, Scope, task-context, and report paths\/hashes/i);
-    assert.match(skill, /corrected plan, Scope, correctness-report, and output-report paths\/hashes/i);
+    assert.match(skill, /plan, Scope, task-context, report paths\/hashes/i);
+    assert.match(skill, /corrected plan, Scope, correctness-report, output-report paths\/hashes/i);
+    assert.match(skill, /2\. \*\*Correctness\.\*\*[\s\S]*inject exact envelope below into `REVIEW_PROMPT`/);
+    assert.match(skill, /3\. \*\*Simplification\.\*\*[\s\S]*inject exact envelope below into `REVIEW_PROMPT`/);
     assert.doesNotMatch(skill, /REVIEW MANIFEST|ADDITIONAL FOCUS|paraphrase|reorder|weaken|augment/i);
-    assert.match(skill, /Stop on unresolved correctness Blocker\/High/);
+    assert.match(skill, /Stop unresolved correctness Blocker\/High/);
     assert.match(correctness, /one representative happy path and primary failure per distinct required behavior/i);
     assert.match(correctness, /another requirement, public boundary, credible regression, or materially different present risk/);
     assert.match(correctness, /concrete risks created by the changed boundaries/i);
@@ -2742,7 +2744,7 @@ test('planning artifact ownership confines reviewer-authored scope-safe writebac
     assert.match(planSimplificationTemplate, /Return envelope/i);
     assert.match(planCorrectnessTemplate, /dispositions\/resulting edits/i);
     assert.doesNotMatch(planReview, /primary directly edits `plan\.md`/i);
-    assert.match(planReview, /plan\/protected hashes[\s\S]*pre-hashes\/bounds/i);
+    assert.match(planReview, /HASHES <name>=sha256:<hex>[\s\S]*pre-hashes\/bounds/i);
     assert.match(planReview, /never invents findings.*semantic edits/i);
     assert.match(planReview, /A usable review is terminal/i);
     assert.doesNotMatch(planReview, /allowedTools "[^"]*Task/);
