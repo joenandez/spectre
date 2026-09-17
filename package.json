@@ -1,6 +1,6 @@
 {
   "name": "@codename_inc/spectre",
-  "version": "7.4.0",
+  "version": "7.4.1",
   "description": "Contract-driven agentic coding workflow for Claude Code and Codex.",
   "type": "module",
   "homepage": "https://github.com/joenandez/spectre#readme",
