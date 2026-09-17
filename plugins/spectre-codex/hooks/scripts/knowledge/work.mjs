@@ -92,6 +92,18 @@ function requestedAssociations(options) {
   return associations;
 }
 
+/** Branch is queryable evidence only; identity resolution never takes a branch key. */
+function requestedQueryAssociations(options) {
+  const associations = requestedAssociations(options);
+  if (options.branch !== undefined) {
+    if (!isNonEmptyString(options.branch)) {
+      throw codedError('WORK_ASSOCIATION_INVALID', 'branch must be a non-empty string.');
+    }
+    associations.push(['branches', options.branch]);
+  }
+  return associations;
+}
+
 function validateAssociationIndex(value, indexPath) {
   if (!isPlainObject(value) || value.schemaVersion !== WORK_ASSOCIATION_SCHEMA_VERSION) {
     throw codedError('WORK_ASSOCIATION_INDEX_INVALID', `${indexPath}: unsupported work association index`);
@@ -130,6 +142,7 @@ function emptyAssociationView() {
     pullRequests: new Map(),
     candidates: new Map(),
     branches: new Map(),
+    legacyBranches: new Map(),
     verifiedWorkIds: new Set(),
     verifiedWorkRecords: new Map(),
     unverifiedWorkIds: new Set(),
@@ -181,22 +194,29 @@ function addRecordAssociations(view, record, target = view, sourceWorkId = recor
   for (const candidate of record.work.associations.candidates) {
     addAssociation(view, 'candidates', candidateAssociationKey(candidate), record.id, target);
   }
+  if (isNonEmptyString(record.provenance?.sourceBranch)) {
+    addAssociation(view, 'branches', record.provenance.sourceBranch, sourceWorkId, target);
+  }
 }
 
 /**
  * Typed work packages are the durable association authority. The small sidecar remains
  * only for an allocation made before its record exists, so a successful registration
- * cannot be invisible to a fresh resolver.
+ * cannot be invisible to a fresh resolver. Its scalar branch entries are legacy-only
+ * evidence: readable for old aggregates, never forward branch authority.
  */
 function associationView(storePath) {
   const view = emptyAssociationView();
   const pending = readAssociationIndex(storePath);
   pending.branches ||= {};
   pending.redirects ||= {};
-  for (const type of ['sourceRuns', 'pullRequests', 'candidates', 'branches']) {
+  for (const type of ['sourceRuns', 'pullRequests', 'candidates']) {
     for (const [key, workId] of Object.entries(pending[type])) {
       addAssociation(view, type, key, associationWorkId(pending, type, workId));
     }
+  }
+  for (const [branch, workId] of Object.entries(pending.branches)) {
+    addAssociation(view, 'legacyBranches', branch, associationWorkId(pending, 'branches', workId));
   }
 
   const { index } = refreshKnowledgeIndex(storePath, { persist: false });
@@ -338,21 +358,27 @@ export async function resolveWorkIdentity(options) {
 
 /**
  * Lists every verified work id that carries the requested exact associations. Delivery keys are
- * plural, so this answers with the whole matching set and never picks one by recency.
+ * plural, so this answers with the whole matching set and never picks one by recency. Branch
+ * matches come from verified record provenance; a legacy sidecar branch pointer is reported
+ * separately so recovery can read it without it becoming selectable evidence.
  */
 export async function listWorkIdentities(options) {
   const resolved = await resolveStore(options, true);
-  if (!resolved.storePath) return { ok: true, workIds: [] };
+  if (!resolved.storePath) return { ok: true, workIds: [], legacyWorkIds: [] };
   return withStoreLock(resolved.storePath, 'list-work-identities', async () => {
     const { view } = associationView(resolved.storePath);
-    const associations = requestedAssociations(options);
+    const associations = requestedQueryAssociations(options);
     if (associations.length === 0) {
       throw codedError(
         'WORK_QUERY_INVALID',
-        'A work identity query needs one exact source run, pull request, or candidate.',
+        'A work identity query needs one exact branch, source run, pull request, or candidate.',
       );
     }
-    return { ok: true, workIds: [...requestedWorkIds(view, associations)].sort() };
+    const workIds = [...requestedWorkIds(view, associations)].sort();
+    const legacyWorkIds = [...(view.legacyBranches.get(options.branch) || [])]
+      .filter((workId) => !workIds.includes(workId))
+      .sort();
+    return { ok: true, workIds, legacyWorkIds };
   }, options.lockOptions);
 }
 

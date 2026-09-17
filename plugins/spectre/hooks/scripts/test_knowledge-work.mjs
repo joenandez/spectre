@@ -524,6 +524,76 @@ describe('stable work identity', () => {
     );
   });
 
+  it('returns every verified work id on one branch in a deterministic order', async (t) => {
+    const workspace = makeWorkspace(t);
+    const branch = 'feature/plural-branch';
+    const workIds = ['work-branch-1', 'work-branch-2', 'work-branch-3'];
+    for (const [position, workId] of workIds.entries()) {
+      await registerCanonicalKnowledge({
+        ...options(workspace), recordPath: writeProposal(workspace, workRecord(workId, {
+          sourceRunIds: [`run-branch-${position}`], pullRequestIds: [], candidates: [],
+        }, { sourceBranch: branch })),
+      });
+    }
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord('work-other-branch', {
+        sourceRunIds: ['run-other-branch'], pullRequestIds: [], candidates: [],
+      }, { sourceBranch: 'feature/unrelated' })),
+    });
+
+    const listed = await work.listWorkIdentities(options(workspace, { branch }));
+    assert.deepEqual(listed.workIds, workIds);
+    assert.deepEqual(listed.legacyWorkIds, []);
+    assert.deepEqual(
+      (await work.listWorkIdentities(options(workspace, { branch }))).workIds,
+      workIds,
+      'a repeated branch query must return the same order',
+    );
+    assert.deepEqual(
+      (await work.listWorkIdentities(options(workspace, { branch: 'feature/unrelated' }))).workIds,
+      ['work-other-branch'],
+    );
+  });
+
+  it('reads a legacy scalar branch sidecar without advancing it to a new work id', async (t) => {
+    const workspace = makeWorkspace(t);
+    const branch = 'feature/legacy-aggregate';
+    const legacy = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-legacy-one' }));
+    const registered = await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(legacy.workId, {
+        sourceRunIds: ['run-legacy-one', 'run-legacy-two'], pullRequestIds: [], candidates: [],
+      })),
+    });
+    const associationPath = work.workAssociationPath(registered.storePath);
+    const sidecar = JSON.parse(fs.readFileSync(associationPath, 'utf8'));
+    sidecar.branches = { [branch]: legacy.workId };
+    fs.writeFileSync(associationPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+
+    const current = await resolveOrAllocateWorkIdentity(options(workspace, {
+      branch, sourceRunId: 'run-after-legacy',
+    }));
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(current.workId, {
+        sourceRunIds: ['run-after-legacy'], pullRequestIds: [], candidates: [],
+      }, { sourceBranch: branch })),
+    });
+
+    const listed = await work.listWorkIdentities(options(workspace, { branch }));
+    assert.deepEqual(listed.workIds, [current.workId], 'only record-backed branch evidence is selectable');
+    assert.deepEqual(listed.legacyWorkIds, [legacy.workId], 'the legacy aggregate stays readable');
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(associationPath, 'utf8')).branches,
+      { [branch]: legacy.workId },
+      'the legacy branch sidecar is never advanced to a new work id',
+    );
+    for (const sourceRunId of ['run-legacy-one', 'run-legacy-two']) {
+      assert.deepEqual(
+        await resolveWorkIdentity(options(workspace, { sourceRunId })),
+        { status: 'resolved', workId: legacy.workId },
+      );
+    }
+  });
+
   it('keeps later exact candidate associations on an explicitly carried work id', async (t) => {
     const workspace = makeWorkspace(t);
     const created = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run_initial' }));
