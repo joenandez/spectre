@@ -63,17 +63,6 @@ const EXECUTION_STATES = new Set([
   FINALIZED_EXECUTION_STATE,
 ]);
 const NO_REMAINING_WORK = 'None.';
-const DELIVERY_LIFECYCLE_CLAIM = '(?:pr\\s+|pull\\s+request\\s+|draft\\s+pr\\s+)?'
-  + '(?:review|approval|ci(?:\\s+checks?)?|checks?|readiness|ready\\s+for\\s+review|merge|merging|closure|closing|close)';
-const DELIVERY_LIFECYCLE_CONNECTOR = '(?:\\s*,\\s*(?:(?:and|or|then|plus)\\s+)?|\\s+(?:and|or|then|before|plus)\\s+)';
-// Review, CI, PR readiness, merge, and closure are verification and pull-request facts. A record
-// that reports them as remaining work makes delivered work read as unfinished implementation.
-const DELIVERY_LIFECYCLE_REMAINING_WORK = new RegExp(
-  '^(?:awaiting|waiting\\s+(?:on|for)|pending|needs?|blocked\\s+on|requires?)\\s+(?:the\\s+)?'
-  + DELIVERY_LIFECYCLE_CLAIM
-  + `(?:${DELIVERY_LIFECYCLE_CONNECTOR}(?:the\\s+)?${DELIVERY_LIFECYCLE_CLAIM})*\\s*\\.?$`,
-  'i',
-);
 const VERIFICATION_STATES = new Set(['unknown', 'not-run', 'checked', 'passed', 'failed']);
 const PULL_REQUEST_STATES = new Set(['unknown', 'none', 'draft-open', 'closed', 'merged']);
 
@@ -401,8 +390,11 @@ function validateImportedSource(record, recordPath) {
 }
 
 /**
- * Finality is an execution-dimension fact. A finalized record states no residual implementation
- * work, and no record may report delivery lifecycle as remaining implementation work.
+ * Finality is an execution-dimension fact: a finalized record states no residual implementation
+ * work. This rule is structural and deterministic, so a record it rejects is always repairable
+ * by a re-capture. Judging whether prose reports delivery lifecycle instead of implementation
+ * work is a heuristic, and it lives on the capture write path so it can never make a stored
+ * record unreadable.
  */
 function validateRemainingWork(work, recordPath) {
   const remainingWork = work.remainingWork.trim();
@@ -410,13 +402,6 @@ function validateRemainingWork(work, recordPath) {
     throw recordError(
       recordPath,
       `finalized work.remainingWork must be exactly ${JSON.stringify(NO_REMAINING_WORK)}`,
-    );
-  }
-  if (DELIVERY_LIFECYCLE_REMAINING_WORK.test(remainingWork)) {
-    throw recordError(
-      recordPath,
-      'work.remainingWork must state implementation work; review, CI, readiness, merge, and closure'
-      + ' are verification and pull-request facts',
     );
   }
 }

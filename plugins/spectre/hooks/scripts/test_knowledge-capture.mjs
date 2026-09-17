@@ -750,4 +750,60 @@ describe('semantic knowledge capture', () => {
       );
     }
   });
+
+  it('gates delivery-lifecycle remaining work at capture input and keeps implementation work', async (t) => {
+    const value = await fixture(t);
+
+    for (const [index, remainingWork] of [
+      'Waiting on CI to pass.',
+      'Awaiting PR review from the platform team.',
+      'Blocked on code review.',
+      'Still waiting on CI.',
+      'The PR needs review before merge.',
+      'Waiting for the reviewer to approve.',
+      'CI is pending; week-long Codex/Claude fill-rate parity remains a post-ship longitudinal measurement.',
+      'Draft PR testing section still needs final ship-suite results before final-update; week-long parity remains a post-ship measurement.',
+      'Awaiting PR review.',
+      'Waiting for approval.',
+      'Pending readiness.',
+      'Needs merge.',
+      'Needs review.',
+      'Pending merge.',
+      'Blocked on CI checks.',
+      'Requires closure.',
+      'Awaiting PR review, CI, and closure.',
+    ].entries()) {
+      await assert.rejects(
+        captureCanonicalKnowledge({
+          projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+          inputPath: inputPath(value, `lifecycle-probe-${index}.json`, workInput({ remainingWork })),
+          sourceRunId: `run-lifecycle-probe-${index}`,
+        }),
+        (error) => {
+          assert.equal(error.code, 'CAPTURE_INPUT_INVALID', remainingWork);
+          assert.match(error.message, /remainingWork/);
+          return true;
+        },
+        remainingWork,
+      );
+    }
+
+    for (const [index, remainingWork] of [
+      'Needs checks.',
+      'Needs close.',
+      'Needs a follow-up refactor of the merge helper.',
+      'Needs merge conflict handling in the rebase path.',
+      'None.',
+      'unknown — imported record',
+      'The rebase path still needs a regression test for merge conflicts.',
+    ].entries()) {
+      const captured = await captureCanonicalKnowledge({
+        projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+        inputPath: inputPath(value, `lifecycle-accept-${index}.json`, workInput({ remainingWork })),
+        sourceRunId: `run-lifecycle-accept-${index}`,
+      });
+      assert.equal(captured.ok, true, remainingWork);
+      assert.equal(storedRecord(value, captured.workId).work.remainingWork, remainingWork);
+    }
+  });
 });

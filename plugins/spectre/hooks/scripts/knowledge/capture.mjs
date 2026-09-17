@@ -29,6 +29,48 @@ const WORK_INPUT_FIELDS = new Set([
 const PLACEHOLDER = /^(?:<[^>]+>|{{[^}]+}}|TODO|REPLACE[_ -]?ME)$/i;
 const UNKNOWN_STATE = { state: 'unknown' };
 
+// `remainingWork` states residual IMPLEMENTATION work. Review, CI, PR readiness, merge, and
+// closure are verification and pull-request facts, so a record that reports them as remaining
+// work makes delivered work read as unfinished implementation.
+//
+// This is a natural-language heuristic, which is why it gates capture input here and not record
+// validation: prose can never make a stored record unreadable or unrepairable. It is tuned for
+// precision over recall — a missed lifecycle clause is a worse-worded record, while a false
+// rejection blocks a truthful one.
+const LIFECYCLE_CLAIM = '(?:review(?:er)?s?|approvals?|ci(?:\\s+checks?)?|readiness'
+  + '|ready\\s+for\\s+review|merges?|merging|closure|closing)';
+const LIFECYCLE_TRIGGER = '(?:awaiting|awaits?|waiting\\s+(?:on|for)|pending|needs?|requires?|blocked\\s+on)';
+const LIFECYCLE_STATE = '(?:pending|outstanding|open|unresolved|awaited|blocked|in\\s+review)';
+// Up to three words may sit between the trigger and the claim, so "Blocked on code review" and
+// "Awaiting PR review" both match while "Needs a follow-up refactor of the merge helper" does not.
+const LIFECYCLE_FILLER = '(?:[\\w\\u2019\'/-]+\\s+){0,3}?';
+// The claim must end its clause. "Needs merge." is a lifecycle claim; "Needs merge conflict
+// handling in the rebase path." continues into implementation work and is truthful.
+const LIFECYCLE_CLAUSE_END = '(?=\\s*[.,;:!?)\\]]|\\s*$|\\s+(?:to|before|after|from|by|of|on|in|is'
+  + '|are|was|were|and|or|then|plus|so|because|which|that|but|until|prior|per|still|remains?)\\b)';
+const DELIVERY_LIFECYCLE_REMAINING_WORK = [
+  // "Waiting on CI to pass." / "Blocked on code review." / "The PR needs review before merge."
+  new RegExp(`\\b${LIFECYCLE_TRIGGER}\\s+${LIFECYCLE_FILLER}${LIFECYCLE_CLAIM}\\b${LIFECYCLE_CLAUSE_END}`, 'i'),
+  // The inverted form: "CI is pending; ..."
+  new RegExp(`\\b${LIFECYCLE_CLAIM}\\s+(?:is|are|was|were|remains?|stays?)\\s+(?:still\\s+)?${LIFECYCLE_STATE}\\b${LIFECYCLE_CLAUSE_END}`, 'i'),
+  // A pull request as the subject of the outstanding work: "Draft PR ... still needs ...". The
+  // gap may not cross a connector or a comma, so "... squash-merged as PR #1085 and needs a
+  // rebase ..." stays truthful branch work rather than a pull-request claim.
+  new RegExp('\\b(?:draft\\s+)?(?:prs?|pull\\s+requests?)\\b'
+    + '(?:(?!\\b(?:and|or|but|then|so)\\b)[^.;!?,]){0,40}?'
+    + '\\b(?:still\\s+)?(?:needs?|requires?|awaits?|is\\s+(?:still\\s+)?(?:waiting|pending|blocked))\\b', 'i'),
+];
+
+function assertImplementationRemainingWork(remainingWork) {
+  const value = remainingWork.trim();
+  if (!DELIVERY_LIFECYCLE_REMAINING_WORK.some((pattern) => pattern.test(value))) return;
+  throw codedError(
+    'CAPTURE_INPUT_INVALID',
+    'Capture input remainingWork must state implementation work; review, CI, readiness, merge,'
+    + ' and closure are verification and pull-request facts.',
+  );
+}
+
 function codedError(code, message, details = {}) {
   const error = new Error(message);
   error.code = code;
@@ -73,6 +115,7 @@ function assertAllowedInput(input, kind, { tagsRequired }) {
     }
   }
   assertNoPlaceholder(input);
+  if (kind === 'work') assertImplementationRemainingWork(input.remainingWork);
   validateTagIntent(input.tags, { required: tagsRequired });
 }
 

@@ -488,7 +488,7 @@ describe('rendered typed records', () => {
     assert.deepEqual(parseKnowledgeRecord(writeRecordPackage(tmp, accepted)).record, accepted);
   });
 
-  it('rejects delivery lifecycle reported as remaining implementation work on any state', async (t) => {
+  it('reads delivery-lifecycle prose instead of making a stored record unreadable', async (t) => {
     const tmp = makeTmp(t);
     const { parseKnowledgeRecord } = await loadRecordModule();
     const blockedWork = {
@@ -498,20 +498,24 @@ describe('rendered typed records', () => {
       pullRequest: { state: 'draft-open', identity: 'octo/repo#22' },
     };
 
+    // The lifecycle-prose rule is a natural-language heuristic and gates writes only. If it
+    // ever ran here, a widened rule, a restore, or a hand edit could make a stored record
+    // permanently unreadable and unrepairable through either CLI.
     for (const remainingWork of [
       'Awaiting PR review.',
       'Waiting for approval.',
       'Pending readiness.',
       'Needs merge.',
       'Awaiting PR review, CI, and closure.',
+      'Waiting on CI to pass.',
+      'Blocked on code review.',
+      'CI is pending; week-long parity remains a post-ship longitudinal measurement.',
+      'Draft PR testing section still needs final ship-suite results before final-update.',
     ]) {
-      assert.throws(
-        () => parseKnowledgeRecord(writeRecordPackage(tmp, workRecord({
-          work: { ...blockedWork, remainingWork },
-        }))),
-        /remainingWork/,
-        remainingWork,
-      );
+      const parsed = parseKnowledgeRecord(writeRecordPackage(tmp, workRecord({
+        work: { ...blockedWork, remainingWork },
+      })));
+      assert.equal(parsed.record.work.remainingWork, remainingWork, remainingWork);
     }
   });
 
