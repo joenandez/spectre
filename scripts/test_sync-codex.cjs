@@ -2468,6 +2468,7 @@ test('review gates pin route-specific opposing models and retain native fallback
         assert.match(skill, /returns.*verbatim report body.*exact unified patch\/no-op/i);
         assert.match(skill, /orchestrator.*persists.*verbatim.*mechanically applies/i);
         assert.match(skill, /--allowedTools "Read,Grep,Glob,LS"/);
+        assert.match(skill, /--allowedTools "Read,Grep,Glob,LS" --output-format text "\$REVIEW_PROMPT"/);
         assert.match(skill, /external attempt.*launch route\/status.*failure class.*fallback-used/i);
         assert.match(skill, /HASHES.*only injected pre-edit hashes/i);
         assert.match(skill, /persists report verbatim before applying (?:the|its) patch/i);

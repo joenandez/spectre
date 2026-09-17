@@ -1,6 +1,6 @@
 ---
 name: "spectre-plan_review"
-description: "Correct/simplify post-create_plan; no tasks/code/Scope/speculation."
+description: "Correct/simplify post-create; no tasks/code/Scope/speculation."
 user-invocable: true
 ---
 
@@ -49,7 +49,7 @@ PATCH_BEGIN
 PATCH_END`
 Envelope `HASHES` contains only injected pre-edit hashes. Orchestrator verifies pre-hashes/bounds; persists report verbatim before applying its patch; records external-attempt; mechanically applies only patch; computes/records post-write hashes/bounds, verifies them; never invents findings/semantic edits. Only two canonical reports and selected plan may change; patch targets only selected plan; execution state/all other artifacts immutable. `--auto-apply scope-safe`: Blocker/High + unambiguous Medium; else ask `all|blockers|IDs|skip`, continue same route; record `addressed|skipped|unresolved|scope-change`. Stop unresolved correctness Blocker/High, scope change, unavailable writeback, or failed schema/hash/scope/bounds.
 
-5. **Route.** Run each stage fresh at high effort (20-minute limit): Codex → Claude Code `opus`: `claude -p --model opus --effort high --permission-mode dontAsk --allowedTools "Read,Grep,Glob,LS" "$REVIEW_PROMPT"`; Claude Code → Codex `gpt-5.6-sol`: `codex exec -C "$PWD" -m gpt-5.6-sol -c 'model_reasoning_effort="high"' -s read-only "$REVIEW_PROMPT"`. Record each external attempt: launch route/status, failure class/fallback-used. Quiet output is not failure. Only missing, non-zero, absent/malformed envelope, hash mismatch, or out-of-bounds permits fallback: record failure before one clean-context native `@spectre:reviewer` with same template/context; it returns verbatim report body + exact unified patch/no-op, never writes. A usable review is terminal; fallback once.
+5. **Route.** Run each stage fresh at high effort (20-minute limit): Codex → Claude Code `opus`: `claude -p --model opus --effort high --permission-mode dontAsk --allowedTools "Read,Grep,Glob,LS" --output-format text "$REVIEW_PROMPT"`; Claude Code → Codex `gpt-5.6-sol`: `codex exec -C "$PWD" -m gpt-5.6-sol -c 'model_reasoning_effort="high"' -s read-only "$REVIEW_PROMPT"`. Record each external attempt: launch route/status, failure class/fallback-used. Quiet output is not failure. Only missing, non-zero, absent/malformed envelope, hash mismatch, or out-of-bounds permits fallback: record failure before one clean-context native `@spectre:reviewer` with same template/context; it returns verbatim report body + exact unified patch/no-op, never writes. A usable review is terminal; fallback once.
 
 ## Handoff
 
@@ -63,4 +63,4 @@ Return outcome/reports/attempt/Scope/plan (≤1K). `--orchestrated`: return; sta
 
 ## Escalate-If
 
-Escalate: missing plan/claim, scope change, correctness Blocker/High, unavailable writeback/bounds failure.
+Escalate: missing plan/claim, scope change, correctness Blocker/High, unavailable writeback/bounds.

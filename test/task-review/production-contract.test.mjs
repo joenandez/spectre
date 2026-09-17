@@ -170,6 +170,7 @@ test("Plan Review persists auditable, read-only, pre-hash-bound writeback", () =
   );
 
   assert.match(planReview, /--allowedTools "Read,Grep,Glob,LS"/);
+  assert.match(planReview, /--allowedTools "Read,Grep,Glob,LS" --output-format text "\$REVIEW_PROMPT"/);
   assert.match(planReview, /external attempt.*launch route\/status.*failure class.*fallback-used/i);
   assert.match(planReview, /HASHES.*only injected pre-edit hashes/i);
   assert.match(planReview, /persists report verbatim before applying (?:the|its) patch/i);
