@@ -51,13 +51,29 @@ const WORK_SECTION_FIELDS = [
   'remainingWork',
   'relatedContext',
 ];
+const FINALIZED_EXECUTION_STATE = 'finalized';
+// Finality lives on the execution dimension only. Verification and pull-request states stay
+// separate facts so a delivered PR never implies completion and completion never implies a PR.
 const EXECUTION_STATES = new Set([
   'unknown',
   'in-progress',
   'implementation-ready',
   'acceptance-pending',
   'blocked',
+  FINALIZED_EXECUTION_STATE,
 ]);
+const NO_REMAINING_WORK = 'None.';
+const DELIVERY_LIFECYCLE_CLAIM = '(?:pr\\s+|pull\\s+request\\s+|draft\\s+pr\\s+)?'
+  + '(?:review|approval|ci(?:\\s+checks?)?|checks?|readiness|ready\\s+for\\s+review|merge|merging|closure|closing|close)';
+const DELIVERY_LIFECYCLE_CONNECTOR = '(?:\\s*,\\s*(?:(?:and|or|then|plus)\\s+)?|\\s+(?:and|or|then|before|plus)\\s+)';
+// Review, CI, PR readiness, merge, and closure are verification and pull-request facts. A record
+// that reports them as remaining work makes delivered work read as unfinished implementation.
+const DELIVERY_LIFECYCLE_REMAINING_WORK = new RegExp(
+  '^(?:awaiting|waiting\\s+(?:on|for)|pending|needs?|blocked\\s+on|requires?)\\s+(?:the\\s+)?'
+  + DELIVERY_LIFECYCLE_CLAIM
+  + `(?:${DELIVERY_LIFECYCLE_CONNECTOR}(?:the\\s+)?${DELIVERY_LIFECYCLE_CLAIM})*\\s*\\.?$`,
+  'i',
+);
 const VERIFICATION_STATES = new Set(['unknown', 'not-run', 'checked', 'passed', 'failed']);
 const PULL_REQUEST_STATES = new Set(['unknown', 'none', 'draft-open', 'closed', 'merged']);
 const AGENT_SKILLS_FIELDS = new Set([
@@ -349,6 +365,27 @@ function validateImportedSource(record, recordPath) {
   }
 }
 
+/**
+ * Finality is an execution-dimension fact. A finalized record states no residual implementation
+ * work, and no record may report delivery lifecycle as remaining implementation work.
+ */
+function validateRemainingWork(work, recordPath) {
+  const remainingWork = work.remainingWork.trim();
+  if (work.execution.state === FINALIZED_EXECUTION_STATE && remainingWork !== NO_REMAINING_WORK) {
+    throw recordError(
+      recordPath,
+      `finalized work.remainingWork must be exactly ${JSON.stringify(NO_REMAINING_WORK)}`,
+    );
+  }
+  if (DELIVERY_LIFECYCLE_REMAINING_WORK.test(remainingWork)) {
+    throw recordError(
+      recordPath,
+      'work.remainingWork must state implementation work; review, CI, readiness, merge, and closure'
+      + ' are verification and pull-request facts',
+    );
+  }
+}
+
 function validateWorkFields(record, recordPath) {
   const work = record.work;
   const allowed = new Set([
@@ -367,6 +404,7 @@ function validateWorkFields(record, recordPath) {
     }
   }
   validateState(work.execution, EXECUTION_STATES, 'work.execution', recordPath);
+  validateRemainingWork(work, recordPath);
   validateState(work.verificationState, VERIFICATION_STATES, 'work.verificationState', recordPath, ['evidenceRef']);
   validateState(work.pullRequest, PULL_REQUEST_STATES, 'work.pullRequest', recordPath, ['identity', 'url']);
   if (!isPlainObject(work.associations)

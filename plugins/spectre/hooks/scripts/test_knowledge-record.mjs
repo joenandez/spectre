@@ -287,6 +287,76 @@ describe('typed knowledge record packages', () => {
       canonicalRecordDigest({ ...record, summary: 'Changed summary.' }),
     );
   });
+  it('accepts an explicit finalized execution state without coupling it to the PR dimension', async (t) => {
+    const tmp = makeTmp(t);
+    const { parseKnowledgeRecord } = await loadRecordModule();
+    const finalizedWithoutPr = workRecord({
+      id: 'work-finalized-no-pr',
+      applicability: { scope: 'work', workId: 'work-finalized-no-pr' },
+      work: {
+        ...workRecord().work,
+        remainingWork: 'None.',
+        execution: { state: 'finalized' },
+        verificationState: { state: 'passed', evidenceRef: 'proof/proof.json' },
+        pullRequest: { state: 'none' },
+      },
+    });
+    const finalizedInAMergedPr = workRecord({
+      id: 'work-finalized-merged-pr',
+      applicability: { scope: 'work', workId: 'work-finalized-merged-pr' },
+      work: {
+        ...finalizedWithoutPr.work,
+        pullRequest: { state: 'merged', identity: 'octo/repo#12' },
+      },
+    });
+    const unfinalizedInAnOpenPr = workRecord({
+      id: 'work-open-pr-not-final',
+      applicability: { scope: 'work', workId: 'work-open-pr-not-final' },
+      work: {
+        ...workRecord().work,
+        execution: { state: 'blocked' },
+        verificationState: { state: 'failed' },
+        pullRequest: { state: 'draft-open', identity: 'octo/repo#13' },
+      },
+    });
+
+    for (const record of [finalizedWithoutPr, finalizedInAMergedPr, unfinalizedInAnOpenPr]) {
+      assert.deepEqual(parseKnowledgeRecord(writeRecordPackage(tmp, record)).record, record);
+    }
+  });
+
+  it('leaves a record without explicit finality unknown instead of promoting it to finalized', async (t) => {
+    const tmp = makeTmp(t);
+    const { parseKnowledgeRecord } = await loadRecordModule();
+    const legacyShape = workRecord({
+      id: 'work-legacy-unknown-finality',
+      applicability: { scope: 'work', workId: 'work-legacy-unknown-finality' },
+      work: {
+        ...workRecord().work,
+        execution: { state: 'unknown' },
+        verificationState: { state: 'passed', evidenceRef: 'proof/proof.json' },
+        pullRequest: { state: 'merged', identity: 'octo/repo#9' },
+      },
+    });
+
+    const parsed = parseKnowledgeRecord(writeRecordPackage(tmp, legacyShape));
+
+    assert.equal(parsed.record.work.execution.state, 'unknown');
+    assert.notEqual(parsed.record.work.execution.state, 'finalized');
+  });
+
+  it('rejects an execution state outside the closed lifecycle set', async (t) => {
+    const tmp = makeTmp(t);
+    const { parseKnowledgeRecord } = await loadRecordModule();
+    const record = workRecord({
+      work: { ...workRecord().work, execution: { state: 'final' } },
+    });
+
+    assert.throws(
+      () => parseKnowledgeRecord(writeRecordPackage(tmp, record)),
+      /work.execution.state/,
+    );
+  });
 });
 
 describe('rendered typed records', () => {
@@ -380,6 +450,96 @@ describe('rendered typed records', () => {
       () => parseKnowledgeRecord(writeRecordPackage(tmp, record)),
       /pullRequest/,
     );
+  });
+
+  it('requires canonical None. remaining work once a record is finalized', async (t) => {
+    const tmp = makeTmp(t);
+    const { parseKnowledgeRecord } = await loadRecordModule();
+    const finalizedWork = {
+      ...workRecord().work,
+      execution: { state: 'finalized' },
+      verificationState: { state: 'passed', evidenceRef: 'proof/proof.json' },
+      pullRequest: { state: 'draft-open', identity: 'octo/repo#21' },
+    };
+
+    for (const remainingWork of [
+      'Awaiting PR review and CI before merge.',
+      'Waiting on CI.',
+      'Pending merge.',
+      'Needs review.',
+      'Blocked on CI checks.',
+      'Requires closure.',
+      'unknown — imported record',
+    ]) {
+      assert.throws(
+        () => parseKnowledgeRecord(writeRecordPackage(tmp, workRecord({
+          work: { ...finalizedWork, remainingWork },
+        }))),
+        /remainingWork/,
+        remainingWork,
+      );
+    }
+
+    const accepted = workRecord({
+      id: 'work-finalized-after-review',
+      applicability: { scope: 'work', workId: 'work-finalized-after-review' },
+      work: { ...finalizedWork, remainingWork: 'None.' },
+    });
+    assert.deepEqual(parseKnowledgeRecord(writeRecordPackage(tmp, accepted)).record, accepted);
+  });
+
+  it('rejects delivery lifecycle reported as remaining implementation work on any state', async (t) => {
+    const tmp = makeTmp(t);
+    const { parseKnowledgeRecord } = await loadRecordModule();
+    const blockedWork = {
+      ...workRecord().work,
+      execution: { state: 'blocked' },
+      verificationState: { state: 'failed' },
+      pullRequest: { state: 'draft-open', identity: 'octo/repo#22' },
+    };
+
+    for (const remainingWork of [
+      'Awaiting PR review.',
+      'Waiting for approval.',
+      'Pending readiness.',
+      'Needs merge.',
+      'Awaiting PR review, CI, and closure.',
+    ]) {
+      assert.throws(
+        () => parseKnowledgeRecord(writeRecordPackage(tmp, workRecord({
+          work: { ...blockedWork, remainingWork },
+        }))),
+        /remainingWork/,
+        remainingWork,
+      );
+    }
+  });
+
+  it('keeps a blocked record non-final with its truthful scoped residual work', async (t) => {
+    const tmp = makeTmp(t);
+    const { parseKnowledgeRecord } = await loadRecordModule();
+
+    for (const [id, remainingWork] of [
+      ['work-blocked-residual', 'The rebase path still needs a regression test for merge conflicts.'],
+      ['work-failed-residual', 'Needs a follow-up refactor of the merge helper before the retry lands.'],
+      ['work-interrupted-residual', 'unknown — imported record'],
+    ]) {
+      const record = workRecord({
+        id,
+        applicability: { scope: 'work', workId: id },
+        work: {
+          ...workRecord().work,
+          remainingWork,
+          execution: { state: 'blocked' },
+          verificationState: { state: 'failed' },
+          pullRequest: { state: 'draft-open', identity: 'octo/repo#23' },
+        },
+      });
+
+      const parsed = parseKnowledgeRecord(writeRecordPackage(tmp, record)).record;
+      assert.equal(parsed.work.execution.state, 'blocked');
+      assert.equal(parsed.work.remainingWork, remainingWork);
+    }
   });
 
   it('requires every work template section to state an explicit unknown rather than be empty', async (t) => {

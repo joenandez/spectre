@@ -89,6 +89,10 @@ function output(result) {
   return JSON.parse(result.stdout);
 }
 
+function storedRecord(value, workId) {
+  return JSON.parse(fs.readFileSync(path.join(value.storePath, 'knowledge', workId, 'record.json'), 'utf8'));
+}
+
 function knowledgeInput(overrides = {}) {
   return {
     inputVersion: 1,
@@ -663,5 +667,87 @@ describe('semantic knowledge capture', () => {
         return true;
       },
     );
+  });
+
+  it('captures a terminal Execute boundary as finalized and leaves an unstated finality unknown', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const terminal = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `terminal-${kind}.json`, workInput({
+          remainingWork: 'None.',
+          execution: { state: 'finalized' },
+          verificationState: { state: 'passed', evidenceRef: 'proof/proof.json' },
+          pullRequest: { state: 'none' },
+        })), '--source-run-id', `run-terminal-${kind}`, '--branch', 'feature/terminal-finality',
+      ], value);
+      assert.equal(terminal.status, 0, terminal.stderr);
+      const finalized = storedRecord(value, output(terminal).workId);
+      assert.equal(finalized.work.execution.state, 'finalized');
+      assert.equal(finalized.work.pullRequest.state, 'none');
+      assert.equal(finalized.work.remainingWork, 'None.');
+
+      const unstated = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `unstated-${kind}.json`, workInput({
+          verificationState: { state: 'passed', evidenceRef: 'proof/proof.json' },
+        })), '--source-run-id', `run-unstated-${kind}`, '--branch', 'feature/terminal-finality',
+      ], value);
+      assert.equal(unstated.status, 0, unstated.stderr);
+      const historical = storedRecord(value, output(unstated).workId);
+      assert.equal(historical.work.verificationState.state, 'passed');
+      assert.equal(historical.work.execution.state, 'unknown');
+      assert.equal(historical.work.pullRequest.state, 'unknown');
+    }
+  });
+
+  it('refuses delivery lifecycle as remaining work at terminal Execute and Ship refresh captures', async (t) => {
+    for (const kind of ['bundled', 'npm']) {
+      const value = await fixture(t);
+      const terminal = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `lifecycle-terminal-${kind}.json`, workInput({
+          remainingWork: 'Awaiting PR review, CI, and merge.',
+          execution: { state: 'finalized' },
+        })), '--source-run-id', `run-lifecycle-terminal-${kind}`, '--branch', 'feature/lifecycle-remaining-work',
+      ], value);
+      assert.equal(terminal.status, 1);
+      assert.equal(output(terminal).code, 'CAPTURE_INPUT_INVALID');
+
+      const blocked = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `lifecycle-blocked-${kind}.json`, workInput({
+          remainingWork: 'Waiting on CI.',
+          execution: { state: 'blocked' },
+        })), '--source-run-id', `run-lifecycle-blocked-${kind}`, '--branch', 'feature/lifecycle-remaining-work',
+      ], value);
+      assert.equal(blocked.status, 1);
+      assert.equal(output(blocked).code, 'CAPTURE_INPUT_INVALID');
+
+      const shipRefresh = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `lifecycle-ship-${kind}.json`, workInput({
+          remainingWork: 'None.',
+          execution: { state: 'finalized' },
+          verificationState: { state: 'passed', evidenceRef: 'proof/proof.json' },
+          pullRequest: { state: 'draft-open', identity: 'github:example/spectre#7' },
+        })), '--source-run-id', `run-lifecycle-ship-${kind}`, '--pull-request-id', 'github:example/spectre#7', '--branch', 'feature/lifecycle-remaining-work',
+      ], value);
+      assert.equal(shipRefresh.status, 0, shipRefresh.stderr);
+      const shipped = storedRecord(value, output(shipRefresh).workId);
+      assert.equal(shipped.work.execution.state, 'finalized');
+      assert.equal(shipped.work.pullRequest.state, 'draft-open');
+      assert.equal(shipped.work.remainingWork, 'None.');
+
+      const residual = run(kind, [
+        'capture', '--kind', 'work', '--input', inputPath(value, `lifecycle-residual-${kind}.json`, workInput({
+          remainingWork: 'The rebase path still needs a regression test for merge conflicts.',
+          execution: { state: 'blocked' },
+          verificationState: { state: 'failed' },
+        })), '--source-run-id', `run-lifecycle-residual-${kind}`, '--branch', 'feature/lifecycle-remaining-work',
+      ], value);
+      assert.equal(residual.status, 0, residual.stderr);
+      const kept = storedRecord(value, output(residual).workId);
+      assert.equal(kept.work.execution.state, 'blocked');
+      assert.equal(
+        kept.work.remainingWork,
+        'The rebase path still needs a regression test for merge conflicts.',
+      );
+    }
   });
 });
