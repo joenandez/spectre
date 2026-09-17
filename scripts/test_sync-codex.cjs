@@ -656,7 +656,7 @@ test('execute resolves explicit plans through one authorized preparation path', 
     assert.match(execute, /No path:[^\n]*same-run source evidence first/i);
     assert.doesNotMatch(execute, /default `docs\/tasks\/\{branch\}/i);
     assert.match(execute, /explicit supplied plan wins over ambient task artifacts/i);
-    assert.match(execute, /For any selected readable plan \(explicit or no-path-resolved\)/i);
+    assert.match(execute, /For selected readable plans, resolve root, plan, Scope, depth\/state/i);
     assert.doesNotMatch(execute, /For any explicit readable plan, resolve root/i);
     assert.match(execute, /`--preflight-plan <depth>` remains a preparation-depth hint/i);
     assert.match(execute, /depth hint must not create authority pause/i);
@@ -792,8 +792,8 @@ test('execute preflight reuses observed assessment and proportionally creates ta
     assert.match(planDirect, /Before task generation or implementation dispatch[^\n]*finalized assessment\/review bindings[^\n]*coarse map[^\n]*includes plan-origin STRUCTURED/i);
     assert.match(planDirect, /For Markdown event sources[^\n]*with `--source "\$PLAN_SOURCE"`/i);
     assert.match(execute, /reuse applicable/i);
-    assert.match(execute, /reroute only if absent or material observations invalidate it/i);
-    assert.match(execute, /scope-safe byte-only review edits[\s\S]*mechanically rebind/i);
+    assert.match(execute, /reroute only if absent\/materially invalidated/i);
+    assert.match(execute, /scope-safe byte-only review edits[\s\S]*rebind/i);
     assert.match(execute, /topology\/uncertainty is unchanged/i);
     assert.doesNotMatch(execute, /Re-bind routing to finalized plan/i);
     assert.match(execute, /Missing assessment dispatches `Skill\(spectre-plan-route\)` to a fresh child agent/i);
@@ -806,8 +806,8 @@ test('execute preflight reuses observed assessment and proportionally creates ta
     assert.match(execute, /No automatic task review/i);
     assert.match(execute, /Scope\/explicit-design changes remain withheld/i);
     assert.match(planReview, /selected plan/i);
-    assert.match(planReview, /exact selected plan path/i);
-    assert.match(planReview, /authority sources/i);
+    assert.match(planReview, /exact selected-plan path/i);
+    assert.match(planReview, /root\/path; sources/i);
     assert.match(execute, /finalized plan path\/hash[\s\S]*closed review evidence[\s\S]*Skill\(spectre-create_tasks\)/i);
     assert.match(createTasks, /plans require closed-review evidence/i);
     assert.match(createTasks, /Execution Mode: direct/);
@@ -1798,7 +1798,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    'ba79d21be2b3086416219a82b8b0bc6f82ba5d2366d272f04bfc5d418ed14d99',
+    'c819a1fee61b4b4ee3527379726f434d17301859e4cdbd1b59a60d54970d2187',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
@@ -2462,20 +2462,17 @@ test('review gates pin route-specific opposing models and retain native fallback
         assert.match(skill, /Claude Code (?:→|->) Codex `gpt-5\.6-sol`/);
         assert.match(skill, /claude -p --model opus --effort high/);
         assert.match(skill, /codex exec -C "\$PWD" -m gpt-5\.6-sol -c 'model_reasoning_effort="high"'/);
-        assert.match(skill, /missing, non-zero, absent\/malformed envelope, hash mismatch, or out-of-bounds/i);
-        assert.match(skill, /record.*failure.*before one.*native/i);
-        assert.match(skill, /native `@spectre(?::|_)reviewer`/);
-        assert.match(skill, /returns.*verbatim report body.*exact unified patch\/no-op/i);
-        assert.match(skill, /orchestrator.*persists.*verbatim.*mechanically applies/i);
-        assert.match(skill, /--allowedTools "Read,Grep,Glob,LS"/);
-        assert.match(skill, /--allowedTools "Read,Grep,Glob,LS" --output-format text "\$REVIEW_PROMPT"/);
+        assert.match(skill, /missing, non-zero, absent\/malformed completion receipt, hash mismatch, or out-of-bounds/i);
+        assert.match(skill, /record.*failure.*before one.*same-runtime CLI fallback/i);
+        assert.match(skill, /REVIEW_COMPLETE[\s\S]*REPORT_SHA256 sha256:<hex>[\s\S]*PLAN_SHA256 sha256:<hex>/);
+        assert.match(skill, /reviewer writes its report before selected-plan edits/i);
+        assert.match(skill, /validates completed route, report, hashes\/disposition\/bounds/i);
+        assert.match(skill, /--allowedTools "Read,Grep,Glob,LS,Write,Edit,Bash\(shasum -a 256 \*\)"/);
+        assert.match(skill, /--allowedTools "Read,Grep,Glob,LS,Write,Edit,Bash\(shasum -a 256 \*\)" --output-format text "\$REVIEW_PROMPT"/);
+        assert.match(skill, /-s workspace-write/);
         assert.match(skill, /external attempt.*launch route\/status.*failure class.*fallback-used/i);
-        assert.match(skill, /HASHES.*only injected pre-edit hashes/i);
-        assert.match(skill, /persists report verbatim before applying (?:the|its) patch/i);
-        assert.match(skill, /computes\/records post-write hashes\/bounds, verifies them/i);
-        assert.match(skill, /only two canonical reports and selected plan may change/i);
-        assert.match(skill, /patch targets only selected plan/i);
-        assert.match(skill, /execution state\/all other artifacts immutable/i);
+        assert.match(skill, /only reports and selected plan may change/i);
+        assert.match(skill, /all else immutable/i);
         assert.match(skill, /Quiet output is not failure/);
         assert.doesNotMatch(skill, /at least 20 minutes/);
       } else if (skillName === 'spectre-task_review') {
@@ -2545,31 +2542,31 @@ test('plan review bounds correctness and enforces subtraction-only simplificatio
     assert.ok(skill.indexOf('2. **Correctness.**') < skill.indexOf('3. **Simplification.**'));
     assert.match(skill, /plan_correctness\.md/);
     assert.match(skill, /evidence\/unknowns/i);
-    assert.match(skill, /retained constraints/i);
+    assert.match(skill, /evidence\/constraints\/tests/i);
     assert.match(skill, /at most one each `@spectre(?::|_)finder`.*`@spectre(?::|_)analyst`.*`@spectre(?::|_)patterns`/);
     assert.match(skill, /references\/correctness-review\.md/);
     assert.match(skill, /references\/simplification-review\.md/);
     assert.match(skill, /send it verbatim to a fresh reviewer/i);
     assert.match(skill, /plan, Scope, task-context, report paths\/hashes/i);
     assert.match(skill, /corrected plan, Scope, correctness-report, output-report paths\/hashes/i);
-    assert.match(skill, /2\. \*\*Correctness\.\*\*[\s\S]*inject exact envelope below into `REVIEW_PROMPT`/);
-    assert.match(skill, /3\. \*\*Simplification\.\*\*[\s\S]*inject exact envelope below into `REVIEW_PROMPT`/);
+    assert.match(skill, /2\. \*\*Correctness\.\*\*[\s\S]*inject direct-write receipt below into `REVIEW_PROMPT`/);
+    assert.match(skill, /3\. \*\*Simplification\.\*\*[\s\S]*inject direct-write receipt below into `REVIEW_PROMPT`/);
     assert.doesNotMatch(skill, /REVIEW MANIFEST|ADDITIONAL FOCUS|paraphrase|reorder|weaken|augment/i);
-    assert.match(skill, /Stop unresolved correctness Blocker\/High/);
+    assert.match(skill, /Stop on unresolved correctness Blocker\/High/);
     assert.match(correctness, /one representative happy path and primary failure per distinct required behavior/i);
     assert.match(correctness, /another requirement, public boundary, credible regression, or materially different present risk/);
     assert.match(correctness, /concrete risks created by the changed boundaries/i);
     assert.match(correctness, /required now by \| simpler local option \| why it fails now \| verification/i);
-    assert.match(correctness, /exact envelope/i);
-    assert.match(correctness, /only pre-edit hashes/i);
-    assert.doesNotMatch(correctness, /post(?:-plan)? hash/i);
+    assert.match(correctness, /direct-write receipt/i);
+    assert.match(correctness, /Write report first.*authorized selected-plan edits/i);
+    assert.match(correctness, /PLAN_SHA256/i);
     assert.match(simplification, /delete, collapse, reuse, or defer/i);
     assert.match(simplification, /High` for untraceable complexity or an invalid exception/i);
     assert.match(simplification, /minimum replacement detail needed by a larger net reduction/i);
     assert.match(simplification, /required now by \| simpler local option \| why it fails now \| removal failure/i);
-    assert.match(simplification, /exact envelope/i);
-    assert.match(simplification, /only pre-edit hashes/i);
-    assert.doesNotMatch(simplification, /post(?:-plan)? hash/i);
+    assert.match(simplification, /Emit receipt: post-write/i);
+    assert.match(simplification, /Write report first.*authorized selected-plan edits/i);
+    assert.match(simplification, /PLAN_SHA256/i);
     assert.match(skill, /plan smaller or no safe reduction/i);
     assert.match(skill, /Reports are deltas; never restate plan/i);
     assert.match(skill, /direct-mode Verification is executable/i);
@@ -2677,8 +2674,7 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
     assert.doesNotMatch(createPlan, /\bchallenger\b/i);
     assert.doesNotMatch(createPlan, /Future flexibility.*optional diagnostics.*hypothetical scale/i);
 
-    assert.match(planReview, /selected minimum-solution record/i);
-    assert.match(planReview, /Plan-origin selection/i);
+    assert.match(planReview, /Pass selection; Plan-origin retains behavior\/research/i);
     assert.match(simplification, /Minimum Solution Selection[\s\S]*first trace/i);
     assert.match(simplification, /undeclared owned complexity.*High/i);
     assert.match(simplification, /minimum-solution reselection/i);
@@ -2752,14 +2748,14 @@ test('planning artifact ownership confines reviewer-authored scope-safe writebac
     assert.match(createTasks, /primary directly writes only the selected canonical artifacts/i);
     assert.match(createTasks, /research agents (?:return|supply) evidence only/i);
 
-    assert.match(planReview, /orchestrator.*persists.*verbatim.*mechanically applies/i);
+    assert.match(planReview, /reviewer writes its report before selected-plan edits/i);
     assert.match(planReview, /correctness.*closes before.*simplification/i);
-    assert.match(planCorrectnessTemplate, /exact envelope/i);
-    assert.match(planSimplificationTemplate, /exact envelope/i);
-    assert.match(planCorrectnessTemplate, /dispositions\/resulting edits/i);
+    assert.match(planCorrectnessTemplate, /direct-write receipt/i);
+    assert.match(planSimplificationTemplate, /Emit receipt: post-write/i);
+    assert.match(planCorrectnessTemplate, /findings\/dispositions\/edits/i);
     assert.doesNotMatch(planReview, /primary directly edits `plan\.md`/i);
-    assert.match(planReview, /HASHES <name>=sha256:<hex>[\s\S]*pre-hashes\/bounds/i);
-    assert.match(planReview, /never invents findings.*semantic edits/i);
+    assert.match(planReview, /REPORT_SHA256 sha256:<hex>[\s\S]*PLAN_SHA256 sha256:<hex>/i);
+    assert.match(planReview, /primary never writes reviewer findings or plan edits/i);
     assert.match(planReview, /A usable review is terminal/i);
     assert.doesNotMatch(planReview, /allowedTools "[^"]*Task/);
 

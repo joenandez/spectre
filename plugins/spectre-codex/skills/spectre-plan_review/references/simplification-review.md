@@ -18,6 +18,6 @@ Finding schema:
 
 `# | Severity | Action | Location | Finding | Why Safe | Suggested Edit`
 
-Include hashes, delete/reuse/defer, exceptions/tests, findings/dispositions, Before → After. Use the injected exact envelope with only pre-edit hashes. Don't write.
+Write report first; authorized selected-plan edits only. Report hashes, delete/reuse/defer, exceptions/tests, findings/dispositions, Before → After. Emit receipt: post-write `REPORT_SHA256`/`PLAN_SHA256`.
 
 DONE when the plan is smaller in mechanisms, surfaces, process, or tests—or every retained complexity boundary proves no safe reduction—while behavior, constraints, hashes, and write bounds survive.

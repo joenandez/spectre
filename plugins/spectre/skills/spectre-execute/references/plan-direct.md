@@ -16,7 +16,7 @@ Place `Feature: <feature-name>` and `Feature Root: .spectre/features/<feature-na
 2. **Runtime Status** — `pending|running|repairing|needs-authority|done`; current/last wave; timestamps; HEAD; finalization owner; source coverage. Cumulative diff is only `baseline..HEAD`.
 3. **Workstream Map** — one coarse row per plan-native phase/workstream/item: stable id, source anchor, local status, dependencies/shared contracts/change surfaces, readiness reason.
 4. **Active Wave** — only currently dispatchable bounded assignments, owners, source anchors, outputs/consumers/replacements, verification signals.
-5. **Verification Ledger** — completions/checks; assessment; Plan Review state (`not-required:<XS|S>|closed`) paths/hashes; `closed`: external-attempt/recorded-failure+fallback provenance; finalized plan hash/pair hashes; route/repairs/failures/E2E. No raw output or report prose.
+5. **Verification Ledger** — completions/checks; assessment; Plan Review state (`not-required:<XS|S>|closed`) report paths/hashes; `closed`: external-attempt/recorded-failure+fallback provenance, completed routes, finalized plan hash/disposition, protected files unchanged; finalized pair hashes; repairs/failures/E2E. No raw output or report prose.
 6. **Plan-Backed Adaptations** — discovered gap, source-plan relationship, disposition, affected workstream.
 7. **Final Quality State** — intermediate/final review reports and verdicts, final verification/requirement-delivery coverage, proof runs/result, unresolved findings.
 
