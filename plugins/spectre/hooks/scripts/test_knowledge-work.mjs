@@ -609,12 +609,60 @@ describe('stable work identity', () => {
       candidate,
     }));
     assert.equal(associated.workId, created.workId);
-    const repeated = await resolveOrAllocateWorkIdentity(options(workspace, { candidate }));
-    assert.equal(repeated.workId, created.workId);
-    assert.equal(repeated.status, 'noop', 'an unchanged direct PR candidate must not fork work');
+    await assert.rejects(
+      () => resolveOrAllocateWorkIdentity(options(workspace, { candidate })),
+      (error) => error.code === 'WORK_IDENTITY_REQUIRED'
+        && error.workIds.includes(created.workId),
+      'a delivery-only candidate must neither fork work nor take over the record it matches',
+    );
     assert.deepEqual(
       await resolveWorkIdentity(options(workspace, { candidate })),
       { status: 'resolved', workId: created.workId },
+    );
+  });
+
+  it('refuses to hand one matched delivery key the identity of another run', async (t) => {
+    const workspace = makeWorkspace(t);
+    const pullRequestId = 'github:example/spectre#7';
+    const first = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-delivery-owner', pullRequestId,
+    }));
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(first.workId, {
+        sourceRunIds: ['run-delivery-owner'], pullRequestIds: [pullRequestId], candidates: [],
+      })),
+    });
+    const associationPath = work.workAssociationPath(first.storePath);
+    const before = fs.readFileSync(associationPath);
+
+    await assert.rejects(
+      () => resolveOrAllocateWorkIdentity(options(workspace, { pullRequestId })),
+      (error) => error.code === 'WORK_IDENTITY_REQUIRED' && error.workIds.includes(first.workId),
+      'a later run must never inherit the record a shared PR already names',
+    );
+    assert.deepEqual(fs.readFileSync(associationPath), before, 'the rejected write leaves no association');
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { pullRequestId })),
+      { status: 'resolved', workId: first.workId },
+      'read-only resolution still reports the single match',
+    );
+
+    const laterRun = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-delivery-later', pullRequestId,
+    }));
+    assert.notEqual(laterRun.workId, first.workId, 'the later run owns its own identity');
+  });
+
+  it('still allocates for a delivery key that matches no record', async (t) => {
+    const workspace = makeWorkspace(t);
+    const allocated = await resolveOrAllocateWorkIdentity(options(workspace, {
+      pullRequestId: 'github:example/spectre#404',
+    }));
+    assert.equal(allocated.status, 'created');
+    assert.match(allocated.workId, /^work-/);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { pullRequestId: 'github:example/spectre#404' })),
+      { status: 'resolved', workId: allocated.workId },
     );
   });
 

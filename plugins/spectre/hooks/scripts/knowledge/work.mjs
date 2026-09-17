@@ -400,6 +400,17 @@ export async function resolveOrAllocateWorkIdentity(options) {
         { workIds: identity.matchedWorkIds },
       );
     }
+    // A PR or candidate is delivery evidence for many runs, so one match is never permission to
+    // write this run's account over that record. Only an explicit id or exact run may claim it.
+    const deliveryOnly = identity.associations.length > 0
+      && !identity.associations.some(([type]) => IDENTITY_ASSOCIATION_TYPES.includes(type));
+    if (deliveryOnly && identity.suppliedWorkId === undefined && identity.matchedWorkIds.length > 0) {
+      throw codedError(
+        'WORK_IDENTITY_REQUIRED',
+        `That PR or candidate already names ${identity.matchedWorkIds.join(', ')}; supply --work-id to update it or --source-run-id to record this run.`,
+        { workIds: identity.matchedWorkIds },
+      );
+    }
     const workId = identity.workId || `work-${crypto.randomUUID()}`;
     let changed = false;
     for (const [type, key] of identity.associations) {
