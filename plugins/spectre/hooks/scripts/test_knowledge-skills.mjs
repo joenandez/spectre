@@ -60,7 +60,8 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(workRecord, /recordPath/);
   assert.match(workRecord, /recoveryInput[\s\S]*manual|manual[\s\S]*recoveryInput/i);
   assert.match(workRecord, /2,000[\s\S]*non-blocking/i);
-  assert.match(workRecord, /gh pr view[\s\S]*--branch-pr-state[\s\S]*merged[\s\S]*closed/i);
+  assert.match(workRecord, /gh pr view[\s\S]*capture input under `pullRequest`/i);
+  assert.doesNotMatch(workRecord, /--branch-pr-state/);
   assert.match(workRecord, /git rev-parse --abbrev-ref HEAD[\s\S]*(?:skip|recovery)/i);
   assert.match(workRecord, /unavailable[\s\S]*(?:skip|recovery)[\s\S]*does not block/i);
   assert.match(workRecord, /spectre-capture\/references\/tagging-policy\.md/);
