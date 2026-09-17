@@ -26,7 +26,7 @@ function options(workspace, associations = {}) {
   return { projectDir: workspace.projectDir, spectreHome: workspace.spectreHome, ...associations };
 }
 
-function workRecord(id, associations) {
+function workRecord(id, associations, provenance = {}) {
   return {
     schemaVersion: 1,
     id,
@@ -35,7 +35,7 @@ function workRecord(id, associations) {
     summary: 'A typed work fixture that owns exact identity associations.',
     tags: [],
     applicability: { scope: 'work', workId: id },
-    provenance: { origin: 'captured', capturedAt: '2026-09-06T00:00:00.000Z' },
+    provenance: { origin: 'captured', capturedAt: '2026-09-06T00:00:00.000Z', ...provenance },
     relatedRecordIds: [],
     work: {
       requestedOutcome: 'Record one exact work association.',
@@ -404,20 +404,123 @@ describe('stable work identity', () => {
     );
   });
 
-  it('requires identification for conflicting exact associations instead of guessing', async (t) => {
+  it('keeps the exact source run as identity when a shared PR already names another record', async (t) => {
     const workspace = makeWorkspace(t);
     const first = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run_first' }));
     const second = await resolveOrAllocateWorkIdentity(options(workspace, { pullRequestId: 'github:42' }));
 
-    await assert.rejects(
-      () => resolveWorkIdentity(options(workspace, {
-        sourceRunId: 'run_first',
-        pullRequestId: 'github:42',
+    assert.notEqual(second.workId, first.workId);
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run_first', pullRequestId: 'github:42' })),
+      { status: 'resolved', workId: first.workId },
+    );
+    const associated = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run_first', pullRequestId: 'github:42',
+    }));
+    assert.equal(associated.workId, first.workId);
+  });
+
+  it('accepts one PR id and one exact candidate tuple across five verified records', async (t) => {
+    const workspace = makeWorkspace(t);
+    const candidate = {
+      repository: 'github.com/example/spectre',
+      base: 'a'.repeat(40),
+      head: 'b'.repeat(40),
+      diff: `sha256:${'c'.repeat(64)}`,
+    };
+    const pullRequestId = 'github:example/spectre#7';
+    const workIds = ['work-plural-1', 'work-plural-2', 'work-plural-3', 'work-plural-4', 'work-plural-5'];
+    for (const [position, workId] of workIds.entries()) {
+      await registerCanonicalKnowledge({
+        ...options(workspace), recordPath: writeProposal(workspace, workRecord(workId, {
+          sourceRunIds: [`run-plural-${position}`], pullRequestIds: [pullRequestId], candidates: [candidate],
+        })),
+      });
+    }
+
+    for (const association of [{ pullRequestId }, { candidate }, { pullRequestId, candidate }]) {
+      assert.deepEqual(
+        await resolveWorkIdentity(options(workspace, association)),
+        { status: 'plural', workId: null, workIds },
+      );
+      assert.deepEqual(
+        (await work.listWorkIdentities(options(workspace, association))).workIds,
+        workIds,
+      );
+    }
+    for (const [position, workId] of workIds.entries()) {
+      assert.deepEqual(
+        await resolveWorkIdentity(options(workspace, { sourceRunId: `run-plural-${position}` })),
+        { status: 'resolved', workId },
+      );
+    }
+  });
+
+  it('still rejects two verified records that claim one exact source run under a shared PR', async (t) => {
+    const workspace = makeWorkspace(t);
+    const pullRequestId = 'github:example/spectre#8';
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord('work-run-owner', {
+        sourceRunIds: ['run-owned-once'], pullRequestIds: [pullRequestId], candidates: [],
       })),
-      (error) => error.code === 'WORK_IDENTITY_AMBIGUOUS'
-        && new Set(error.workIds).size === 2
-        && error.workIds.includes(first.workId)
-        && error.workIds.includes(second.workId),
+    });
+
+    await assert.rejects(
+      registerCanonicalKnowledge({
+        ...options(workspace), recordPath: writeProposal(workspace, workRecord('work-run-claimant', {
+          sourceRunIds: ['run-owned-once'], pullRequestIds: [pullRequestId], candidates: [],
+        })),
+      }),
+      (error) => error.code === 'WORK_IDENTITY_CONFLICT' && error.conflictingWorkIds.includes('work-run-owner'),
+    );
+    await assert.rejects(
+      resolveOrAllocateWorkIdentity(options(workspace, {
+        workId: 'work-run-claimant', sourceRunId: 'run-owned-once',
+      })),
+      (error) => error.code === 'WORK_IDENTITY_CONFLICT',
+    );
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { sourceRunId: 'run-owned-once' })),
+      { status: 'resolved', workId: 'work-run-owner' },
+    );
+  });
+
+  it('associates a second record with an already shared PR id and candidate under an exact work id', async (t) => {
+    const workspace = makeWorkspace(t);
+    const candidate = {
+      repository: 'github.com/example/spectre',
+      base: 'd'.repeat(40),
+      head: 'e'.repeat(40),
+      diff: `sha256:${'f'.repeat(64)}`,
+    };
+    const pullRequestId = 'github:example/spectre#11';
+    const first = await resolveOrAllocateWorkIdentity(options(workspace, {
+      sourceRunId: 'run-shared-first', pullRequestId, candidate,
+    }));
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(first.workId, {
+        sourceRunIds: ['run-shared-first'], pullRequestIds: [pullRequestId], candidates: [candidate],
+      })),
+    });
+
+    const second = await resolveOrAllocateWorkIdentity(options(workspace, { sourceRunId: 'run-shared-second' }));
+    assert.notEqual(second.workId, first.workId);
+    const associated = await resolveOrAllocateWorkIdentity(options(workspace, {
+      workId: second.workId, pullRequestId, candidate,
+    }));
+    assert.equal(associated.workId, second.workId);
+    await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, workRecord(second.workId, {
+        sourceRunIds: ['run-shared-second'], pullRequestIds: [pullRequestId], candidates: [candidate],
+      })),
+    });
+    assert.deepEqual(
+      await resolveWorkIdentity(options(workspace, { workId: second.workId, pullRequestId, candidate })),
+      { status: 'resolved', workId: second.workId },
+    );
+    assert.deepEqual(
+      (await work.listWorkIdentities(options(workspace, { pullRequestId }))).workIds,
+      [first.workId, second.workId].sort(),
     );
   });
 

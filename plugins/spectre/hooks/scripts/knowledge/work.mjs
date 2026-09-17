@@ -9,6 +9,8 @@ import { atomicWriteJson, resolveProjectStore, withStoreLock } from './store.mjs
 const WORK_ASSOCIATION_FILE_NAME = 'work-associations.json';
 const WORK_ASSOCIATION_SCHEMA_VERSION = 1;
 const WORK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** One exact Execute run is the only singular identity key; PR and candidate keys are plural delivery evidence. */
+const IDENTITY_ASSOCIATION_TYPES = ['sourceRuns'];
 
 function codedError(code, message, details = {}) {
   const error = new Error(message);
@@ -261,9 +263,11 @@ function resolveFromIndex(view, pending, options) {
       { workIds: [canonicalSuppliedWorkId] },
     );
   }
-  const resolvedIds = requestedWorkIds(view, associations);
+  const identityAssociations = associations.filter(([type]) => IDENTITY_ASSOCIATION_TYPES.includes(type));
+  const matchedWorkIds = [...requestedWorkIds(view, associations)].sort();
+  const identityIds = requestedWorkIds(view, identityAssociations);
   if (canonicalSuppliedWorkId !== null) {
-    const conflicts = [...resolvedIds].filter((workId) => workId !== canonicalSuppliedWorkId);
+    const conflicts = [...identityIds].filter((workId) => workId !== canonicalSuppliedWorkId);
     if (conflicts.length > 0) {
       throw codedError(
         'WORK_IDENTITY_CONFLICT',
@@ -272,24 +276,36 @@ function resolveFromIndex(view, pending, options) {
       );
     }
     return {
-      status: resolvedIds.size === 0 && !view.verifiedWorkIds.has(canonicalSuppliedWorkId) && suppliedWorkId === canonicalSuppliedWorkId ? 'unresolved' : 'resolved',
+      status: identityIds.size === 0 && !view.verifiedWorkIds.has(canonicalSuppliedWorkId) && suppliedWorkId === canonicalSuppliedWorkId ? 'unresolved' : 'resolved',
       workId: canonicalSuppliedWorkId,
       associations,
+      matchedWorkIds,
       suppliedWorkId: canonicalSuppliedWorkId,
       ...(suppliedWorkId !== canonicalSuppliedWorkId ? { redirectedFrom: suppliedWorkId } : {}),
     };
   }
-  if (resolvedIds.size > 1) {
+  if (identityIds.size > 1) {
     throw codedError(
       'WORK_IDENTITY_AMBIGUOUS',
-      'Exact associations resolve to different work ids; identify the work id explicitly.',
-      { workIds: [...resolvedIds].sort() },
+      'Exact source runs resolve to different work ids; identify the work id explicitly.',
+      { workIds: [...identityIds].sort() },
     );
   }
-  if (resolvedIds.size === 1) {
-    return { status: 'resolved', workId: [...resolvedIds][0], associations };
+  if (identityIds.size === 1) {
+    return { status: 'resolved', workId: [...identityIds][0], associations, matchedWorkIds };
   }
-  return { status: 'unresolved', workId: null, associations };
+  // An exact run that matches no record always starts its own identity; a shared PR or candidate
+  // is delivery evidence for many records and never renames the run.
+  if (identityAssociations.length > 0) {
+    return { status: 'unresolved', workId: null, associations, matchedWorkIds };
+  }
+  if (matchedWorkIds.length === 1) {
+    return { status: 'resolved', workId: matchedWorkIds[0], associations, matchedWorkIds };
+  }
+  if (matchedWorkIds.length > 1) {
+    return { status: 'plural', workId: null, associations, matchedWorkIds };
+  }
+  return { status: 'unresolved', workId: null, associations, matchedWorkIds };
 }
 
 async function resolveStore(options, readOnly) {
@@ -301,7 +317,10 @@ async function resolveStore(options, readOnly) {
   });
 }
 
-/** Resolves only exact run, PR, or repository/base/head/diff associations. */
+/**
+ * Resolves only exact run, PR, or repository/base/head/diff associations. A PR or candidate
+ * shared by several records answers `plural` with every matching id instead of guessing one.
+ */
 export async function resolveWorkIdentity(options) {
   const resolved = await resolveStore(options, true);
   if (!resolved.storePath) return { status: 'unresolved', workId: null };
@@ -311,8 +330,29 @@ export async function resolveWorkIdentity(options) {
     return {
       status: identity.status,
       workId: identity.workId,
+      ...(identity.status === 'plural' ? { workIds: identity.matchedWorkIds } : {}),
       ...(identity.redirectedFrom ? { redirectedFrom: identity.redirectedFrom } : {}),
     };
+  }, options.lockOptions);
+}
+
+/**
+ * Lists every verified work id that carries the requested exact associations. Delivery keys are
+ * plural, so this answers with the whole matching set and never picks one by recency.
+ */
+export async function listWorkIdentities(options) {
+  const resolved = await resolveStore(options, true);
+  if (!resolved.storePath) return { ok: true, workIds: [] };
+  return withStoreLock(resolved.storePath, 'list-work-identities', async () => {
+    const { view } = associationView(resolved.storePath);
+    const associations = requestedAssociations(options);
+    if (associations.length === 0) {
+      throw codedError(
+        'WORK_QUERY_INVALID',
+        'A work identity query needs one exact source run, pull request, or candidate.',
+      );
+    }
+    return { ok: true, workIds: [...requestedWorkIds(view, associations)].sort() };
   }, options.lockOptions);
 }
 
@@ -327,11 +367,20 @@ export async function resolveOrAllocateWorkIdentity(options) {
   return withStoreLock(resolved.storePath, 'resolve-work-identity', async () => {
     const { view, pending } = associationView(resolved.storePath);
     const identity = resolveFromIndex(view, pending, options);
+    if (identity.status === 'plural') {
+      throw codedError(
+        'WORK_IDENTITY_AMBIGUOUS',
+        'That PR or candidate is shared by several work records; identify the work id or exact source run.',
+        { workIds: identity.matchedWorkIds },
+      );
+    }
     const workId = identity.workId || `work-${crypto.randomUUID()}`;
     let changed = false;
     for (const [type, key] of identity.associations) {
       const existing = view[type].get(key) || new Set();
-      const conflicts = [...existing].filter((current) => current !== workId);
+      const conflicts = IDENTITY_ASSOCIATION_TYPES.includes(type)
+        ? [...existing].filter((current) => current !== workId)
+        : [];
       if (conflicts.length > 0) {
         throw codedError(
           'WORK_IDENTITY_CONFLICT',
@@ -520,7 +569,7 @@ export async function foldWorkIdentities(options) {
   }
 }
 
-/** Reject a registration that would split an exact association across verified work IDs. */
+/** Reject a registration that would split one exact source run across verified work IDs. */
 export function assertWorkRecordAssociations(storePath, record, options = {}) {
   if (record.kind !== 'work') return;
   const { view, pending } = associationView(storePath);
@@ -563,7 +612,8 @@ export function assertWorkRecordAssociations(storePath, record, options = {}) {
           { workIds: [...unverified].sort() },
         );
       }
-      const foldFrom = type === 'sourceRuns' ? new Set(options.foldFromWorkIds || []) : new Set();
+      if (!IDENTITY_ASSOCIATION_TYPES.includes(type)) continue;
+      const foldFrom = new Set(options.foldFromWorkIds || []);
       const conflicts = [...(view[type].get(key) || [])]
         .filter((workId) => workId !== record.id && !foldFrom.has(workId));
       if (conflicts.length > 0) {
