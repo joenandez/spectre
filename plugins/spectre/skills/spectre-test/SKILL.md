@@ -6,7 +6,7 @@ user-invocable: true
 
 # test
 
-Add risk-weighted behavioral tests and commit standalone batches. Test boundaries, prioritize where breakage hurts, skip code that cannot break; risk assessment is inline and no intermediate report files exist.
+Add risk-weighted behavioral tests; standalone commits them. Prioritize breakage-prone boundaries, skip non-behavior, and keep risk assessment in-thread.
 
 ## Inputs
 
@@ -22,14 +22,14 @@ Add risk-weighted behavioral tests and commit standalone batches. Test boundarie
 
 ## Method / guardrails
 
-- **Orchestrated Ship/Clean mode:** consume the supplied unchanged set/risk plan; do not redo broad analysis. Edit tests/fixtures only—never production/source; do not stage or commit. The test lead may batch testers internally, runs only new/changed focused tests, and returns compact changed-path/check results plus cross-boundary needs to the parent.
+- **Orchestrated Ship/Clean mode:** consume the unchanged set/risk plan; do not redo broad analysis. Edit tests/fixtures only—never production/source; do not stage or commit. The calling primary owns batching, runs only new/changed focused tests, and returns compact paths/checks plus cross-boundary needs.
 - **Triage every changed file into a risk tier (inline):**
   - **P0 Critical** — `auth`/`payment`/`security`/`crypto`/`session`/`token`, PII/permissions/user-data mutation, external handlers, DB migrations, or `@critical`. Cover every user-facing outcome/error path, null/empty/malformed/overflow security inputs, public API/schema, and mutation-resistant assertions.
   - **P1 Core** — feature components, API/state/business logic, fetch/cache. Cover public happy/error paths and exported-boundary contracts; skip internal helpers/exhaustive branches.
   - **P2 Supporting** — real-logic utils/validators/transformers/hooks/adapters. Cover exported happy paths; skip private/trivial functions.
   - **P3 Skip** — types, config, styles/docs, logic-free constants/enums/barrels/pass-throughs, generated/build tooling. Types + lint suffice; mark **SKIP — {reason}**.
 - **Write or consume the in-thread test plan** (3–7 bullets, `- [P{tier}] {file}: {behavior}`): P0 → multiple bullets (behaviors + error paths); P1 → 1–2; P2 → 1; P3 → SKIP line.
-- **Dispatch `@spectre:tester` in parallel:** one message/multiple tasks; P0 = one agent/file, P1 = 2–3 files/agent, P2 = 3–5, up to 8 agents. Give batch paths/tier and require behavioral, outcome-not-call, mutation-resistant tests; wait before verifying.
+- **Primary-owned dispatch:** directly dispatch leaf `@spectre:tester` agents in parallel—one message/multiple tasks; P0 = one agent/file, P1 = 2–3 files/agent, P2 = 3–5, up to 8. Give batch paths/tier and require behavioral, outcome-not-call, mutation-resistant tests; wait before verifying.
 - **Quality:** one behavior/test; descriptive `when_[cond]_then_[outcome]` names; outcome assertions (calls only for prevented side effects), refactor/mutation resilience. Do not mock internals, duplicate type/framework coverage; test API/event schemas at boundaries.
 - **Verify before commit:** standalone runs affected lint plus new/changed and related tests across demonstrated dependencies, then spot-checks quality. Branch-caused → repair/reverify; unrelated → route/continue; indeterminate → reproduce only the failing check at base. Never run a repository-wide baseline or full suite from this skill.
 - **Commit guard:** `--no-verify`, `eslint-disable`, and committing code carrying `eslint-disable` are **expressly forbidden without the user's explicit permission.**
@@ -37,8 +37,8 @@ Add risk-weighted behavioral tests and commit standalone batches. Test boundarie
 ## Outputs + DONE
 
 - Risk-appropriate tests added; focused tests have no branch-caused failure; other findings are routed.
-- No working-set, evidence, or test-plan artifact. Standalone commits contain reusable tests/fixtures and required product changes only, grouped logically (`type(scope): description`; tests bundled with feature or separate, your judgment).
-- **DONE when:** every changed file is P0–P3; the plan records P3 skips; tester batches finish; tier coverage holds; focused tests have no attributable failure; other findings are routed without stopping; quality is spot-checked; and standalone changes are committed without bypass/suppression.
+- No working-set/evidence/test-plan artifact. Standalone commits contain only reusable tests/fixtures and required product changes, grouped logically (`type(scope): description`).
+- **DONE when:** every changed file is P0–P3; P3 skips are recorded; primary-dispatched tester batches finish and tier coverage holds—existing green suites alone are insufficient; focused tests have no attributable failure; other findings are routed without stopping; quality is spot-checked; and standalone changes are committed without bypass/suppression.
 
 ## Handoff
 

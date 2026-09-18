@@ -925,10 +925,10 @@ test('autonomous plan execution instruction envelope stays token-neutral', () =>
     ),
   };
 
-  assert.ok(totals.spectre <= 12_651, `canonical envelope exceeded: ${totals.spectre} > 12,651`);
+  assert.ok(totals.spectre <= 12_702, `canonical envelope exceeded: ${totals.spectre} > 12,702`);
   assert.ok(
-    totals['spectre-codex'] <= 12_747,
-    `Codex envelope exceeded: ${totals['spectre-codex']} > 12,747`,
+    totals['spectre-codex'] <= 12_798,
+    `Codex envelope exceeded: ${totals['spectre-codex']} > 12,798`,
   );
 });
 
@@ -1798,7 +1798,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    'c819a1fee61b4b4ee3527379726f434d17301859e4cdbd1b59a60d54970d2187',
+    'cd5bbb36356ed186b5a92f667d5dd365133bf19a81a89ee66143475c945328f5',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
@@ -1981,13 +1981,20 @@ test('Ship/Clean pin one parallel cleanup boundary and a single post-rebase suit
     assert.ok(sweepIndex > testIndex);
     assert.ok(rebaseIndex > sweepIndex);
     assert.doesNotMatch(ship, /spectre-clean/);
-    assert.match(ship, /one test lead[\s\S]*owns batching/i);
+    assert.match(ship, /Skill loading imports instructions, not phase delegation/i);
+    assert.match(ship, /primary owns both contracts[\s\S]*one parallel dispatch[\s\S]*analyst[\s\S]*tester/i);
+    assert.match(ship, /no phase child spawns agents/i);
     assert.match(ship, /It alone integrates stale\/uncovered checks[\s\S]*commits/i);
     assert.match(clean, /user-invocable: true/);
     assert.match(clean, /CLEANED_THROUGH_SHA/);
-    assert.match(clean, /one prune lead[\s\S]*one test lead[\s\S]*Skill\(spectre-sweep\)/i);
+    assert.match(clean, /Skill loading imports instructions, not phase delegation/i);
+    assert.match(clean, /primary directly dispatches[\s\S]*analyst\/tester batches[\s\S]*Skill\(spectre-sweep\)/i);
     assert.match(prune, /orchestrated[\s\S]*do not edit tests[\s\S]*run no affected suite/i);
+    assert.match(prune, /calling primary directly dispatches[\s\S]*leaf `@(?:spectre:|spectre_)?analyst`/i);
+    assert.match(prune, /DONE when:[^\n]*required analysts finish for non-trivial sets/i);
     assert.match(testSkill, /orchestrated[\s\S]*tests\/fixtures[\s\S]*never production[\s\S]*do not stage or commit/i);
+    assert.match(testSkill, /Primary-owned dispatch:[\s\S]*leaf `@(?:spectre:|spectre_)?tester`/i);
+    assert.match(testSkill, /existing green suites alone are insufficient/i);
     assert.match(sweep, /sole pre-rebase commit owner/i);
     assert.match(sweep, /stale\/uncovered/i);
     assert.match(ship, /--verification-owner parent[\s\S]*No checks/i);
@@ -2017,6 +2024,45 @@ test('orchestrated create-pr preserves pending/final candidate gates', () => {
     assert.match(ship, /EXPECTED_BASE_SHA[\s\S]*EXPECTED_HEAD_SHA[\s\S]*EXPECTED_DIFF_SHA256/i);
     assert.match(ship, /after suite[\s\S]*--orchestrated[\s\S]*--pr-phase final-update[\s\S]*FINAL_VERIFICATION_SUMMARY[\s\S]*Testing only/i);
     assert.match(ship, /PR_CANDIDATE_STALE[\s\S]*refresh and retry/i);
+    assert.match(createPr, /A parent may supply a frozen work-ID set[\s\S]*does not write a work record/i);
+    assert.match(createPr, /returns its PR identity\/URL against the frozen work-ID set for Ship to associate/i);
+    assert.match(
+      ship,
+      /Once PR identity exists[\s\S]*re-run `work membership` against the final tuple[\s\S]*no longer proves is reported, not associated/i,
+    );
+  }
+});
+
+test('work records bind to exact runs and one PR associates a plural selection in both trees', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+
+  for (const rootName of ['spectre', 'spectre-codex']) {
+    const readSkill = (skillName) => fs.readFileSync(path.join(
+      repoRoot, 'plugins', rootName, 'skills', skillName, 'SKILL.md',
+    ), 'utf8');
+    const workRecord = readSkill('spectre-work-record');
+    const execute = readSkill('spectre-execute');
+    const ship = readSkill('spectre-ship');
+
+    assert.match(
+      workRecord,
+      /one record per exact Execute run[\s\S]*distinct runs never fold[\s\S]*a branch and a pull request may each reference many records/i,
+    );
+    assert.match(workRecord, /--source-run-id <exact-run>[\s\S]*in addition to/i);
+    assert.match(workRecord, /delivery receipt derives only from that exact run.s event log/i);
+    assert.doesNotMatch(workRecord, /branch pointer/i);
+
+    assert.match(execute, /`run finish` first[\s\S]*Skill\(spectre-work-record\)[\s\S]*--source-run-id <exact-run>/i);
+    assert.match(execute, /start-only delivery receipt Ship can never select/i);
+    assert.match(execute, /independent of Ship, any PR, and later review\/CI\/merge\/closure/i);
+
+    assert.match(ship, /never derive work identity from branch, recency, or ambient roots/i);
+    assert.match(ship, /work membership --branch <exact-branch> --candidate <tuple-json>/i);
+    assert.match(ship, /Association annotates only: it never confers finality/i);
+    assert.match(
+      ship,
+      /later Execute run on this branch keeps its own record and joins this same PR only when the updated candidate proves membership/i,
+    );
   }
 });
 
@@ -2054,7 +2100,7 @@ test('Ship uses the fixed measurement surface without primary bookkeeping', () =
       assert.match(ship, new RegExp(`measure start --label "${label}"`));
     }
     assert.match(ship, /measure start` for Prune\/Test/);
-    assert.match(ship, /Prune\/Test[\s\S]*measure finish[\s\S]*returned child identity/i);
+    assert.match(ship, /Prune\/Test[\s\S]*measure finish[\s\S]*child identity only when singular/i);
     assert.match(ship, /Sweep[\s\S]*measure finish[\s\S]*Sweep snapshot/i);
     assert.match(ship, /Rebase[\s\S]*measure finish[\s\S]*Rebase snapshot/i);
     assert.match(ship, /Full suite[\s\S]*measure finish[\s\S]*Create PR[\s\S]*measure finish[\s\S]*measure summary --rows[\s\S]*--outer-snapshot/i);
@@ -2067,7 +2113,7 @@ test('Ship uses the fixed measurement surface without primary bookkeeping', () =
   }
 
   // Structured-handoff tokens are reallocated inside the fixed 28-skill aggregate ceiling.
-  for (const [rootName, ceiling] of [['spectre', 11_011], ['spectre-codex', 11_013]]) {
+  for (const [rootName, ceiling] of [['spectre', 11_376], ['spectre-codex', 11_378]]) {
     const tokens = skillNames.reduce(
       (total, name) => total + repositoryTokenCount(
         repoRoot,
@@ -2115,9 +2161,10 @@ test('ship composes focused skills without a proof prerequisite', () => {
     assert.ok(sweepIndex > testIndex);
     assert.ok(rebaseIndex > sweepIndex);
     assert.ok(createPrIndex > rebaseIndex);
-    assert.match(skill, /Resolve exact branch -> canonical work ID before Create PR/i);
-    assert.match(skill, /quiet[^\n]*no recency/i);
-    assert.match(skill, /freeze it for pending, final, work record/i);
+    assert.match(skill, /Before the first PR side effect[\s\S]*work membership --branch <exact-branch> --candidate/i);
+    assert.match(skill, /freeze its `selected` work-ID set[\s\S]*excluded[\s\S]*ambiguous[\s\S]*without substituting recency/i);
+    assert.match(skill, /Still before Create PR[\s\S]*Skill\(spectre-work-record\)[^\n]*per selected record[\s\S]*refresh a blocked\/incomplete one truthfully/i);
+    assert.match(skill, /Annotate the still-selected set[\s\S]*work associate[\s\S]*--pull-request-id[\s\S]*Association annotates only[\s\S]*never confers finality/i);
     assert.match(skill, /Proof is optional:/);
     assert.match(skill, /do not inspect, infer, invoke, or gate on it/);
     assert.doesNotMatch(skill, /--require-proof/);
@@ -2411,7 +2458,8 @@ test('delegate replaces quick_dev, deliver, and align-and-deliver with compact a
     assert.match(sweep, /Never run a repository-wide baseline or full suite/);
     assert.match(sweep, /ordinary lint\/test failures remain in repair flow/);
     assert.match(clean, /Ordinary test\/lint\/build failures never produce it/);
-    assert.match(clean, /repairable findings remain with the owning child/);
+    assert.match(clean, /primary applies only analyst-supported `CONFIRMED_SAFE` prune edits/i);
+    assert.match(clean, /tester agents own tests\/fixtures[\s\S]*Sweep child alone stages\/commits/i);
     assert.doesNotMatch(createPr, /\(spectre-ship\)/);
     assert.doesNotMatch(ship, /\(spectre-ship\)/);
   }

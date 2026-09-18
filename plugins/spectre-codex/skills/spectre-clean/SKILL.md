@@ -6,7 +6,7 @@ user-invocable: true
 
 # clean
 
-End-to-end cleanup utility. The primary owns scope, risk assessment, sequencing, and synthesis. It is not a Ship dependency; phase work uses `spectre-prune`, `spectre-test`, and `spectre-sweep`.
+End-to-end cleanup utility. The primary owns scope, risk, sequencing, and synthesis. Ship calls `spectre-prune`/`spectre-test`/`spectre-sweep` directly, never Clean.
 
 ## Inputs
 
@@ -21,10 +21,10 @@ End-to-end cleanup utility. The primary owns scope, risk assessment, sequencing,
 
 ## Outputs + DONE
 
-- Parallel prune and one test-lead result; manual-review/cross-boundary items preserved.
+- Parallel prune/test worker results; manual-review/cross-boundary items preserved.
 - Primary P0-P3 risk plan, compact check results, one Sweep verification/commit boundary, and `CLEANED_THROUGH_SHA`.
-- Final report: prune/manual review · risk tiers · tests/affected checks · routed findings · sweep commits · `CLEANED_THROUGH_SHA` · `NEEDS_AUTHORITY`, if any.
-- **DONE when:** every phase ran in its owning subagent, the primary supplied risk tiers, repairable findings were repaired/routed by their owner, manual-review items surfaced, and sweep committed or returned genuine `NEEDS_AUTHORITY`.
+- Report: prune/manual review · risk tiers · tests/checks · routed findings · sweep commits · `CLEANED_THROUGH_SHA` · `NEEDS_AUTHORITY`, if any.
+- **DONE when:** the primary followed each phase contract, supplied risk tiers, and finished required analyst/tester batches; phase repairs/routing and manual review are complete, and sweep committed or returned genuine `NEEDS_AUTHORITY`.
 
 ## Method / guardrails
 
@@ -35,13 +35,13 @@ End-to-end cleanup utility. The primary owns scope, risk assessment, sequencing,
    - **P2:** exported real-logic utilities, validators, transformers, adapters, hooks.
    - **P3:** docs/styles/config/types/constants/barrels/pass-throughs/generated files.
    Keep a compact plan in-thread: `- [P{tier}] {file}: {behavior or SKIP reason}`.
-3. **Parallel phases.** In one dispatch, start one prune lead for `Skill(spectre-prune)` and one test lead for `Skill(spectre-test)` with the unchanged resolved set, `{FEATURE_ROOT}`, and the risk plan. Each uses `--orchestrated`; the test lead owns any internal tester batching. They return compact changed-path/check results, manual-review items, and cross-boundary needs; neither stages nor commits.
+3. **Parallel phases.** In this primary load/follow `Skill(spectre-prune)` and `Skill(spectre-test)` with the unchanged set, `{FEATURE_ROOT}`, risk plan, and `--orchestrated`. Skill loading imports instructions, not phase delegation: the primary directly dispatches required leaf analyst/tester batches in one parallel boundary. Return compact paths/checks, manual review, and cross-boundary needs; neither phase stages/commits.
 4. **Sweep phase.** Dispatch a sweep lead with the unchanged set and compact phase results. `Skill(spectre-sweep)` runs only stale/uncovered integrated checks, repairs attributable failures, and is the sole pre-rebase commit owner.
-5. **Synthesize.** Route repairable/cross-boundary findings to their owner; report final state, the Sweep commit `CLEANED_THROUGH_SHA`, routed findings, and genuine authority/safety impasses.
+5. **Synthesize.** Route repairable/cross-boundary findings; report final state, Sweep commit `CLEANED_THROUGH_SHA`, routes, and genuine authority/safety impasses.
 
 Guardrails:
 - Do not inline the bodies of prune/test/sweep; call the skills.
-- Do not let the primary perform prune edits, test authoring, or Sweep commits; repairable findings remain with the owning child, which continues without a user gate.
+- The primary applies only analyst-supported `CONFIRMED_SAFE` prune edits; tester agents own tests/fixtures; the Sweep child alone stages/commits. Phase repairs continue without a user gate.
 - `CONFIRMED_SAFE` cleanup may be applied; `UNCERTAIN`/`UNSAFE` cleanup stays untouched and appears in final manual review.
 - `--no-verify`, lint/type suppressions, and forced green are forbidden unless the user explicitly permits them.
 
