@@ -5,6 +5,7 @@ import { runDoctor } from './lib/doctor.js';
 import { main as runWorkflowCli } from '../plugins/spectre/hooks/scripts/workflow-cli.mjs';
 import { resolveKnowledgeProjectDir } from '../plugins/spectre/hooks/scripts/knowledge/cli-arguments.mjs';
 import { captureWithInputTransport } from '../plugins/spectre/hooks/scripts/knowledge/capture-input.mjs';
+import { associateWorkDelivery, listDeliveryMembership } from '../plugins/spectre/hooks/scripts/knowledge/work.mjs';
 import {
   formatCanonicalKnowledgeLoad,
   formatCanonicalKnowledgeSearch,
@@ -88,6 +89,8 @@ function usage() {
   spectre knowledge history <id> [--cursor <token>] [--project-dir <path>] [--json]
   spectre knowledge inspect <id> --revision <token> [--project-dir <path>] [--json]
   spectre knowledge work resolve [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--project-dir <path>] [--json]
+  spectre knowledge work membership --branch <exact-branch> --candidate <json> [--project-dir <path>] [--json]
+  spectre knowledge work associate --work-id <id> [--work-id <id>] --pull-request-id <id> --candidate <json> [--pull-request <json>] [--expected-revisions <json>] [--project-dir <path>] [--json]
   spectre knowledge work fold --canonical-work-id <id> --old-work-id <id> [--old-work-id <id>] [--project-dir <path>] [--json]
   spectre knowledge registry [--host claude|codex] [--project-dir <path>] [--json]
   spectre knowledge capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--branch <exact-branch>] [--expected-revision <token>] [--project-dir <path>] [--json]
@@ -129,6 +132,16 @@ function sourceRunId(flags) {
     throw new CliError('WORK_SOURCE_RUN_CONFLICT', '--source-run-id and --run-id must match when both are supplied.');
   }
   return sourceRunId ?? runId;
+}
+
+function jsonFlag(flags, name) {
+  const value = flags.get(name);
+  if (value === undefined || value === true) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    throw new CliError('WORK_DELIVERY_INPUT_INVALID', `${name} must be valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /** A branch is no longer a work identity key, so a silent false negative or no-op must not pass. */
@@ -275,7 +288,7 @@ export async function main(argv) {
     }
 
     if (target === 'work' && positional[2] === 'resolve') {
-      assertRetiredWorkBranchFlag(flags, 'work resolve', 'Resolve by --work-id, --source-run-id, --pull-request-id, or --candidate. A branch names many work records, and the record-backed plural branch query has no CLI surface yet.');
+      assertRetiredWorkBranchFlag(flags, 'work resolve', 'Resolve by --work-id, --source-run-id, --pull-request-id, or --candidate, or ask work membership for the plural branch and candidate answer.');
       try {
         const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
         const result = await resolveCanonicalKnowledgeWork({
@@ -321,6 +334,31 @@ export async function main(argv) {
         }, captureCanonicalKnowledge);
         if (flags.has('--json')) writeJson(result); else process.stdout.write(`Captured ${result.kind} record ${result.id} (${result.status})\n`);
       } catch (error) { const payload = serializeCanonicalKnowledgeCaptureError(error); throw new CliError(payload.code, payload.message, payload); }
+      return;
+    }
+
+    if (target === 'work' && positional[2] === 'membership') {
+      try {
+        writeJson(await listDeliveryMembership({
+          projectDir: knowledgeProjectDir(), branch: flags.get('--branch'),
+          candidate: jsonFlag(flags, '--candidate'), lockOptions: lockOptions(),
+        }));
+      } catch (error) { throw new CliError(error?.code || 'WORK_MEMBERSHIP_FAILED', error instanceof Error ? error.message : String(error)); }
+      return;
+    }
+
+    if (target === 'work' && positional[2] === 'associate') {
+      try {
+        // A partial association is reported, never thrown, so `retry` reaches the operator whole.
+        const result = await associateWorkDelivery({
+          projectDir: knowledgeProjectDir(), workIds: flags.getAll('--work-id'),
+          pullRequestId: flags.get('--pull-request-id'), candidate: jsonFlag(flags, '--candidate'),
+          pullRequest: jsonFlag(flags, '--pull-request'), expectedRevisions: jsonFlag(flags, '--expected-revisions'),
+          lockOptions: lockOptions(),
+        });
+        writeJson(result);
+        if (!result.ok) process.exitCode = 1;
+      } catch (error) { throw new CliError(error?.code || 'WORK_ASSOCIATION_FAILED', error instanceof Error ? error.message : String(error)); }
       return;
     }
 

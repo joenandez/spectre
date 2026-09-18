@@ -16,7 +16,7 @@ import { previewKnowledgeRegistry } from './knowledge/preview.mjs';
 import { registerCanonicalKnowledge, serializeKnowledgeError } from './knowledge/registration.mjs';
 import { formatKnowledgeSearchHuman, formatKnowledgeSearchWarningsHuman, searchKnowledge } from './knowledge/search.mjs';
 import { applyTagOperationFile, ensureTags, mergeTags, readTagOperationFile, searchTags, serializeTagError } from './knowledge/tags.mjs';
-import { foldWorkIdentities, resolveWorkIdentity } from './knowledge/work.mjs';
+import { associateWorkDelivery, foldWorkIdentities, listDeliveryMembership, resolveWorkIdentity } from './knowledge/work.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -44,6 +44,10 @@ export function parseArgs(argv) {
   };
 }
 
+const RESOLVE_BRANCH_GUIDANCE = 'Resolve by --work-id, --source-run-id, --pull-request-id, or --candidate, or ask work membership for the plural branch and candidate answer.';
+const FOLD_BRANCH_GUIDANCE = 'A branch never constrained a fold. Name every id with --canonical-work-id and --old-work-id.';
+const CAPTURE_BRANCH_PR_STATE_GUIDANCE = 'capture no longer reads --branch-pr-state. Set the PR state in the capture input under "pullRequest". --branch is still recorded as provenance.sourceBranch.';
+
 function codedError(code, message, details = {}) {
   const error = new Error(message);
   error.code = code;
@@ -65,6 +69,22 @@ function numericFlag(flags, name) {
   return value === undefined ? undefined : Number(value);
 }
 
+function jsonFlag(flags, name) {
+  const value = flags.get(name);
+  if (value === undefined || value === true) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    throw codedError('WORK_DELIVERY_INPUT_INVALID', `${name} must be valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** A branch is no longer a work identity key, so a silent false negative or no-op must not pass. */
+function assertRetiredWorkBranchFlag(flags, command, guidance) {
+  if (!flags.has('--branch')) return;
+  throw codedError('WORK_BRANCH_FLAG_RETIRED', `${command} no longer reads --branch. ${guidance}`);
+}
+
 function usage() {
   return [
     'Usage:',
@@ -77,6 +97,8 @@ function usage() {
     '  knowledge-cli.mjs history <id> --project-dir <path> [--json]',
     '  knowledge-cli.mjs inspect <id> --revision <token> --project-dir <path> [--json]',
     '  knowledge-cli.mjs work resolve [--work-id <id>] [--source-run-id <id>] [--pull-request-id <id>] --project-dir <path> [--json]',
+    '  knowledge-cli.mjs work membership --branch <exact-branch> --candidate <json> --project-dir <path> [--json]',
+    '  knowledge-cli.mjs work associate --work-id <id> [--work-id <id>] --pull-request-id <id> --candidate <json> [--pull-request <json>] [--expected-revisions <json>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs work fold --canonical-work-id <id> --old-work-id <id> [--old-work-id <id>] --project-dir <path> [--json]',
     '  knowledge-cli.mjs registry [--host claude|codex] --project-dir <path> [--json]',
     '  knowledge-cli.mjs capture --kind knowledge|work --input <json|-> [--record-id <id>] [--work-id <id>] [--source-run-id <id>|--run-id <id>] [--pull-request-id <id>] [--candidate <json>] [--branch <exact-branch>] [--expected-revision <token>] --project-dir <path> [--json]',
@@ -194,6 +216,7 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
   if (command === 'work' && subcommand === 'resolve') {
+    assertRetiredWorkBranchFlag(flags, 'work resolve', RESOLVE_BRANCH_GUIDANCE);
     try {
       const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
       const result = await resolveWorkIdentity({ projectDir: projectDir(flags), workId: flags.get('--work-id'), sourceRunId: sourceRunId(flags), pullRequestId: flags.get('--pull-request-id'), candidate, lockOptions: lockOptions(flags) });
@@ -208,12 +231,36 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
   if (command === 'work' && subcommand === 'fold') {
+    assertRetiredWorkBranchFlag(flags, 'work fold', FOLD_BRANCH_GUIDANCE);
     try {
       writeResult(await foldWorkIdentities({
         projectDir: projectDir(flags), canonicalWorkId: flags.get('--canonical-work-id'),
         oldWorkIds: flags.getAll('--old-work-id'), lockOptions: lockOptions(flags),
       }), flags);
     } catch (error) { throw codedError(error?.code || 'WORK_FOLD_FAILED', error instanceof Error ? error.message : String(error)); }
+    return;
+  }
+  if (command === 'work' && subcommand === 'membership') {
+    try {
+      writeResult(await listDeliveryMembership({
+        projectDir: projectDir(flags), branch: flags.get('--branch'),
+        candidate: jsonFlag(flags, '--candidate'), lockOptions: lockOptions(flags),
+      }), flags);
+    } catch (error) { throw codedError(error?.code || 'WORK_MEMBERSHIP_FAILED', error instanceof Error ? error.message : String(error)); }
+    return;
+  }
+  if (command === 'work' && subcommand === 'associate') {
+    try {
+      // A partial association is reported, never thrown, so `retry` reaches the operator whole.
+      const result = await associateWorkDelivery({
+        projectDir: projectDir(flags), workIds: flags.getAll('--work-id'),
+        pullRequestId: flags.get('--pull-request-id'), candidate: jsonFlag(flags, '--candidate'),
+        pullRequest: jsonFlag(flags, '--pull-request'), expectedRevisions: jsonFlag(flags, '--expected-revisions'),
+        lockOptions: lockOptions(flags),
+      });
+      writeResult(result, flags);
+      if (!result.ok) process.exitCode = 1;
+    } catch (error) { throw codedError(error?.code || 'WORK_ASSOCIATION_FAILED', error instanceof Error ? error.message : String(error)); }
     return;
   }
   if (command === 'registry') {
@@ -225,6 +272,7 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
   if (command === 'capture') {
+    if (flags.has('--branch-pr-state')) throw codedError('CAPTURE_BRANCH_PR_STATE_RETIRED', CAPTURE_BRANCH_PR_STATE_GUIDANCE);
     try {
       const candidate = flags.get('--candidate') ? JSON.parse(flags.get('--candidate')) : undefined;
       const result = await captureWithInputTransport({
