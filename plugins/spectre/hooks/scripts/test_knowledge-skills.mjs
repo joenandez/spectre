@@ -13,6 +13,13 @@ const TEMPLATE_PATH = path.join(
   'references',
   'recall-template.md',
 );
+const WORK_CAPTURE_INPUT_PATH = path.join(
+  PLUGIN_ROOT,
+  'skills',
+  'spectre-work-record',
+  'references',
+  'work-capture-input.json',
+);
 const TAGGING_POLICY_PATH = path.join(
   PLUGIN_ROOT,
   'skills',
@@ -62,6 +69,18 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(workRecord, /2,000[\s\S]*non-blocking/i);
   assert.match(workRecord, /gh pr view[\s\S]*capture input under `pullRequest`/i);
   assert.doesNotMatch(workRecord, /--branch-pr-state/);
+  const workCaptureInput = fs.readFileSync(WORK_CAPTURE_INPUT_PATH, 'utf8');
+  assert.doesNotMatch(workRecord, /branch pointer/i);
+  assert.match(workRecord, /one record per exact Execute run[\s\S]*same run[\s\S]*only that record/i);
+  assert.match(workRecord, /a branch and a pull request may each reference many records/i);
+  assert.match(workRecord, /--source-run-id <exact-run>[\s\S]*in addition to/i);
+  assert.match(workRecord, /"execution": \{"state": "finalized"\}[\s\S]*"remainingWork": "None\."/);
+  assert.match(workRecord, /blocked, failed, or interrupted[\s\S]*non-final[\s\S]*residual/i);
+  assert.match(workRecord, /CAPTURE_INPUT_INVALID/);
+  assert.match(workCaptureInput, /"execution"[\s\S]*"verificationState"[\s\S]*"pullRequest"/);
+  assert.match(workCaptureInput, /unknown\|none\|draft-open\|closed\|merged/);
+  assert.doesNotMatch(workCaptureInput, /\|open\|/);
+  assert.match(workRecord, /`unknown\|none\|draft-open\|closed\|merged`[\s\S]*`open` is rejected/i);
   assert.match(workRecord, /git rev-parse --abbrev-ref HEAD[\s\S]*(?:skip|recovery)/i);
   assert.match(workRecord, /unavailable[\s\S]*(?:skip|recovery)[\s\S]*does not block/i);
   assert.match(workRecord, /spectre-capture\/references\/tagging-policy\.md/);
@@ -78,6 +97,10 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(execute, /accepted batch[\s\S]*Skill\(spectre-capture\)[\s\S]*qualifying reusable knowledge/i);
   assert.match(execute, /capture failure[\s\S]*does not block/i);
   assert.match(execute, /IMPLEMENTATION_READY[\s\S]*ACCEPTANCE_PENDING/);
+  assert.match(execute, /run finish[\s\S]*then[\s\S]*Skill\(spectre-work-record\)/i);
+  assert.match(execute, /--source-run-id/);
+  assert.match(execute, /finalized[\s\S]*remainingWork[\s\S]*None\.[\s\S]*independent of Ship/i);
+  assert.match(execute, /blocked[\s\S]*non-final/i);
 
   assert.doesNotMatch(ship, /pre-PR[\s\S]*work/i);
   assert.match(ship, /PR[\s\S]*first[\s\S]*Skill\(spectre-work-record\)/i);
