@@ -793,6 +793,7 @@ describe('semantic knowledge capture', () => {
       'Needs checks.',
       'Needs close.',
       'Needs a follow-up refactor of the merge helper.',
+      'Needs a merge of the two config loaders.',
       'Needs merge conflict handling in the rebase path.',
       'None.',
       'unknown — imported record',
@@ -971,10 +972,11 @@ describe('Execute delivery receipt capture', () => {
     assert.equal(receipt.runId, run.runId);
     assert.equal(receipt.startHead, value.startHead);
     assert.equal(receipt.terminalHead, childCommit);
-    assert.deepEqual(receipt.acceptedCommits, [parentCommit, childCommit]);
+    // The fixture completes the child first, and accepted order follows completion order.
+    assert.deepEqual(receipt.acceptedCommits, [childCommit, parentCommit]);
     assert.deepEqual(receipt.acceptedPatchIds, [
-      patchIdFor(value.projectDir, parentCommit),
       patchIdFor(value.projectDir, childCommit),
+      patchIdFor(value.projectDir, parentCommit),
     ]);
     assert.equal(classifyDeliveryReceipt(storedRecord(value, captured.workId)).state, 'complete');
   });
@@ -1040,5 +1042,223 @@ describe('Execute delivery receipt capture', () => {
     });
 
     assert.deepEqual(storedRecord(value, captured.workId).work.deliveryReceipt, deliveryReceipt);
+  });
+
+  it('refuses terminal evidence written by the capture input', async (t) => {
+    const value = await receiptFixture(t);
+    const foreign = commitFile(value.projectDir, 'foreign.txt', 'foreign\n', 'Unrelated commit');
+
+    const created = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'fabricate-start.json', workInput()),
+      sourceRunId: 'run-nothing',
+    });
+    assert.equal(
+      Object.hasOwn(storedRecord(value, created.workId).work, 'deliveryReceipt'),
+      false,
+    );
+
+    const fabricated = {
+      runId: 'run_00000000-0000-4000-8000-0000000000ff',
+      branch: RECEIPT_BRANCH,
+      startHead: value.startHead,
+      terminalHead: foreign,
+      acceptedCommits: [foreign],
+      acceptedPatchIds: [patchIdFor(value.projectDir, foreign)],
+    };
+    const revised = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'fabricate-terminal.json', workInput({
+        summary: 'A work capture fixture claiming delivery.',
+        deliveryReceipt: fabricated,
+      })),
+      workId: created.workId, expectedRevision: created.revisionToken,
+    });
+
+    const record = storedRecord(value, revised.workId);
+    assert.deepEqual(record.work.deliveryReceipt, {
+      runId: fabricated.runId, branch: RECEIPT_BRANCH, startHead: value.startHead,
+    });
+    assert.equal(classifyDeliveryReceipt(record).state, 'start-only');
+  });
+
+  it('never lets a capture input retarget the stored run identity', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    const created = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'cross-run-start.json', workInput()),
+      sourceRunId: run.runId,
+    });
+    const owned = storedRecord(value, created.workId).work.deliveryReceipt;
+
+    const revised = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'cross-run-input.json', workInput({
+        summary: 'A work capture fixture from another run.',
+        deliveryReceipt: {
+          runId: 'run_00000000-0000-4000-8000-0000000000bb',
+          branch: 'feature/other-run',
+          startHead: 'a'.repeat(40),
+        },
+      })),
+      workId: created.workId, expectedRevision: created.revisionToken,
+    });
+
+    const record = storedRecord(value, revised.workId);
+    assert.equal(record.summary, 'A work capture fixture from another run.');
+    assert.deepEqual(record.work.deliveryReceipt, owned);
+  });
+
+  it('accepts only the submission the completion gate accepted', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    const superseded = commitFile(value.projectDir, 'work.txt', 'first\n', 'First attempt');
+    await runEvents(value, run.runId, [
+      { type: 'task.started', actorId: RECEIPT_WORKER, taskId: '1.1', attempt: 1, payload: {} },
+    ]);
+    await runEvents(value, run.runId, [{
+      type: 'task.submitted', actorId: RECEIPT_WORKER, taskId: '1.1', attempt: 1, payload: { commit: superseded },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'gate.recorded',
+      actorId: run.primaryActorId,
+      payload: { kind: 'verification', status: 'fail', taskIds: ['1.1'], checkIds: ['test:focused'] },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'task.blocked', actorId: run.primaryActorId, taskId: '1.1', payload: { reasonCode: 'gate-failed' },
+    }]);
+    await runEvents(value, run.runId, [
+      { type: 'task.started', actorId: RECEIPT_WORKER, taskId: '1.1', attempt: 2, payload: {} },
+    ]);
+    const repaired = commitFile(value.projectDir, 'work.txt', 'second\n', 'Repair attempt');
+    await runEvents(value, run.runId, [{
+      type: 'task.submitted', actorId: RECEIPT_WORKER, taskId: '1.1', attempt: 2, payload: { commit: repaired },
+    }]);
+    const gate = await runEvents(value, run.runId, [{
+      type: 'gate.recorded',
+      actorId: run.primaryActorId,
+      payload: { kind: 'verification', status: 'pass', taskIds: ['1.1'], checkIds: ['test:focused'] },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'task.completed', actorId: run.primaryActorId, taskId: '1.1', payload: { gateEventId: gate.events[0].eventId },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'task.skipped', actorId: run.primaryActorId, taskId: '1.1.1', payload: { reasonCode: 'not-needed' },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'gate.recorded',
+      actorId: run.primaryActorId,
+      payload: { kind: 'proof', status: 'pass', taskIds: ['1.1'], checkIds: ['test:focused'] },
+    }]);
+    await runEvents(value, run.runId, [{ type: 'run.completed', actorId: run.primaryActorId, payload: {} }]);
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-repair.json', workInput()),
+      sourceRunId: run.runId,
+    });
+
+    const receipt = storedRecord(value, captured.workId).work.deliveryReceipt;
+    assert.deepEqual(receipt.acceptedCommits, [repaired]);
+    assert.deepEqual(receipt.acceptedPatchIds, [patchIdFor(value.projectDir, repaired)]);
+    assert.equal(classifyDeliveryReceipt(storedRecord(value, captured.workId)).state, 'complete');
+  });
+
+  it('withholds a newer terminal head when the accepted set cannot be proved', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    const proved = commitFile(value.projectDir, 'proved.txt', 'proved\n', 'Proved work');
+    const firstGate = await runEvents(value, run.runId, [{
+      type: 'gate.recorded',
+      actorId: run.primaryActorId,
+      payload: { kind: 'verification', status: 'pass', taskIds: ['1.1'], checkIds: ['test:focused'] },
+    }]);
+    await runEvents(value, run.runId, [
+      { type: 'task.started', actorId: RECEIPT_WORKER, taskId: '1.1', attempt: 1, payload: {} },
+    ]);
+    await runEvents(value, run.runId, [{
+      type: 'task.submitted', actorId: RECEIPT_WORKER, taskId: '1.1', attempt: 1, payload: { commit: proved },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'task.completed', actorId: run.primaryActorId, taskId: '1.1', payload: { gateEventId: firstGate.events[0].eventId },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'run.blocked', actorId: run.primaryActorId, payload: { reasonCode: 'handoff' },
+    }]);
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-blocked.json', workInput()),
+      sourceRunId: run.runId,
+    });
+    const blocked = storedRecord(value, captured.workId).work.deliveryReceipt;
+    assert.equal(blocked.terminalHead, proved);
+    assert.deepEqual(blocked.acceptedCommits, [proved]);
+
+    // The run resumes and accepts a commit whose object a repair rebase removed.
+    const pruned = 'b'.repeat(40);
+    await runEvents(value, run.runId, [
+      { type: 'task.started', actorId: RECEIPT_WORKER, taskId: '1.1.1', attempt: 1, payload: {} },
+    ]);
+    await runEvents(value, run.runId, [{
+      type: 'task.submitted', actorId: RECEIPT_WORKER, taskId: '1.1.1', attempt: 1, payload: { commit: pruned },
+    }]);
+    const secondGate = await runEvents(value, run.runId, [{
+      type: 'gate.recorded',
+      actorId: run.primaryActorId,
+      payload: { kind: 'verification', status: 'pass', taskIds: ['1.1.1'], checkIds: ['test:focused'] },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'task.completed', actorId: run.primaryActorId, taskId: '1.1.1', payload: { gateEventId: secondGate.events[0].eventId },
+    }]);
+    await runEvents(value, run.runId, [{
+      type: 'gate.recorded',
+      actorId: run.primaryActorId,
+      payload: { kind: 'proof', status: 'pass', taskIds: ['1.1', '1.1.1'], checkIds: ['test:focused'] },
+    }]);
+    const laterHead = commitFile(value.projectDir, 'later.txt', 'later\n', 'Later work');
+    await runEvents(value, run.runId, [{ type: 'run.completed', actorId: run.primaryActorId, payload: {} }]);
+
+    const revised = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-unprovable.json', workInput({
+        summary: 'A work capture fixture after an unprovable repair.',
+      })),
+      workId: captured.workId, expectedRevision: captured.revisionToken, sourceRunId: run.runId,
+    });
+
+    const record = storedRecord(value, revised.workId);
+    assert.notEqual(record.work.deliveryReceipt.terminalHead, laterHead);
+    assert.deepEqual(record.work.deliveryReceipt, blocked);
+  });
+
+  it('completes the receipt across the real start-then-terminal boundary sequence', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+
+    const start = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'boundary-start.json', workInput()),
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
+    });
+    assert.equal(classifyDeliveryReceipt(storedRecord(value, start.workId)).state, 'start-only');
+
+    const commit = commitFile(value.projectDir, 'boundary.txt', 'boundary\n', 'Boundary work');
+    await acceptedRun(value, run, { '1.1': commit, '1.1.1': commit });
+
+    const terminal = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'boundary-terminal.json', workInput({
+        summary: 'A work capture fixture at Execute completion.',
+      })),
+      workId: start.workId, expectedRevision: start.revisionToken,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
+    });
+
+    const record = storedRecord(value, terminal.workId);
+    assert.equal(record.work.deliveryReceipt.terminalHead, commit);
+    assert.deepEqual(record.work.deliveryReceipt.acceptedCommits, [commit]);
+    assert.equal(classifyDeliveryReceipt(record).state, 'complete');
   });
 });

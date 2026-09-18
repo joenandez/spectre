@@ -48,7 +48,9 @@ const LIFECYCLE_STATE = '(?:pending|outstanding|open|unresolved|awaited|blocked|
 const LIFECYCLE_FILLER = '(?:[\\w\\u2019\'/-]+\\s+){0,3}?';
 // The claim must end its clause. "Needs merge." is a lifecycle claim; "Needs merge conflict
 // handling in the rebase path." continues into implementation work and is truthful.
-const LIFECYCLE_CLAUSE_END = '(?=\\s*[.,;:!?)\\]]|\\s*$|\\s+(?:to|before|after|from|by|of|on|in|is'
+// `of` is deliberately absent: it introduces the object the work acts on, so "Needs a merge of the
+// two config loaders." names implementation work rather than the pull request's merge.
+const LIFECYCLE_CLAUSE_END = '(?=\\s*[.,;:!?)\\]]|\\s*$|\\s+(?:to|before|after|from|by|on|in|is'
   + '|are|was|were|and|or|then|plus|so|because|which|that|but|until|prior|per|still|remains?)\\b)';
 const DELIVERY_LIFECYCLE_REMAINING_WORK = [
   // "Waiting on CI to pass." / "Blocked on code review." / "The PR needs review before merge."
@@ -250,37 +252,58 @@ function receiptSha(value) {
   return token && RECEIPT_SHA_PATTERN.test(token) ? token : undefined;
 }
 
-/** Accepted means the primary completed the task behind a passing gate, not merely submitted. */
-function acceptedCommits(state, events) {
+/**
+ * Accepted means the primary completed the task behind a passing gate, not merely submitted.
+ *
+ * One task may submit several times: a failing batch gate blocks it, the repair redispatches it,
+ * and the amended commit is submitted again. Only the submission that `task.completed` accepted is
+ * evidence; the superseded shas no longer exist as patches and would make the run unprovable.
+ */
+function acceptedCommits(events) {
+  const latest = new Map();
   const commits = [];
   for (const event of events) {
-    if (event.type !== 'task.submitted') continue;
-    if (state.tasks?.[event.taskId]?.state !== 'completed') continue;
-    const commit = receiptSha(event.payload?.commit);
+    if (event.type === 'task.submitted') {
+      latest.set(event.taskId, receiptSha(event.payload?.commit));
+      continue;
+    }
+    if (event.type !== 'task.completed') continue;
+    const commit = latest.get(event.taskId);
     if (commit && !commits.includes(commit)) commits.push(commit);
   }
   return commits;
 }
 
-/** Terminal evidence, or as much of it as the event log alone can prove. */
+/**
+ * Terminal evidence, or nothing.
+ *
+ * The head and the accepted pair are ONE fact. A head published without the pair it belongs to
+ * would re-pair with an older stored list, so a later run's commits would be missing from a
+ * receipt that still classifies `complete` — a false `selected`. Withholding the head instead
+ * leaves the stored receipt's own consistent triple in place until a capture can prove all three.
+ */
 function terminalEvidence(projectDir, state, events) {
+  // A boundary event survives a resume, so a still-active run would otherwise publish a stale head
+  // beside a partial accepted list.
+  if (state?.status === 'active') return {};
   const boundary = [...events].reverse().find((event) => RUN_BOUNDARY_EVENTS.has(event.type));
   const terminalHead = receiptSha(boundary?.git?.headSha);
   if (!terminalHead) return {};
-  const commits = acceptedCommits(state, events);
+  const commits = acceptedCommits(events);
+  // A run that accepted nothing has a complete fact: the head, and no accepted work.
   if (commits.length === 0) return { terminalHead };
   const root = git(projectDir, ['rev-parse', '--show-toplevel']);
   const repoRoot = root.ok ? root.stdout.trim() : '';
-  if (!repoRoot) return { terminalHead };
+  if (!repoRoot) return {};
   const patchIds = [];
   for (const commit of commits) {
     const { ok, id } = patchIdOf(repoRoot, commit);
     // An unreadable patch is not an empty patch. Persisting `null` here would tell the
-    // evaluator the commit has no patch, so the whole list is dropped and the receipt stays
-    // start-only until a capture can prove it.
+    // evaluator the commit has no patch, so the whole fact is withheld and the receipt keeps
+    // whatever it already proved until a capture can prove the full set.
     if (!ok) {
       debugLog('capture.receipt_patch_unreadable', { commit });
-      return { terminalHead };
+      return {};
     }
     patchIds.push(id);
   }
@@ -312,6 +335,28 @@ async function deliveryReceiptFromRun({ projectDir, spectreHome, sourceRunId }) 
     runId: sourceRunId,
     terminal: Boolean(receipt.terminalHead),
     acceptedCommits: receipt.acceptedCommits?.length || 0,
+  });
+  return receipt;
+}
+
+/**
+ * The start-only fallback a caller may supply when the run's own log is unreadable.
+ *
+ * Terminal evidence has exactly ONE source, the run's durable event log. A caller-supplied
+ * `terminalHead` or accepted list would let any capture input hand-write proven delivery for
+ * commits the run never produced, so those fields are dropped rather than rejected — capture is
+ * never a blocking delivery authority.
+ */
+function startOnlyReceipt(value) {
+  if (!isPlainObject(value)) return undefined;
+  const receipt = {};
+  for (const field of ['runId', 'branch', 'startHead']) {
+    if (value[field] !== undefined) receipt[field] = value[field];
+  }
+  if (Object.keys(receipt).length === 0) return undefined;
+  debugLog('capture.receipt_input_narrowed', {
+    runId: receipt.runId,
+    dropped: Object.keys(value).filter((key) => !Object.hasOwn(receipt, key)),
   });
   return receipt;
 }
@@ -449,7 +494,7 @@ function constructWork(input, current, workId, tags, associations, options) {
   const stored = current?.work.deliveryReceipt;
   const deliveryReceipt = mergeDeliveryReceipt(
     stored,
-    input.deliveryReceipt,
+    receiptForStoredRun(stored, startOnlyReceipt(input.deliveryReceipt)),
     receiptForStoredRun(stored, options.deliveryReceipt),
   );
   return {
