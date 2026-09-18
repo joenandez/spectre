@@ -4,11 +4,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { describe, it } from 'node:test';
 import * as work from './knowledge/work.mjs';
 
 import { registerCanonicalKnowledge } from './knowledge/registration.mjs';
 import {
+  DELIVERY_SELECTION_REASONS,
+  evaluateRecordDeliveryMembership,
+  listDeliveryMembership,
   resolveWorkIdentity,
   resolveOrAllocateWorkIdentity,
 } from './knowledge/work.mjs';
@@ -773,5 +777,345 @@ describe('stable work identity', () => {
       }),
       (error) => error.code === 'WORK_IDENTITY_ASSOCIATION_REMOVED',
     );
+  });
+});
+
+/**
+ * Candidate-bounded delivery selection.
+ *
+ * Every check builds a real Git history with the local `git` binary and registers real work
+ * packages against it. Nothing about Git is mocked, because the whole point of the selection
+ * layer is that only proved membership in the frozen candidate may reach `selected`.
+ */
+
+const FIXTURE_GIT_ENV = {
+  GIT_AUTHOR_NAME: 'Spectre Fixture',
+  GIT_AUTHOR_EMAIL: 'fixture@spectre.invalid',
+  GIT_COMMITTER_NAME: 'Spectre Fixture',
+  GIT_COMMITTER_EMAIL: 'fixture@spectre.invalid',
+  GIT_AUTHOR_DATE: '2026-01-01T00:00:00+0000',
+  GIT_COMMITTER_DATE: '2026-01-01T00:00:00+0000',
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_SYSTEM: '/dev/null',
+};
+
+function gitRaw(repoDir, args, input) {
+  return execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=', ...args], {
+    cwd: repoDir,
+    encoding: 'utf8',
+    env: { ...process.env, ...FIXTURE_GIT_ENV },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    maxBuffer: 64 * 1024 * 1024,
+    ...(input === undefined ? {} : { input }),
+  });
+}
+
+function git(repoDir, args, input) {
+  return gitRaw(repoDir, args, input).trim();
+}
+
+/** The predicate's exact patch bytes, so a persisted id is comparable to a recomputed one. */
+function patchIdOf(repoDir, sha) {
+  const patch = gitRaw(repoDir, [
+    'diff-tree', '-p', '--no-color', '--root', '--full-index', '--binary',
+    '--no-ext-diff', '--no-textconv', sha,
+  ]);
+  if (!patch.trim()) return null;
+  const [id] = git(repoDir, ['patch-id', '--stable'], patch).split(/\s+/);
+  return id || null;
+}
+
+function commit(repoDir, message, files) {
+  for (const [relativePath, contents] of Object.entries(files)) {
+    fs.writeFileSync(path.join(repoDir, relativePath), contents);
+  }
+  git(repoDir, ['add', '--all']);
+  git(repoDir, ['commit', '--quiet', '--no-gpg-sign', '-m', message]);
+  return git(repoDir, ['rev-parse', 'HEAD']);
+}
+
+function makeGitWorkspace(t) {
+  const workspace = makeWorkspace(t);
+  git(workspace.projectDir, ['init', '--quiet', '-b', 'main']);
+  return workspace;
+}
+
+function receiptFor(repoDir, { runId, branch, startHead, terminalHead, acceptedCommits }) {
+  return {
+    runId,
+    branch,
+    startHead,
+    terminalHead,
+    acceptedCommits,
+    acceptedPatchIds: acceptedCommits.map((sha) => patchIdOf(repoDir, sha)),
+  };
+}
+
+function deliveryRecord(id, { sourceRunId, receipt, pullRequestIds = [], sourceBranch, pullRequest }) {
+  const record = workRecord(
+    id,
+    { sourceRunIds: [sourceRunId], pullRequestIds, candidates: [] },
+    sourceBranch ? { sourceBranch } : {},
+  );
+  if (receipt) record.work.deliveryReceipt = receipt;
+  if (pullRequest) record.work.pullRequest = pullRequest;
+  return record;
+}
+
+async function registerDelivery(workspace, record) {
+  await registerCanonicalKnowledge({ ...options(workspace), recordPath: writeProposal(workspace, record) });
+}
+
+const ABSENT_SHA = '0'.repeat(40);
+const ABSENT_PATCH_ID = '1'.repeat(40);
+
+/**
+ * One branch carrying present work, reverted work, overwritten work, delivered work, work from
+ * another branch, a receipt-less legacy record, a start-only receipt, and work that never
+ * entered the candidate range at all.
+ */
+async function buildSelectionFixture(t) {
+  const workspace = makeGitWorkspace(t);
+  const repoDir = workspace.projectDir;
+  const seed = commit(repoDir, 'seed', { 'README.md': 'seed\n' });
+  git(repoDir, ['checkout', '--quiet', '-b', 'feature']);
+  const alpha = commit(repoDir, 'run A: alpha', { 'alpha.txt': 'a1\n' });
+  const beta = commit(repoDir, 'run B: beta', { 'beta.txt': 'b1\n' });
+  const gamma = commit(repoDir, 'run C: gamma', { 'gamma.txt': 'c1\n' });
+  git(repoDir, ['revert', '--quiet', '--no-edit', '--no-gpg-sign', gamma]);
+  const shared = commit(repoDir, 'run D: shared v2', { 'shared.txt': 'v2\n' });
+  commit(repoDir, 'later: shared v3', { 'shared.txt': 'v3\n' });
+
+  const candidate = {
+    repository: 'github.com/example/spectre',
+    base: git(repoDir, ['merge-base', 'main', 'HEAD']),
+    head: git(repoDir, ['rev-parse', 'HEAD']),
+    diff: `sha256:${'c'.repeat(64)}`,
+  };
+
+  // Registration order is deliberately not the expected output order.
+  const records = [
+    deliveryRecord('work-shared', {
+      sourceRunId: 'run-shared',
+      receipt: receiptFor(repoDir, {
+        runId: 'run-shared', branch: 'feature', startHead: gamma, terminalHead: shared, acceptedCommits: [shared],
+      }),
+    }),
+    deliveryRecord('work-delivered', {
+      sourceRunId: 'run-delivered',
+      pullRequestIds: ['github:example/spectre#7'],
+      pullRequest: { state: 'draft-open', identity: 'github:example/spectre#7', url: 'https://example.invalid/pull/7' },
+      receipt: receiptFor(repoDir, {
+        runId: 'run-delivered', branch: 'feature', startHead: alpha, terminalHead: beta, acceptedCommits: [beta],
+      }),
+    }),
+    deliveryRecord('work-alpha', {
+      sourceRunId: 'run-alpha',
+      receipt: receiptFor(repoDir, {
+        runId: 'run-alpha', branch: 'feature', startHead: seed, terminalHead: alpha, acceptedCommits: [alpha],
+      }),
+    }),
+    deliveryRecord('work-missing', {
+      sourceRunId: 'run-missing',
+      receipt: {
+        runId: 'run-missing',
+        branch: 'feature',
+        startHead: seed,
+        terminalHead: ABSENT_SHA,
+        acceptedCommits: [ABSENT_SHA],
+        acceptedPatchIds: [ABSENT_PATCH_ID],
+      },
+    }),
+    deliveryRecord('work-legacy', { sourceRunId: 'run-legacy', sourceBranch: 'feature' }),
+    deliveryRecord('work-beta', {
+      sourceRunId: 'run-beta',
+      receipt: receiptFor(repoDir, {
+        runId: 'run-beta', branch: 'feature', startHead: alpha, terminalHead: beta, acceptedCommits: [beta],
+      }),
+    }),
+    deliveryRecord('work-other-branch', {
+      sourceRunId: 'run-other-branch',
+      sourceBranch: 'feature',
+      receipt: receiptFor(repoDir, {
+        runId: 'run-other-branch', branch: 'feature/other', startHead: seed, terminalHead: alpha, acceptedCommits: [alpha],
+      }),
+    }),
+    deliveryRecord('work-start-only', {
+      sourceRunId: 'run-start-only',
+      receipt: { runId: 'run-start-only', branch: 'feature', startHead: seed },
+    }),
+    deliveryRecord('work-gamma', {
+      sourceRunId: 'run-gamma',
+      receipt: receiptFor(repoDir, {
+        runId: 'run-gamma', branch: 'feature', startHead: beta, terminalHead: gamma, acceptedCommits: [gamma],
+      }),
+    }),
+    deliveryRecord('work-absent', {
+      sourceRunId: 'run-absent',
+      receipt: receiptFor(repoDir, {
+        runId: 'run-absent', branch: 'feature', startHead: seed, terminalHead: seed, acceptedCommits: [seed],
+      }),
+    }),
+  ];
+  for (const record of records) await registerDelivery(workspace, record);
+  return { workspace, repoDir, candidate, branch: 'feature' };
+}
+
+function selectionQuery(fixture) {
+  return {
+    projectDir: fixture.workspace.projectDir,
+    spectreHome: fixture.workspace.spectreHome,
+    branch: fixture.branch,
+    candidate: fixture.candidate,
+  };
+}
+
+const EXPECTED_SELECTION = {
+  'work-absent': ['excluded', 'not-in-candidate-range'],
+  'work-alpha': ['selected', 'net-effect-present'],
+  'work-beta': ['selected', 'net-effect-present'],
+  'work-delivered': ['excluded', 'pull-request-associated'],
+  'work-gamma': ['excluded', 'net-effect-absent'],
+  'work-legacy': ['excluded', 'receipt-absent'],
+  'work-missing': ['ambiguous', 'accepted-objects-missing'],
+  'work-other-branch': ['excluded', 'branch-mismatch'],
+  'work-shared': ['ambiguous', 'net-effect-unprovable'],
+  'work-start-only': ['ambiguous', 'receipt-start-only'],
+};
+
+describe('candidate-bounded delivery selection', () => {
+  it('returns one verdict and reason per record for every mapped case', async (t) => {
+    const fixture = await buildSelectionFixture(t);
+    const result = await listDeliveryMembership(selectionQuery(fixture));
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(
+      Object.fromEntries(result.evaluations.map((entry) => [entry.workId, [entry.verdict, entry.reason]])),
+      EXPECTED_SELECTION,
+    );
+  });
+
+  it('selects several PR-less current-branch records proven in the frozen candidate', async (t) => {
+    const fixture = await buildSelectionFixture(t);
+    const result = await listDeliveryMembership(selectionQuery(fixture));
+
+    assert.deepEqual(result.selected, ['work-alpha', 'work-beta']);
+  });
+
+  it('keeps rebase-equivalent work selectable from the persisted patch identity', async (t) => {
+    const workspace = makeGitWorkspace(t);
+    const repoDir = workspace.projectDir;
+    const seed = commit(repoDir, 'seed', { 'README.md': 'seed\n' });
+    git(repoDir, ['checkout', '--quiet', '-b', 'feature']);
+    const accepted = commit(repoDir, 'run A: alpha', { 'alpha.txt': 'a1\n' });
+    const receipt = receiptFor(repoDir, {
+      runId: 'run-rebased', branch: 'feature', startHead: seed, terminalHead: accepted, acceptedCommits: [accepted],
+    });
+    git(repoDir, ['checkout', '--quiet', 'main']);
+    commit(repoDir, 'target: docs', { 'docs.md': 'target moved\n' });
+    git(repoDir, ['checkout', '--quiet', 'feature']);
+    git(repoDir, ['rebase', '--quiet', 'main']);
+    await registerDelivery(workspace, deliveryRecord('work-rebased', { sourceRunId: 'run-rebased', receipt }));
+
+    const result = await listDeliveryMembership({
+      projectDir: repoDir,
+      spectreHome: workspace.spectreHome,
+      branch: 'feature',
+      candidate: {
+        repository: 'github.com/example/spectre',
+        base: git(repoDir, ['merge-base', 'main', 'HEAD']),
+        head: git(repoDir, ['rev-parse', 'HEAD']),
+        diff: `sha256:${'d'.repeat(64)}`,
+      },
+    });
+
+    assert.deepEqual(result.selected, ['work-rebased']);
+    assert.deepEqual(result.evaluations[0].evidence.provedByPatchId, [accepted]);
+  });
+
+  it('excludes other-branch, delivered, reverted, absent, and legacy records', async (t) => {
+    const fixture = await buildSelectionFixture(t);
+    const result = await listDeliveryMembership(selectionQuery(fixture));
+
+    assert.deepEqual(result.excluded, [
+      'work-absent', 'work-delivered', 'work-gamma', 'work-legacy', 'work-other-branch',
+    ]);
+  });
+
+  it('never auto-associates missing objects, unprovable overlap, or a start-only receipt', async (t) => {
+    const fixture = await buildSelectionFixture(t);
+    const result = await listDeliveryMembership(selectionQuery(fixture));
+
+    assert.deepEqual(result.ambiguous, ['work-missing', 'work-shared', 'work-start-only']);
+    for (const workId of result.ambiguous) assert.ok(!result.selected.includes(workId), workId);
+  });
+
+  it('repeats the same ordered set and the same evidence for the same tuple', async (t) => {
+    const fixture = await buildSelectionFixture(t);
+    const query = selectionQuery(fixture);
+    const first = await listDeliveryMembership(query);
+    const second = await listDeliveryMembership(query);
+
+    assert.deepEqual(second, first);
+    assert.deepEqual(
+      first.evaluations.map((entry) => entry.workId),
+      [...first.evaluations.map((entry) => entry.workId)].sort(),
+    );
+  });
+
+  it('names why membership could not be proven on every excluded and ambiguous record', async (t) => {
+    const fixture = await buildSelectionFixture(t);
+    const result = await listDeliveryMembership(selectionQuery(fixture));
+
+    for (const entry of result.evaluations) {
+      if (entry.verdict === 'selected') {
+        assert.equal(entry.recovery, null);
+        continue;
+      }
+      assert.equal(typeof entry.reason, 'string');
+      assert.ok(entry.reason.length > 0, entry.workId);
+      assert.equal(typeof entry.recovery, 'string');
+      assert.ok(entry.recovery.length > 0, `${entry.workId} carries recovery detail`);
+    }
+  });
+
+  it('answers every hostile input with a closed verdict instead of throwing', async (t) => {
+    const workspace = makeGitWorkspace(t);
+    const candidate = {
+      repository: 'github.com/example/spectre',
+      base: 'a'.repeat(40),
+      head: 'b'.repeat(40),
+      diff: `sha256:${'c'.repeat(64)}`,
+    };
+    const throwingRecord = { id: 'work-hostile', kind: 'work', get work() { throw new Error('unreadable'); } };
+    const hostile = [
+      undefined, null, 0, '', [], true, Number.NaN, new Date(), () => {}, Symbol('x'),
+      { }, { id: 'work-x' }, { id: 'work-x', kind: 'knowledge' },
+      { id: 'work-x', kind: 'work', work: null }, { id: 'work-x', kind: 'work', work: { deliveryReceipt: 7 } },
+      throwingRecord,
+    ];
+
+    for (const record of hostile) {
+      for (const query of [
+        { projectDir: workspace.projectDir, record, branch: 'feature', candidate },
+        { projectDir: undefined, record, branch: undefined, candidate: undefined },
+      ]) {
+        const result = evaluateRecordDeliveryMembership(query);
+        assert.notEqual(result, undefined, String(record));
+        assert.ok(['selected', 'excluded', 'ambiguous'].includes(result.verdict), `${String(record)}: ${result.verdict}`);
+        assert.notEqual(result.verdict, 'selected', 'a hostile input is never selected');
+        assert.equal(typeof result.reason, 'string');
+        assert.ok(result.reason.length > 0);
+        assert.ok(result.recovery === null || typeof result.recovery === 'string');
+      }
+    }
+    assert.notEqual(evaluateRecordDeliveryMembership(), undefined);
+    assert.notEqual(evaluateRecordDeliveryMembership(null), undefined);
+  });
+
+  it('maps every record-level reason to exactly one verdict', () => {
+    for (const [reason, verdict] of Object.entries(DELIVERY_SELECTION_REASONS)) {
+      assert.ok(['selected', 'excluded', 'ambiguous'].includes(verdict), reason);
+    }
   });
 });

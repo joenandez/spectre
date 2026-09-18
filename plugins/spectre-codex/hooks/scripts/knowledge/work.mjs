@@ -3,7 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { parseKnowledgeRecord, readRecordRevision, readVerifiedIndexedRecord, refreshKnowledgeIndex } from './records.mjs';
+import { evaluateDeliveryMembership } from '../workflow/membership.mjs';
+import {
+  classifyDeliveryReceipt,
+  parseKnowledgeRecord,
+  readRecordRevision,
+  readVerifiedIndexedRecord,
+  refreshKnowledgeIndex,
+} from './records.mjs';
 import { atomicWriteJson, resolveProjectStore, withStoreLock } from './store.mjs';
 
 const WORK_ASSOCIATION_FILE_NAME = 'work-associations.json';
@@ -380,6 +387,194 @@ export async function listWorkIdentities(options) {
       .sort();
     return { ok: true, workIds, legacyWorkIds };
   }, options.lockOptions);
+}
+
+/**
+ * Record-level delivery selection.
+ *
+ * The bounded membership predicate answers one question about one receipt and one candidate
+ * range. It cannot see whether a record was already delivered, whether it belongs to another
+ * branch, or whether it predates receipts entirely. Those are record facts, so they are
+ * settled here, before any Git call, and each one keeps its own reason.
+ *
+ * Every non-`selected` verdict names why membership could not be proven. Nothing falls back
+ * to branch ancestry, project recency, or the latest run: an unprovable record stays
+ * `ambiguous` and waits for a person.
+ */
+export const DELIVERY_SELECTION_REASONS = Object.freeze({
+  'record-unreadable': 'ambiguous',
+  'record-unverified': 'ambiguous',
+  'pull-request-associated': 'excluded',
+  'receipt-absent': 'excluded',
+  'receipt-unusable': 'excluded',
+  'branch-mismatch': 'excluded',
+  'receipt-start-only': 'ambiguous',
+});
+
+/** One recovery sentence per reason, record-level first, then the membership vocabulary. */
+const SELECTION_RECOVERY = Object.freeze({
+  'record-unreadable': 'The package could not be read as a work record, so it carries no membership evidence.',
+  'record-unverified': 'The work package no longer matches its persisted revision; re-register it before delivering it.',
+  'pull-request-associated': 'The record already names a pull request, so a later delivery never re-selects it.',
+  'receipt-absent': 'The record predates delivery receipts; it stays readable history and is never auto-selected.',
+  'receipt-unusable': 'The delivery receipt is unusable, so this run froze no membership evidence.',
+  'branch-mismatch': 'The receipt names another branch, so this candidate cannot represent that work.',
+  'receipt-start-only': 'The run captured only a start receipt, so its accepted work was never frozen.',
+  'receipt-incomplete': 'The receipt has no terminal evidence, so membership cannot be computed.',
+  'repo-unreadable': 'Git could not be read from the project directory.',
+  'candidate-objects-missing': 'The candidate base or head commit is absent from this checkout.',
+  'range-unreadable': 'The candidate commit range could not be listed.',
+  'patch-id-unreadable': 'A patch identity could not be computed, so range membership stays unproven.',
+  'patch-id-mismatch': 'A persisted patch id no longer matches the commit it claims.',
+  'accepted-objects-missing': 'Accepted commits are absent from this checkout and cannot be inspected.',
+  'partial-range-membership': 'Only part of the accepted work is inside the candidate range.',
+  'patch-unreadable': 'A proved commit patch could not be read.',
+  'no-patch-evidence': 'A proved commit carries no patch text to check.',
+  'net-effect-unprovable': 'Later commits rewrote the same content, so presence cannot be proven.',
+  'net-effect-unreadable': 'The candidate head tree could not be checked.',
+  'evaluation-failed': 'Membership evaluation failed before it reached a fact.',
+  'not-in-candidate-range': 'No accepted commit of that run is inside the candidate range.',
+  'net-effect-absent': 'The accepted work is reverted or otherwise absent from the candidate head.',
+});
+
+function recoveryDetail(verdict, reason) {
+  if (verdict === 'selected') return null;
+  return SELECTION_RECOVERY[reason] || `Membership could not be proven: ${reason}.`;
+}
+
+function selectionVerdict(workId, verdict, reason, evidence = {}) {
+  return { workId, verdict, reason, recovery: recoveryDetail(verdict, reason), evidence };
+}
+
+/** A hostile or half-written record must still answer, so every read is guarded. */
+function readWorkId(record) {
+  try {
+    return isNonEmptyString(record?.id) ? record.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Any PR association is a permanent boundary: that record is already delivered. */
+function isPullRequestAssociated(record) {
+  const pullRequestIds = record.work?.associations?.pullRequestIds;
+  if (Array.isArray(pullRequestIds) && pullRequestIds.length > 0) return true;
+  const state = record.work?.pullRequest?.state;
+  return isNonEmptyString(state) && !['none', 'unknown'].includes(state);
+}
+
+function evaluateRecord(workId, { projectDir, record, branch, candidate }) {
+  if (!isPlainObject(record) || record.kind !== 'work' || !isPlainObject(record.work)) {
+    return selectionVerdict(workId, 'ambiguous', 'record-unreadable');
+  }
+  if (isPullRequestAssociated(record)) {
+    return selectionVerdict(workId, 'excluded', 'pull-request-associated', {
+      pullRequestIds: [...(record.work.associations?.pullRequestIds || [])].sort(),
+    });
+  }
+
+  const classified = classifyDeliveryReceipt(record);
+  if (classified.state === 'legacy') {
+    const reason = classified.reason === 'no-receipt' ? 'receipt-absent' : 'receipt-unusable';
+    return selectionVerdict(workId, 'excluded', reason, { receiptState: classified.state, receiptReason: classified.reason });
+  }
+
+  const receipt = record.work.deliveryReceipt;
+  const recordBranch = isNonEmptyString(receipt?.branch) ? receipt.branch : null;
+  if (recordBranch === null || !isNonEmptyString(branch) || recordBranch !== branch) {
+    return selectionVerdict(workId, 'excluded', 'branch-mismatch', { recordBranch, branch: isNonEmptyString(branch) ? branch : null });
+  }
+  if (classified.state === 'start-only') {
+    return selectionVerdict(workId, 'ambiguous', 'receipt-start-only', {
+      runId: isNonEmptyString(receipt.runId) ? receipt.runId : null,
+      receiptState: classified.state,
+      receiptReason: classified.reason,
+    });
+  }
+
+  // The candidate tuple bounds the Git question: base and head are the frozen outgoing shas.
+  const membership = evaluateDeliveryMembership({
+    projectDir,
+    receipt,
+    candidate: { baseSha: candidate?.base, headSha: candidate?.head },
+  });
+  return selectionVerdict(workId, membership.verdict, membership.reason, membership.evidence);
+}
+
+/**
+ * Total per-record membership verdict. Every input, including a malformed or hostile record,
+ * returns exactly one of `selected`, `excluded`, or `ambiguous` with a reason. Nothing throws
+ * and nothing returns `undefined`, because a thrown evaluator would leave Ship guessing.
+ *
+ * @returns {{workId: string|null, verdict: 'selected'|'excluded'|'ambiguous', reason: string, recovery: string|null, evidence: object}}
+ */
+export function evaluateRecordDeliveryMembership(options) {
+  const query = isPlainObject(options) ? options : {};
+  const workId = readWorkId(query.record);
+  try {
+    return evaluateRecord(workId, query);
+  } catch (error) {
+    return selectionVerdict(workId, 'ambiguous', 'record-unreadable', {
+      failure: error?.code || error?.name || 'error',
+    });
+  }
+}
+
+function emptySelection(branch, candidateKey) {
+  return { ok: true, branch, candidateKey, evaluations: [], selected: [], excluded: [], ambiguous: [] };
+}
+
+function selectionOrderKey(evaluation) {
+  return typeof evaluation.workId === 'string' ? evaluation.workId : '';
+}
+
+/**
+ * Evaluates every work record in the store against one branch and one frozen candidate tuple.
+ *
+ * The answer is ordered by work id, never by index iteration or recency, so repeating the
+ * query against the same tuple returns the same ordered set and the same evidence. A record
+ * whose bytes no longer match its persisted revision is reported `ambiguous`, never dropped
+ * and never selected.
+ */
+export async function listDeliveryMembership(options = {}) {
+  const query = isPlainObject(options) ? options : {};
+  if (!isNonEmptyString(query.branch)) {
+    throw codedError('WORK_QUERY_INVALID', 'A delivery membership query needs the exact current branch.');
+  }
+  const candidate = validateCandidate(query.candidate);
+  const candidateKey = candidateAssociationKey(candidate);
+  const projectDir = path.resolve(query.projectDir || process.cwd());
+  const resolved = await resolveStore(query, true);
+  if (!resolved.storePath) return emptySelection(query.branch, candidateKey);
+
+  return withStoreLock(resolved.storePath, 'list-delivery-membership', async () => {
+    const { view } = associationView(resolved.storePath);
+    const evaluations = [];
+    for (const record of view.verifiedWorkRecords.values()) {
+      evaluations.push(evaluateRecordDeliveryMembership({ projectDir, record, branch: query.branch, candidate }));
+    }
+    for (const workId of view.unverifiedWorkIds) {
+      evaluations.push(selectionVerdict(workId, 'ambiguous', 'record-unverified'));
+    }
+    evaluations.sort((left, right) => {
+      const leftKey = selectionOrderKey(left);
+      const rightKey = selectionOrderKey(right);
+      if (leftKey < rightKey) return -1;
+      return leftKey > rightKey ? 1 : 0;
+    });
+    const idsFor = (verdict) => evaluations
+      .filter((evaluation) => evaluation.verdict === verdict)
+      .map((evaluation) => evaluation.workId);
+    return {
+      ok: true,
+      branch: query.branch,
+      candidateKey,
+      evaluations,
+      selected: idsFor('selected'),
+      excluded: idsFor('excluded'),
+      ambiguous: idsFor('ambiguous'),
+    };
+  }, query.lockOptions);
 }
 
 /**
