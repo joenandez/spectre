@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +13,7 @@ import { registerCanonicalKnowledge } from './registration.mjs';
 import { resolveProjectStore } from './store.mjs';
 import { ensureTags, loadTagCatalog, normalizeTagId, resolveTagId } from './tags.mjs';
 import { resolveOrAllocateWorkIdentity, resolveWorkIdentity } from './work.mjs';
+import { readWorkflowRun } from '../workflow/store.mjs';
 
 const INPUT_VERSION = 1;
 const WORK_FIELDS = [
@@ -24,7 +26,7 @@ const KNOWLEDGE_FIELDS = new Set([
 ]);
 const WORK_INPUT_FIELDS = new Set([
   'inputVersion', 'title', 'summary', ...WORK_FIELDS, 'tags', 'execution',
-  'verificationState', 'pullRequest', 'relatedRecordIds',
+  'verificationState', 'pullRequest', 'relatedRecordIds', 'deliveryReceipt',
 ]);
 const PLACEHOLDER = /^(?:<[^>]+>|{{[^}]+}}|TODO|REPLACE[_ -]?ME)$/i;
 const UNKNOWN_STATE = { state: 'unknown' };
@@ -169,6 +171,180 @@ function mergeCandidates(left = [], right = []) {
   return [...found.values()];
 }
 
+// --- Bounded delivery receipt ---------------------------------------------------------------
+//
+// The receipt is derived from one exact Execute run's own durable event log and from nothing
+// else. There is deliberately no branch walk and no `startHead` ancestry walk: a commit that
+// merely sits on the branch is not evidence that this run produced it. Evidence the log cannot
+// prove stays ABSENT, so `classifyDeliveryReceipt` reports `start-only` and the membership
+// evaluator fails closed instead of reading an invented value.
+
+const RECEIPT_RUN_ID_PATTERN = /^run_[0-9a-f-]{36}$/;
+const RECEIPT_SHA_PATTERN = /^[0-9a-f]{7,64}$/i;
+// The run store stamps these when Git cannot answer. They are the absence of evidence.
+const RECEIPT_SENTINELS = new Set(['unknown', 'unavailable']);
+const RUN_BOUNDARY_EVENTS = new Set([
+  'run.implementation_ready', 'run.completed', 'run.failed', 'run.blocked', 'run.interrupted',
+]);
+const GIT_TIMEOUT_MS = 30_000;
+// A generated file or a lockfile makes a multi-megabyte commit patch routine.
+const GIT_MAX_BUFFER = 256 * 1024 * 1024;
+
+function debugLog(event, fields) {
+  if (!process.env.SPECTRE_DEBUG) return;
+  process.stderr.write(`${JSON.stringify({ event, ...fields })}\n`);
+}
+
+/** Reports whether Git ran separately from what it printed: a failure is never a fact. */
+function git(cwd, args, input) {
+  try {
+    const stdout = execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: GIT_TIMEOUT_MS,
+      maxBuffer: GIT_MAX_BUFFER,
+      // An ambient GIT_DIR or GIT_WORK_TREE would read another repository.
+      env: { ...process.env, GIT_DIR: undefined, GIT_WORK_TREE: undefined },
+      ...(input === undefined ? {} : { input }),
+    });
+    return { ok: true, stdout };
+  } catch (error) {
+    debugLog('capture.git_failed', { args: args[0], message: error?.message });
+    return { ok: false, stdout: '' };
+  }
+}
+
+/**
+ * The patch id persisted for one accepted commit, computed here because the pre-rebase object
+ * can be garbage-collected long before anything reads the receipt.
+ *
+ * The argument list is byte-identical to the patch `workflow/membership.mjs` rebuilds at
+ * evaluation time; the two ids are compared, so it is copied deliberately and never shortened.
+ *
+ * @returns {{ok: boolean, id: string|null}} `ok: false` means Git failed; `ok: true` with a
+ * `null` id means the commit genuinely has no patch (a merge or an empty commit).
+ */
+function patchIdOf(repoRoot, sha) {
+  const patch = git(repoRoot, [
+    'diff-tree', '-p', '--no-color', '--root', '--full-index', '--binary',
+    '--no-ext-diff', '--no-textconv', sha,
+  ]);
+  if (!patch.ok) return { ok: false, id: null };
+  if (!patch.stdout.trim()) return { ok: true, id: null };
+  const output = git(repoRoot, ['patch-id', '--stable'], patch.stdout);
+  if (!output.ok) return { ok: false, id: null };
+  const [id] = output.stdout.trim().split(/\s+/);
+  return { ok: true, id: id || null };
+}
+
+function receiptToken(value) {
+  if (typeof value !== 'string') return undefined;
+  const token = value.trim();
+  if (!token || /\s/.test(token) || RECEIPT_SENTINELS.has(token.toLowerCase())) return undefined;
+  return token;
+}
+
+function receiptSha(value) {
+  const token = receiptToken(value);
+  return token && RECEIPT_SHA_PATTERN.test(token) ? token : undefined;
+}
+
+/** Accepted means the primary completed the task behind a passing gate, not merely submitted. */
+function acceptedCommits(state, events) {
+  const commits = [];
+  for (const event of events) {
+    if (event.type !== 'task.submitted') continue;
+    if (state.tasks?.[event.taskId]?.state !== 'completed') continue;
+    const commit = receiptSha(event.payload?.commit);
+    if (commit && !commits.includes(commit)) commits.push(commit);
+  }
+  return commits;
+}
+
+/** Terminal evidence, or as much of it as the event log alone can prove. */
+function terminalEvidence(projectDir, state, events) {
+  const boundary = [...events].reverse().find((event) => RUN_BOUNDARY_EVENTS.has(event.type));
+  const terminalHead = receiptSha(boundary?.git?.headSha);
+  if (!terminalHead) return {};
+  const commits = acceptedCommits(state, events);
+  if (commits.length === 0) return { terminalHead };
+  const root = git(projectDir, ['rev-parse', '--show-toplevel']);
+  const repoRoot = root.ok ? root.stdout.trim() : '';
+  if (!repoRoot) return { terminalHead };
+  const patchIds = [];
+  for (const commit of commits) {
+    const { ok, id } = patchIdOf(repoRoot, commit);
+    // An unreadable patch is not an empty patch. Persisting `null` here would tell the
+    // evaluator the commit has no patch, so the whole list is dropped and the receipt stays
+    // start-only until a capture can prove it.
+    if (!ok) {
+      debugLog('capture.receipt_patch_unreadable', { commit });
+      return { terminalHead };
+    }
+    patchIds.push(id);
+  }
+  return { terminalHead, acceptedCommits: commits, acceptedPatchIds: patchIds };
+}
+
+/** Read one exact run's receipt evidence. Work capture is never a delivery authority, so an
+ * unreadable or unknown run yields no receipt rather than an error. */
+async function deliveryReceiptFromRun({ projectDir, spectreHome, sourceRunId }) {
+  if (typeof sourceRunId !== 'string' || !RECEIPT_RUN_ID_PATTERN.test(sourceRunId)) return undefined;
+  let loaded;
+  try {
+    loaded = await readWorkflowRun({ projectDir, spectreHome, runId: sourceRunId });
+  } catch (error) {
+    debugLog('capture.receipt_run_unreadable', { runId: sourceRunId, code: error?.code || 'UNKNOWN' });
+    return undefined;
+  }
+  const { state, events } = loaded;
+  const branch = receiptToken(state?.branch);
+  const startHead = receiptSha(events.find((event) => event.type === 'run.started')?.git?.headSha);
+  if (!branch || !startHead) {
+    debugLog('capture.receipt_start_unprovable', {
+      runId: sourceRunId, branch: Boolean(branch), startHead: Boolean(startHead),
+    });
+    return undefined;
+  }
+  const receipt = { runId: sourceRunId, branch, startHead, ...terminalEvidence(projectDir, state, events) };
+  debugLog('capture.receipt_derived', {
+    runId: sourceRunId,
+    terminal: Boolean(receipt.terminalHead),
+    acceptedCommits: receipt.acceptedCommits?.length || 0,
+  });
+  return receipt;
+}
+
+/** A work record belongs to one exact run: another run's evidence never overwrites it. */
+function receiptForStoredRun(stored, derived) {
+  if (!derived || !isPlainObject(stored) || !stored.runId || stored.runId === derived.runId) return derived;
+  debugLog('capture.receipt_run_mismatch', { stored: stored.runId, derived: derived.runId });
+  return undefined;
+}
+
+/**
+ * Carry the stored receipt forward and let newer evidence only ADD to it. A capture that
+ * learns nothing about delivery must never erase a completed receipt: that would silently
+ * downgrade a `complete` record to `legacy` and destroy the run's only delivery evidence.
+ */
+function mergeDeliveryReceipt(current, ...updates) {
+  let merged = isPlainObject(current) ? { ...current } : undefined;
+  for (const update of updates) {
+    if (!isPlainObject(update)) continue;
+    // Spreading is what carries evidence forward: an update can only add or replace a field.
+    const next = { ...(merged || {}), ...update };
+    // The two accepted lists are one index-aligned fact, so an update that carries either one
+    // replaces both and a stale list can never re-pair with a new one.
+    if (update.acceptedCommits !== undefined || update.acceptedPatchIds !== undefined) {
+      next.acceptedCommits = update.acceptedCommits;
+      next.acceptedPatchIds = update.acceptedPatchIds;
+    }
+    merged = next;
+  }
+  return merged;
+}
+
 function existingRecord(storePath, id) {
   if (typeof id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) return null;
   const recordPath = path.join(storePath, 'knowledge', id, 'record.json');
@@ -270,6 +446,12 @@ function constructWork(input, current, workId, tags, associations, options) {
   const applicability = current?.applicability || { scope: 'work', workId };
   const provenance = current?.provenance || { origin: 'captured', capturedAt: nowIso(options) };
   const sourceBranch = options.branch === undefined ? provenance.sourceBranch : options.branch;
+  const stored = current?.work.deliveryReceipt;
+  const deliveryReceipt = mergeDeliveryReceipt(
+    stored,
+    input.deliveryReceipt,
+    receiptForStoredRun(stored, options.deliveryReceipt),
+  );
   return {
     schemaVersion: 1,
     id: workId,
@@ -291,6 +473,7 @@ function constructWork(input, current, workId, tags, associations, options) {
       verificationState: input.verificationState || current?.work.verificationState || UNKNOWN_STATE,
       pullRequest: input.pullRequest || current?.work.pullRequest || UNKNOWN_STATE,
       associations: mergedAssociations,
+      ...(deliveryReceipt ? { deliveryReceipt } : {}),
     },
   };
 }
@@ -356,12 +539,22 @@ export async function captureCanonicalKnowledge(options) {
   if (kind === 'knowledge' && options.recordId !== undefined && input.id !== options.recordId) {
     throw codedError('CAPTURE_INPUT_INVALID', '--record-id must match the semantic knowledge input id.');
   }
-  const resolved = await resolveProjectStore(path.resolve(options.projectDir || process.cwd()), {
+  const projectDir = path.resolve(options.projectDir || process.cwd());
+  const resolved = await resolveProjectStore(projectDir, {
     spectreHome: options.spectreHome,
     gitRunner: options.gitRunner,
     allocationLockOptions: options.allocationLockOptions,
   });
   const requested = requestedAssociations(options);
+  // Derived before any store lock is taken, because reading the run takes the same store lock.
+  const captureOptions = kind === 'work'
+    ? {
+      ...options,
+      deliveryReceipt: await deliveryReceiptFromRun({
+        projectDir, spectreHome: options.spectreHome, sourceRunId: options.sourceRunId,
+      }),
+    }
+    : options;
   let current = null;
   let workIdentity = null;
   let tagResult = { tags: [], tagOutcomes: [] };
@@ -388,7 +581,7 @@ export async function captureCanonicalKnowledge(options) {
     const preflightTags = await preflightCanonicalTags({
       projectDir: options.projectDir, tags: input.tags, existingTags: current?.record.tags || [], ...storeOptions(options),
     });
-    prevalidateSemanticRecord(input, kind, current?.record, requested, options, preflightTags);
+    prevalidateSemanticRecord(input, kind, current?.record, requested, captureOptions, preflightTags);
   } catch (error) {
     throw recovery(error, { recoveryInput: path.resolve(options.inputPath) });
   }
@@ -409,7 +602,7 @@ export async function captureCanonicalKnowledge(options) {
     }
     record = kind === 'knowledge'
       ? constructKnowledge(input, current?.record, tagResult.tags, options)
-      : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, options);
+      : constructWork(input, current?.record, workIdentity.workId, tagResult.tags, requested, captureOptions);
     validateKnowledgeRecord(record, path.join('<semantic-capture>', record.id, 'record.json'), { expectedId: record.id });
     assertWorkRecordTokenLimit(record);
     if (current && !options.expectedRevision && current.revisionToken !== revisionTokenFor(record, current.resourceDigests)) {

@@ -8,10 +8,11 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { estimateRenderedRecordTokens, refreshKnowledgeIndex } from './knowledge/records.mjs';
+import { classifyDeliveryReceipt, estimateRenderedRecordTokens, refreshKnowledgeIndex } from './knowledge/records.mjs';
 import { registerCanonicalKnowledge } from './knowledge/registration.mjs';
 import { captureCanonicalKnowledge } from './knowledge/capture.mjs';
 import { resolveProjectStore } from './knowledge/store.mjs';
+import { recordWorkflowEvents, startWorkflowRun } from './workflow/store.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, '../../../..');
@@ -805,5 +806,239 @@ describe('semantic knowledge capture', () => {
       assert.equal(captured.ok, true, remainingWork);
       assert.equal(storedRecord(value, captured.workId).work.remainingWork, remainingWork);
     }
+  });
+});
+
+function gitIn(cwd, args, input) {
+  const result = spawnSync('git', args, {
+    cwd, encoding: 'utf8', ...(input === undefined ? {} : { input }),
+  });
+  assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+function commitFile(projectDir, name, body, message) {
+  fs.writeFileSync(path.join(projectDir, name), body);
+  gitIn(projectDir, ['add', name]);
+  gitIn(projectDir, ['commit', '-m', message]);
+  return gitIn(projectDir, ['rev-parse', 'HEAD']);
+}
+
+function patchIdFor(projectDir, sha) {
+  const patch = gitIn(projectDir, [
+    'diff-tree', '-p', '--no-color', '--root', '--full-index', '--binary',
+    '--no-ext-diff', '--no-textconv', sha,
+  ]);
+  return gitIn(projectDir, ['patch-id', '--stable'], `${patch}\n`).split(/\s+/)[0];
+}
+
+const RECEIPT_BRANCH = 'feature/delivery-receipt';
+const RECEIPT_WORKER = 'actor_00000000-0000-4000-8000-000000000001';
+
+async function receiptFixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-knowledge-receipt-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const projectDir = path.join(root, 'project');
+  const spectreHome = path.join(root, 'spectre-home');
+  const stdinTemp = path.join(root, 'stdin-temp');
+  fs.mkdirSync(projectDir, { recursive: true });
+  fs.mkdirSync(stdinTemp, { recursive: true });
+  gitIn(projectDir, ['init', '-b', RECEIPT_BRANCH]);
+  gitIn(projectDir, ['config', 'user.email', 'receipt@example.test']);
+  gitIn(projectDir, ['config', 'user.name', 'Receipt Fixture']);
+  gitIn(projectDir, ['config', 'commit.gpgsign', 'false']);
+  const sourcePath = path.join(projectDir, '.spectre', 'features', 'delivery-receipt', 'specs', 'tasks.json');
+  fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+  fs.writeFileSync(sourcePath, JSON.stringify({
+    meta: { schema_version: 1, feature: 'delivery-receipt', feature_root: '.spectre/features/delivery-receipt' },
+    phases: [{
+      id: '1',
+      title: 'Build',
+      parents: [{ id: '1.1', title: 'Parent', subtasks: [{ id: '1.1.1', title: 'Child', type: 'Build' }] }],
+    }],
+  }, null, 2));
+  const startHead = commitFile(projectDir, 'start.txt', 'start\n', 'Start commit');
+  const { storePath } = await resolveProjectStore(projectDir, { spectreHome });
+  fs.writeFileSync(path.join(storePath, 'tags.json'), JSON.stringify({
+    schemaVersion: 1,
+    tags: { authentication: { description: 'Authentication behavior.', aliases: ['auth'] } },
+    redirects: { credentials: 'authentication' },
+  }, null, 2));
+  refreshKnowledgeIndex(storePath);
+  return { root, projectDir, spectreHome, stdinTemp, storePath, sourcePath, startHead };
+}
+
+async function runEvents(value, runId, events) {
+  return recordWorkflowEvents({
+    projectDir: value.projectDir, spectreHome: value.spectreHome, runId, events,
+  });
+}
+
+async function startedRun(value) {
+  const started = await startWorkflowRun({
+    projectDir: value.projectDir, spectreHome: value.spectreHome, source: value.sourcePath,
+  });
+  await runEvents(value, started.runId, [
+    {
+      type: 'agent.dispatched',
+      actorId: started.primaryActorId,
+      assignmentId: 'assignment_1',
+      attempt: 1,
+      payload: { workerActorId: RECEIPT_WORKER, taskDefinitions: [{ id: '1.1' }, { id: '1.1.1' }] },
+    },
+    ...['1.1', '1.1.1'].map((taskId) => ({
+      type: 'task.assigned',
+      actorId: started.primaryActorId,
+      taskId,
+      assignmentId: 'assignment_1',
+      attempt: 1,
+      payload: { assignedActorId: RECEIPT_WORKER },
+    })),
+  ]);
+  return started;
+}
+
+async function acceptedRun(value, run, commitByTask) {
+  for (const [taskId, commit] of Object.entries(commitByTask)) {
+    await runEvents(value, run.runId, [{ type: 'task.started', actorId: RECEIPT_WORKER, taskId, attempt: 1, payload: {} }]);
+    await runEvents(value, run.runId, [{
+      type: 'task.submitted', actorId: RECEIPT_WORKER, taskId, attempt: 1, payload: { commit },
+    }]);
+  }
+  const taskIds = Object.keys(commitByTask);
+  const gate = await runEvents(value, run.runId, [{
+    type: 'gate.recorded',
+    actorId: run.primaryActorId,
+    payload: { kind: 'verification', status: 'pass', taskIds, checkIds: ['test:focused'] },
+  }]);
+  for (const taskId of [...taskIds].reverse()) {
+    await runEvents(value, run.runId, [{
+      type: 'task.completed', actorId: run.primaryActorId, taskId, payload: { gateEventId: gate.events[0].eventId },
+    }]);
+  }
+  await runEvents(value, run.runId, [{
+    type: 'gate.recorded',
+    actorId: run.primaryActorId,
+    payload: { kind: 'proof', status: 'pass', taskIds, checkIds: ['test:focused'] },
+  }]);
+  await runEvents(value, run.runId, [{ type: 'run.completed', actorId: run.primaryActorId, payload: {} }]);
+}
+
+function recordFile(value, workId) {
+  return path.join(value.storePath, 'knowledge', workId, 'record.json');
+}
+
+describe('Execute delivery receipt capture', () => {
+  it('persists the exact run, branch, and start HEAD at the Execute-start boundary', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-start.json', workInput()),
+      sourceRunId: run.runId,
+    });
+
+    const record = storedRecord(value, captured.workId);
+    assert.deepEqual(record.work.deliveryReceipt, {
+      runId: run.runId, branch: RECEIPT_BRANCH, startHead: value.startHead,
+    });
+    assert.equal(classifyDeliveryReceipt(record).state, 'start-only');
+
+    const before = fs.readFileSync(recordFile(value, captured.workId), 'utf8');
+    await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-start-again.json', workInput()),
+      sourceRunId: run.runId,
+    });
+    assert.equal(fs.readFileSync(recordFile(value, captured.workId), 'utf8'), before);
+  });
+
+  it('completes the receipt at the terminal boundary from accepted commit evidence', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    const parentCommit = commitFile(value.projectDir, 'parent.txt', 'parent\n', 'Parent work');
+    const childCommit = commitFile(value.projectDir, 'child.txt', 'child\n', 'Child work');
+    await acceptedRun(value, run, { '1.1': parentCommit, '1.1.1': childCommit });
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-terminal.json', workInput()),
+      sourceRunId: run.runId,
+    });
+
+    const receipt = storedRecord(value, captured.workId).work.deliveryReceipt;
+    assert.equal(receipt.runId, run.runId);
+    assert.equal(receipt.startHead, value.startHead);
+    assert.equal(receipt.terminalHead, childCommit);
+    assert.deepEqual(receipt.acceptedCommits, [parentCommit, childCommit]);
+    assert.deepEqual(receipt.acceptedPatchIds, [
+      patchIdFor(value.projectDir, parentCommit),
+      patchIdFor(value.projectDir, childCommit),
+    ]);
+    assert.equal(classifyDeliveryReceipt(storedRecord(value, captured.workId)).state, 'complete');
+  });
+
+  it('never fills missing accepted evidence from the branch or start-HEAD ancestry', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    commitFile(value.projectDir, 'unrelated-a.txt', 'a\n', 'Branch commit A');
+    const branchTip = commitFile(value.projectDir, 'unrelated-b.txt', 'b\n', 'Branch commit B');
+    await acceptedRun(value, run, { '1.1': undefined, '1.1.1': undefined });
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-no-evidence.json', workInput()),
+      sourceRunId: run.runId,
+    });
+
+    const record = storedRecord(value, captured.workId);
+    assert.equal(record.work.deliveryReceipt.terminalHead, branchTip);
+    assert.equal(Object.hasOwn(record.work.deliveryReceipt, 'acceptedCommits'), false);
+    assert.equal(Object.hasOwn(record.work.deliveryReceipt, 'acceptedPatchIds'), false);
+    assert.equal(classifyDeliveryReceipt(record).state, 'start-only');
+  });
+
+  it('carries a stored receipt through a later capture that learns no delivery evidence', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    const commit = commitFile(value.projectDir, 'parent.txt', 'parent\n', 'Parent work');
+    await acceptedRun(value, run, { '1.1': commit, '1.1.1': commit });
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-complete.json', workInput()),
+      sourceRunId: run.runId,
+    });
+    const complete = storedRecord(value, captured.workId).work.deliveryReceipt;
+    assert.equal(classifyDeliveryReceipt(storedRecord(value, captured.workId)).state, 'complete');
+
+    const revised = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-revised.json', workInput({ summary: 'A revised work capture fixture.' })),
+      workId: captured.workId, expectedRevision: captured.revisionToken,
+    });
+
+    const record = storedRecord(value, revised.workId);
+    assert.equal(record.summary, 'A revised work capture fixture.');
+    assert.deepEqual(record.work.deliveryReceipt, complete);
+    assert.equal(classifyDeliveryReceipt(record).state, 'complete');
+  });
+
+  it('accepts an explicit receipt in the capture input when no run evidence is readable', async (t) => {
+    const value = await receiptFixture(t);
+    const deliveryReceipt = {
+      runId: 'run_00000000-0000-4000-8000-0000000000aa',
+      branch: RECEIPT_BRANCH,
+      startHead: value.startHead,
+    };
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-explicit.json', workInput({ deliveryReceipt })),
+      sourceRunId: 'run_00000000-0000-4000-8000-0000000000aa',
+    });
+
+    assert.deepEqual(storedRecord(value, captured.workId).work.deliveryReceipt, deliveryReceipt);
   });
 });
