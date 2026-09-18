@@ -339,6 +339,8 @@ async function deliveryReceiptFromRun({ projectDir, spectreHome, sourceRunId }) 
   return receipt;
 }
 
+const START_ONLY_RECEIPT_FIELDS = ['runId', 'branch', 'startHead'];
+
 /**
  * The start-only fallback a caller may supply when the run's own log is unreadable.
  *
@@ -346,14 +348,20 @@ async function deliveryReceiptFromRun({ projectDir, spectreHome, sourceRunId }) 
  * `terminalHead` or accepted list would let any capture input hand-write proven delivery for
  * commits the run never produced, so those fields are dropped rather than rejected — capture is
  * never a blocking delivery authority.
+ *
+ * The three start fields are one fact, like the accepted commit and patch lists: all three or
+ * none. A partial set would reach record validation as an invalid receipt and fail the whole
+ * capture, which is the one outcome this fallback exists to avoid.
  */
 function startOnlyReceipt(value) {
   if (!isPlainObject(value)) return undefined;
-  const receipt = {};
-  for (const field of ['runId', 'branch', 'startHead']) {
-    if (value[field] !== undefined) receipt[field] = value[field];
+  if (!START_ONLY_RECEIPT_FIELDS.every((field) => isNonEmptyString(value[field]))) {
+    debugLog('capture.receipt_input_incomplete', {
+      present: START_ONLY_RECEIPT_FIELDS.filter((field) => isNonEmptyString(value[field])),
+    });
+    return undefined;
   }
-  if (Object.keys(receipt).length === 0) return undefined;
+  const receipt = Object.fromEntries(START_ONLY_RECEIPT_FIELDS.map((field) => [field, value[field]]));
   debugLog('capture.receipt_input_narrowed', {
     runId: receipt.runId,
     dropped: Object.keys(value).filter((key) => !Object.hasOwn(receipt, key)),
@@ -492,9 +500,13 @@ function constructWork(input, current, workId, tags, associations, options) {
   const provenance = current?.provenance || { origin: 'captured', capturedAt: nowIso(options) };
   const sourceBranch = options.branch === undefined ? provenance.sourceBranch : options.branch;
   const stored = current?.work.deliveryReceipt;
+  // The caller-supplied fallback is add-only: once a receipt is stored, only the run's own log
+  // may revise it. Otherwise a capture input naming the stored run could rewrite `branch` and
+  // `startHead` over evidence the run wrote, and `branch` gates record-level delivery selection.
+  const suppliedReceipt = isPlainObject(stored) ? undefined : startOnlyReceipt(input.deliveryReceipt);
   const deliveryReceipt = mergeDeliveryReceipt(
     stored,
-    receiptForStoredRun(stored, startOnlyReceipt(input.deliveryReceipt)),
+    suppliedReceipt,
     receiptForStoredRun(stored, options.deliveryReceipt),
   );
   return {

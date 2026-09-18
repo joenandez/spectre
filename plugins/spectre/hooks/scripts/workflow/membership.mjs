@@ -69,6 +69,7 @@ export const DELIVERY_MEMBERSHIP_REASONS = Object.freeze({
   'range-unreadable': 'ambiguous',
   'patch-id-unreadable': 'ambiguous',
   'patch-id-mismatch': 'ambiguous',
+  'no-patch-identity': 'ambiguous',
   'accepted-objects-missing': 'ambiguous',
   'partial-range-membership': 'ambiguous',
   'patch-unreadable': 'ambiguous',
@@ -303,7 +304,11 @@ function evaluate({ projectDir, receipt, candidate }) {
           return verdict('ambiguous', 'patch-id-mismatch', { ...base, commit: sha });
         }
       }
-      const match = claimedPatchId ? index.byPatchId.get(claimedPatchId) : undefined;
+      // A merge or an empty commit has no patch identity to match on, so an unproved one is
+      // unprovable, never absent. Answering `excluded` here would drop a merge commit's real
+      // content out of the delivery on the strength of no evidence at all.
+      if (!claimedPatchId) return verdict('ambiguous', 'no-patch-identity', { ...base, commit: sha });
+      const match = index.byPatchId.get(claimedPatchId);
       if (match) {
         provedByPatchId.push(sha);
         patchSourceOf.set(sha, match);

@@ -431,6 +431,7 @@ const SELECTION_RECOVERY = Object.freeze({
   'range-unreadable': 'The candidate commit range could not be listed.',
   'patch-id-unreadable': 'A patch identity could not be computed, so range membership stays unproven.',
   'patch-id-mismatch': 'A persisted patch id no longer matches the commit it claims.',
+  'no-patch-identity': 'An accepted merge or empty commit carries no patch identity, so range membership cannot be proven.',
   'accepted-objects-missing': 'Accepted commits are absent from this checkout and cannot be inspected.',
   'partial-range-membership': 'Only part of the accepted work is inside the candidate range.',
   'patch-unreadable': 'A proved commit patch could not be read.',
@@ -596,6 +597,13 @@ export async function listDeliveryMembership(options = {}) {
  */
 const DELIVERY_PULL_REQUEST_FIELDS = ['state', 'identity', 'url'];
 
+/**
+ * The only two states an association can legitimately produce. An association opens or names a
+ * pull request; it never observes a merge or a close, so `merged` and `closed` stay out of
+ * reach of this writer and cannot be hand-written onto a record that was never delivered.
+ */
+const ASSOCIABLE_PULL_REQUEST_STATES = ['none', 'draft-open'];
+
 /** One recovery sentence per way an association can fail to land on one record. */
 const ASSOCIATION_RECOVERY = Object.freeze({
   WORK_RECORD_MISSING: 'No work package with that id is stored; capture the run before associating it.',
@@ -620,6 +628,9 @@ function validateDeliveryPullRequest(pullRequest) {
     if (!isNonEmptyString(pullRequest[field])) {
       throw codedError('WORK_DELIVERY_INPUT_INVALID', `pullRequest.${field} must be a non-empty string.`);
     }
+  }
+  if (!ASSOCIABLE_PULL_REQUEST_STATES.includes(pullRequest.state)) {
+    throw codedError('WORK_DELIVERY_INPUT_INVALID', `pullRequest.state must be one of ${ASSOCIABLE_PULL_REQUEST_STATES.join(', ')}.`);
   }
   return {
     state: pullRequest.state,
@@ -653,7 +664,9 @@ function deliveredWorkRecord(current, delivery) {
     delivery.pullRequestId,
   );
   next.work.associations.candidates = mergedCandidates(next.work.associations.candidates, delivery.candidate);
-  if (delivery.pullRequest) next.work.pullRequest = delivery.pullRequest;
+  // A partial pull-request payload adds to what is stored: a later state must not erase the
+  // identity and url an earlier association already proved.
+  if (delivery.pullRequest) next.work.pullRequest = { ...next.work.pullRequest, ...delivery.pullRequest };
   return next;
 }
 

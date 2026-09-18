@@ -1300,6 +1300,33 @@ describe('association-only guarded delivery association', () => {
     }
   });
 
+  it('adds to the stored pull request state instead of erasing its identity and url', async (t) => {
+    const fixture = await buildAssociationFixture(t, 1);
+    await associateWorkDelivery(deliveryOptions(fixture.workspace, { workIds: fixture.workIds }));
+
+    const result = await associateWorkDelivery(deliveryOptions(fixture.workspace, {
+      workIds: fixture.workIds, pullRequest: { state: 'draft-open' },
+    }));
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(storedRecord(fixture.storePath, fixture.workIds[0]).work.pullRequest, DELIVERY_PR_STATE);
+  });
+
+  it('refuses a pull request state an association can never observe', async (t) => {
+    const fixture = await buildAssociationFixture(t, 1);
+
+    for (const state of ['merged', 'closed', 'unknown']) {
+      await assert.rejects(
+        associateWorkDelivery(deliveryOptions(fixture.workspace, {
+          workIds: fixture.workIds, pullRequest: { state },
+        })),
+        (error) => error.code === 'WORK_DELIVERY_INPUT_INVALID',
+        state,
+      );
+    }
+    assert.deepEqual(storedRecord(fixture.storePath, fixture.workIds[0]).work.associations.pullRequestIds, []);
+  });
+
   it('returns bounded partial recovery naming the succeeded and remaining ids for an injected stale revision', async (t) => {
     const fixture = await buildAssociationFixture(t, 3);
     const stale = fixture.workIds[1];

@@ -1088,6 +1088,48 @@ describe('Execute delivery receipt capture', () => {
     assert.equal(classifyDeliveryReceipt(record).state, 'start-only');
   });
 
+  it('never lets a capture input rewrite branch or start HEAD on a stored receipt', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    const commit = commitFile(value.projectDir, 'parent.txt', 'parent\n', 'Parent work');
+    await acceptedRun(value, run, { '1.1': commit, '1.1.1': commit });
+    const created = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'stored-receipt.json', workInput()),
+      sourceRunId: run.runId,
+    });
+    const owned = storedRecord(value, created.workId).work.deliveryReceipt;
+
+    // The record's own run id is readable, so naming it must not buy the caller write access.
+    const revised = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'rewrite-branch.json', workInput({
+        summary: 'A work capture fixture naming a conflicting branch.',
+        deliveryReceipt: { runId: run.runId, branch: 'feature/other-branch', startHead: 'a'.repeat(40) },
+      })),
+      workId: created.workId, expectedRevision: created.revisionToken,
+    });
+
+    const record = storedRecord(value, revised.workId);
+    assert.equal(record.summary, 'A work capture fixture naming a conflicting branch.');
+    assert.deepEqual(record.work.deliveryReceipt, owned);
+  });
+
+  it('drops a partial caller receipt instead of failing the whole capture', async (t) => {
+    const value = await receiptFixture(t);
+
+    const captured = await captureCanonicalKnowledge({
+      projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+      inputPath: inputPath(value, 'receipt-partial.json', workInput({
+        deliveryReceipt: { runId: 'run_00000000-0000-4000-8000-0000000000cc' },
+      })),
+      sourceRunId: 'run_00000000-0000-4000-8000-0000000000cc',
+    });
+
+    const record = storedRecord(value, captured.workId);
+    assert.equal(Object.hasOwn(record.work, 'deliveryReceipt'), false);
+  });
+
   it('never lets a capture input retarget the stored run identity', async (t) => {
     const value = await receiptFixture(t);
     const run = await startedRun(value);

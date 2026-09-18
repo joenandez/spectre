@@ -36,6 +36,7 @@ export const MEMBERSHIP_SCENARIOS = [
   'multi-commit-partial-revert',
   'partial-range-membership',
   'empty-accepted-commit',
+  'rebased-no-patch-commit',
   'candidate-objects-missing',
   'rebased-equivalent-pruned',
   'large-rebased-patch',
@@ -386,6 +387,39 @@ const BUILDERS = {
       }),
       candidate: candidateFor(repoDir),
       expected: { verdict: 'ambiguous', reason: 'no-patch-evidence' },
+    };
+  },
+
+  /**
+   * An accepted commit with no patch of its own — an empty commit here, a merge commit in the
+   * field — that a rebase moved out of the candidate range while its own object still
+   * resolves. Nothing about it proves the run's work absent, so it must never answer
+   * `excluded`.
+   */
+  'rebased-no-patch-commit'(t) {
+    const repoDir = initRepo(t);
+    const seed = commit(repoDir, 'seed', { 'README.md': 'seed\n' });
+    git(repoDir, ['checkout', '--quiet', '-b', 'feature']);
+    git(repoDir, ['commit', '--quiet', '--no-gpg-sign', '--allow-empty', '-m', 'run A: no-op']);
+    const acceptedA = git(repoDir, ['rev-parse', 'HEAD']);
+    const terminalHead = commit(repoDir, 'run A: alpha', { 'alpha.txt': 'a1\n' });
+    const receipt = receiptFor(repoDir, {
+      runId: 'run_no_patch_a',
+      branch: 'feature',
+      startHead: seed,
+      terminalHead,
+      acceptedCommits: [acceptedA],
+    });
+    git(repoDir, ['checkout', '--quiet', 'main']);
+    commit(repoDir, 'target: docs', { 'docs.md': 'target moved\n' });
+    git(repoDir, ['checkout', '--quiet', 'feature']);
+    git(repoDir, ['rebase', '--quiet', 'main']);
+    return {
+      repoDir,
+      branch: 'feature',
+      receipt,
+      candidate: candidateFor(repoDir),
+      expected: { verdict: 'ambiguous', reason: 'no-patch-identity' },
     };
   },
 
