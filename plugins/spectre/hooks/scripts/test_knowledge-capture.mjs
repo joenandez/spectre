@@ -148,7 +148,13 @@ function filledTemplate(kind, overrides = {}) {
   const template = JSON.parse(fs.readFileSync(path.join(
     PLUGIN_ROOT, 'skills', kind === 'work' ? 'spectre-work-record' : 'spectre-capture', 'references', `${kind}-capture-input.json`,
   ), 'utf8'));
-  return { ...template, ...(kind === 'knowledge' ? knowledgeInput() : workInput()), ...overrides };
+  const filled = kind === 'knowledge' ? knowledgeInput() : {
+    ...workInput(),
+    execution: { state: 'unknown' },
+    verificationState: { state: 'unknown' },
+    pullRequest: { state: 'unknown' },
+  };
+  return { ...template, ...filled, ...overrides };
 }
 
 function rawKnowledgeRecord(input) {

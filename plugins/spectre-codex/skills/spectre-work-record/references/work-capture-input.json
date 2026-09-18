@@ -10,6 +10,9 @@
   "verification": "<verification and evidence>",
   "remainingWork": "<remaining work and unknowns>",
   "relatedContext": "<related knowledge and source context>",
+  "execution": { "state": "<unknown|in-progress|implementation-ready|acceptance-pending|blocked|finalized>" },
+  "verificationState": { "state": "<unknown|not-run|checked|passed|failed>", "evidenceRef": "<optional evidence reference>" },
+  "pullRequest": { "state": "<unknown|none|draft-open|closed|merged>" },
   "tags": [
     {
       "id": "<canonical-or-new-tag>",

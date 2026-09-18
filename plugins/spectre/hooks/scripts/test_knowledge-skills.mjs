@@ -102,7 +102,11 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(execute, /finalized[\s\S]*remainingWork[\s\S]*None\.[\s\S]*independent of Ship/i);
   assert.match(execute, /blocked[\s\S]*non-final/i);
 
-  assert.doesNotMatch(ship, /pre-PR[\s\S]*work/i);
+  // Ship now legitimately writes work records before the PR exists, so the old `pre-PR` ban
+  // no longer states a boundary; pin the real one: candidate-bounded selection, then refresh.
+  assert.match(ship, /Before the first PR side effect[\s\S]*work membership[\s\S]*--candidate/i);
+  assert.match(ship, /Still before Create PR[\s\S]*per selected record[\s\S]*never finalize it/i);
+  assert.match(ship, /Association annotates only: it never confers finality/i);
   assert.match(ship, /PR[\s\S]*first[\s\S]*Skill\(spectre-work-record\)/i);
   assert.match(ship, /neither stages\/commits/i);
   assert.match(ship, /relay compact paths\/checks and repair\/route cross-boundary needs unless `NEEDS_AUTHORITY`/i);
