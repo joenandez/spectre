@@ -9,10 +9,13 @@ import { describe, it } from 'node:test';
 import * as work from './knowledge/work.mjs';
 
 import { registerCanonicalKnowledge } from './knowledge/registration.mjs';
+import { readRecordRevision, renderKnowledgeRecord } from './knowledge/records.mjs';
 import {
   DELIVERY_SELECTION_REASONS,
+  associateWorkDelivery,
   evaluateRecordDeliveryMembership,
   listDeliveryMembership,
+  listWorkIdentities,
   resolveWorkIdentity,
   resolveOrAllocateWorkIdentity,
 } from './knowledge/work.mjs';
@@ -1116,6 +1119,260 @@ describe('candidate-bounded delivery selection', () => {
   it('maps every record-level reason to exactly one verdict', () => {
     for (const [reason, verdict] of Object.entries(DELIVERY_SELECTION_REASONS)) {
       assert.ok(['selected', 'excluded', 'ambiguous'].includes(verdict), reason);
+    }
+  });
+});
+
+const DELIVERY_PR_ID = 'github:example/spectre#42';
+const DELIVERY_PR_STATE = Object.freeze({
+  state: 'draft-open',
+  identity: DELIVERY_PR_ID,
+  url: 'https://example.invalid/pull/42',
+});
+const DELIVERY_CANDIDATE = Object.freeze({
+  repository: 'github.com/example/spectre',
+  base: 'a'.repeat(40),
+  head: 'b'.repeat(40),
+  diff: `sha256:${'c'.repeat(64)}`,
+});
+
+function storedRecord(storePath, workId) {
+  return JSON.parse(fs.readFileSync(path.join(storePath, 'knowledge', workId, 'record.json'), 'utf8'));
+}
+
+/** Everything association must leave untouched: the seven sections and every lifecycle fact but PR state. */
+function outsideDelivery(record) {
+  const clone = structuredClone(record);
+  delete clone.work.associations;
+  delete clone.work.pullRequest;
+  return clone;
+}
+
+/** The rendered record minus the one header line association is allowed to move. */
+function renderedOutsideDelivery(record) {
+  return renderKnowledgeRecord(record)
+    .split('\n')
+    .filter((line) => !line.startsWith('- Pull request state:'))
+    .join('\n');
+}
+
+function deliveryOptions(workspace, overrides = {}) {
+  return {
+    ...options(workspace),
+    pullRequestId: DELIVERY_PR_ID,
+    pullRequest: DELIVERY_PR_STATE,
+    candidate: DELIVERY_CANDIDATE,
+    ...overrides,
+  };
+}
+
+/** N independent verified records, each owning its own exact Execute run, none delivered. */
+async function buildAssociationFixture(t, count) {
+  const workspace = makeWorkspace(t);
+  const workIds = [];
+  let storePath = null;
+  for (let index = 0; index < count; index += 1) {
+    const workId = `work-assoc-${index}`;
+    const registered = await registerCanonicalKnowledge({
+      ...options(workspace),
+      recordPath: writeProposal(workspace, deliveryRecord(workId, { sourceRunId: `run-assoc-${index}` })),
+    });
+    storePath = registered.storePath;
+    workIds.push(workId);
+  }
+  return { workspace, storePath, workIds };
+}
+
+describe('association-only guarded delivery association', () => {
+  it('associates five selected records with one PR and one candidate while exact runs stay unique', async (t) => {
+    const fixture = await buildAssociationFixture(t, 5);
+
+    const result = await associateWorkDelivery(deliveryOptions(fixture.workspace, { workIds: fixture.workIds }));
+
+    assert.equal(result.ok, true);
+    assert.equal(result.status, 'associated');
+    assert.deepEqual(result.remaining, []);
+    assert.equal(result.retry, null);
+    assert.deepEqual(result.succeeded.map((entry) => entry.workId), fixture.workIds);
+    for (const workId of fixture.workIds) {
+      const record = storedRecord(fixture.storePath, workId);
+      assert.deepEqual(record.work.associations.pullRequestIds, [DELIVERY_PR_ID], workId);
+      assert.deepEqual(record.work.associations.candidates, [DELIVERY_CANDIDATE], workId);
+      assert.deepEqual(record.work.pullRequest, DELIVERY_PR_STATE, workId);
+    }
+    assert.deepEqual(
+      await listWorkIdentities(options(fixture.workspace, { pullRequestId: DELIVERY_PR_ID })),
+      { ok: true, workIds: fixture.workIds, legacyWorkIds: [] },
+    );
+    assert.deepEqual(
+      await listWorkIdentities(options(fixture.workspace, { candidate: DELIVERY_CANDIDATE })),
+      { ok: true, workIds: fixture.workIds, legacyWorkIds: [] },
+    );
+    await assert.rejects(
+      registerCanonicalKnowledge({
+        ...options(fixture.workspace),
+        recordPath: writeProposal(
+          fixture.workspace,
+          deliveryRecord('work-assoc-collision', { sourceRunId: 'run-assoc-0' }),
+        ),
+      }),
+      (error) => error.code === 'WORK_IDENTITY_CONFLICT',
+    );
+  });
+
+  it('keeps an already-finalized record byte-identical outside delivery association', async (t) => {
+    const workspace = makeWorkspace(t);
+    const record = deliveryRecord('work-final', { sourceRunId: 'run-final' });
+    record.work.execution = { state: 'finalized' };
+    record.work.verificationState = { state: 'passed', evidenceRef: 'node --test' };
+    const registered = await registerCanonicalKnowledge({
+      ...options(workspace), recordPath: writeProposal(workspace, record),
+    });
+    const before = storedRecord(registered.storePath, 'work-final');
+
+    await associateWorkDelivery(deliveryOptions(workspace, { workIds: ['work-final'] }));
+    const after = storedRecord(registered.storePath, 'work-final');
+
+    assert.equal(renderedOutsideDelivery(after), renderedOutsideDelivery(before));
+    assert.ok(renderKnowledgeRecord(before).includes('- Pull request state: none'));
+    assert.ok(renderKnowledgeRecord(after).includes('- Pull request state: draft-open'));
+    assert.deepEqual(outsideDelivery(after), outsideDelivery(before));
+    assert.deepEqual(after.work.execution, { state: 'finalized' });
+    assert.deepEqual(after.work.verificationState, { state: 'passed', evidenceRef: 'node --test' });
+    assert.equal(after.work.remainingWork, 'None.');
+    assert.deepEqual(after.work.associations.pullRequestIds, [DELIVERY_PR_ID]);
+    assert.deepEqual(after.work.associations.sourceRunIds, before.work.associations.sourceRunIds);
+  });
+
+  it('associates an incomplete or blocked record and leaves it non-final', async (t) => {
+    const workspace = makeWorkspace(t);
+    const states = [
+      ['work-blocked', 'blocked', 'The failing acceptance gate still blocks task 3.'],
+      ['work-open', 'in-progress', 'Task 4 is still unimplemented.'],
+    ];
+    let storePath = null;
+    for (const [workId, state, remainingWork] of states) {
+      const record = deliveryRecord(workId, { sourceRunId: `run-${workId}` });
+      record.work.execution = { state };
+      record.work.remainingWork = remainingWork;
+      const registered = await registerCanonicalKnowledge({
+        ...options(workspace), recordPath: writeProposal(workspace, record),
+      });
+      storePath = registered.storePath;
+    }
+
+    const result = await associateWorkDelivery(deliveryOptions(workspace, {
+      workIds: states.map(([workId]) => workId),
+    }));
+
+    assert.equal(result.ok, true);
+    for (const [workId, state, remainingWork] of states) {
+      const after = storedRecord(storePath, workId);
+      assert.deepEqual(after.work.execution, { state }, workId);
+      assert.equal(after.work.remainingWork, remainingWork, workId);
+      assert.deepEqual(after.work.associations.pullRequestIds, [DELIVERY_PR_ID], workId);
+      assert.deepEqual(after.work.associations.candidates, [DELIVERY_CANDIDATE], workId);
+    }
+  });
+
+  it('re-runs the same association as a no-op that never duplicates associations', async (t) => {
+    const fixture = await buildAssociationFixture(t, 3);
+    const first = await associateWorkDelivery(deliveryOptions(fixture.workspace, { workIds: fixture.workIds }));
+    const afterFirst = fixture.workIds.map((workId) => storedRecord(fixture.storePath, workId));
+
+    const second = await associateWorkDelivery(deliveryOptions(fixture.workspace, { workIds: fixture.workIds }));
+
+    assert.equal(second.ok, true);
+    assert.equal(second.status, 'noop');
+    assert.deepEqual(second.remaining, []);
+    assert.deepEqual(
+      second.succeeded.map((entry) => entry.status),
+      fixture.workIds.map(() => 'unchanged'),
+    );
+    assert.deepEqual(
+      second.succeeded.map((entry) => entry.revision),
+      first.succeeded.map((entry) => entry.revision),
+    );
+    assert.deepEqual(fixture.workIds.map((workId) => storedRecord(fixture.storePath, workId)), afterFirst);
+    for (const record of afterFirst) {
+      assert.equal(record.work.associations.pullRequestIds.length, 1);
+      assert.equal(record.work.associations.candidates.length, 1);
+    }
+  });
+
+  it('returns bounded partial recovery naming the succeeded and remaining ids for an injected stale revision', async (t) => {
+    const fixture = await buildAssociationFixture(t, 3);
+    const stale = fixture.workIds[1];
+
+    const result = await associateWorkDelivery(deliveryOptions(fixture.workspace, {
+      workIds: fixture.workIds,
+      expectedRevisions: { [stale]: `sha256:${'0'.repeat(64)}` },
+    }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'partial');
+    assert.deepEqual(
+      result.succeeded.map((entry) => entry.workId),
+      fixture.workIds.filter((workId) => workId !== stale),
+    );
+    assert.deepEqual(result.remaining.map((entry) => entry.workId), [stale]);
+    assert.equal(result.remaining[0].code, 'KNOWLEDGE_REVISION_CONFLICT');
+    assert.equal(
+      result.remaining[0].currentRevision,
+      readRecordRevision(path.join(fixture.storePath, 'knowledge', stale)),
+    );
+    assert.equal(typeof result.remaining[0].recovery, 'string');
+    assert.deepEqual(result.retry.workIds, [stale]);
+    assert.deepEqual(result.retry.expectedRevisions, { [stale]: result.remaining[0].currentRevision });
+    assert.deepEqual(storedRecord(fixture.storePath, stale).work.associations.pullRequestIds, []);
+  });
+
+  it('converges on retry by associating only the remaining records', async (t) => {
+    const fixture = await buildAssociationFixture(t, 3);
+    const stale = fixture.workIds[1];
+    const partial = await associateWorkDelivery(deliveryOptions(fixture.workspace, {
+      workIds: fixture.workIds,
+      expectedRevisions: { [stale]: `sha256:${'0'.repeat(64)}` },
+    }));
+    const settled = partial.succeeded.map((entry) => storedRecord(fixture.storePath, entry.workId));
+
+    const retried = await associateWorkDelivery(deliveryOptions(fixture.workspace, { ...partial.retry }));
+
+    assert.equal(retried.ok, true);
+    assert.equal(retried.status, 'associated');
+    assert.deepEqual(retried.succeeded.map((entry) => entry.workId), [stale]);
+    assert.deepEqual(
+      partial.succeeded.map((entry) => storedRecord(fixture.storePath, entry.workId)),
+      settled,
+      'a retry never revises an already-associated record',
+    );
+    for (const workId of fixture.workIds) {
+      assert.deepEqual(storedRecord(fixture.storePath, workId).work.associations.pullRequestIds, [DELIVERY_PR_ID], workId);
+    }
+
+    const full = await associateWorkDelivery(deliveryOptions(fixture.workspace, {
+      workIds: fixture.workIds,
+      expectedRevisions: { [stale]: `sha256:${'0'.repeat(64)}` },
+    }));
+    assert.equal(full.ok, true);
+    assert.equal(full.status, 'noop');
+  });
+
+  it('reports recovery input for an unassociable record instead of blocking a valid PR', async (t) => {
+    const fixture = await buildAssociationFixture(t, 2);
+    const workIds = [...fixture.workIds, 'work-assoc-absent'];
+
+    const result = await associateWorkDelivery(deliveryOptions(fixture.workspace, { workIds }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'partial');
+    assert.deepEqual(result.succeeded.map((entry) => entry.workId), fixture.workIds);
+    assert.deepEqual(result.remaining.map((entry) => entry.workId), ['work-assoc-absent']);
+    assert.equal(result.remaining[0].code, 'WORK_RECORD_MISSING');
+    assert.equal(result.remaining[0].currentRevision, null);
+    assert.ok(result.remaining[0].recovery.length > 0);
+    for (const workId of fixture.workIds) {
+      assert.deepEqual(storedRecord(fixture.storePath, workId).work.associations.pullRequestIds, [DELIVERY_PR_ID], workId);
     }
   });
 });

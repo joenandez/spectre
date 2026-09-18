@@ -26,6 +26,11 @@ function codedError(code, message, details = {}) {
   return error;
 }
 
+function debugLog(event, fields) {
+  if (!process.env.SPECTRE_DEBUG) return;
+  process.stderr.write(`${JSON.stringify({ event, ...fields })}\n`);
+}
+
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -578,6 +583,230 @@ export async function listDeliveryMembership(options = {}) {
 }
 
 /**
+ * Guarded, association-only delivery annotation.
+ *
+ * This operation adds delivery evidence to records that are already written. It changes the
+ * plural PR and candidate associations and the PR state, and nothing else: the seven semantic
+ * sections, execution state (including `finalized`), verification state, and `remainingWork`
+ * stay byte-identical, because the stored record is cloned and only those two fields are
+ * touched. Adding a PR is never permission to restate what a run did.
+ *
+ * It is not a delivery authority. Every per-record failure is reported, never thrown, so an
+ * otherwise valid PR is never blocked by an annotation that could not land.
+ */
+const DELIVERY_PULL_REQUEST_FIELDS = ['state', 'identity', 'url'];
+
+/** One recovery sentence per way an association can fail to land on one record. */
+const ASSOCIATION_RECOVERY = Object.freeze({
+  WORK_RECORD_MISSING: 'No work package with that id is stored; capture the run before associating it.',
+  WORK_IDENTITY_UNVERIFIED: 'The work package no longer matches its persisted revision; re-register it, then retry.',
+  KNOWLEDGE_REVISION_CONFLICT: 'Another writer revised the record; retry with the reported current revision.',
+  KNOWLEDGE_REVISION_REQUIRED: 'The record needs its current revision as the expected revision; retry with the reported one.',
+  KNOWLEDGE_CURRENT_RECORD_UNREADABLE: 'The stored package is unreadable; recover it before retrying.',
+  KNOWLEDGE_CURRENT_RECORD_MISMATCH: 'The stored package differs from its indexed revision; recover it before retrying.',
+});
+
+function associationRecovery(code) {
+  return ASSOCIATION_RECOVERY[code] || 'The association could not be written; retry with the reported current revision.';
+}
+
+function validateDeliveryPullRequest(pullRequest) {
+  if (!isPlainObject(pullRequest)
+    || Object.keys(pullRequest).some((key) => !DELIVERY_PULL_REQUEST_FIELDS.includes(key))) {
+    throw codedError('WORK_DELIVERY_INPUT_INVALID', 'pullRequest needs only state, identity, and url.');
+  }
+  for (const field of DELIVERY_PULL_REQUEST_FIELDS) {
+    if (field !== 'state' && pullRequest[field] === undefined) continue;
+    if (!isNonEmptyString(pullRequest[field])) {
+      throw codedError('WORK_DELIVERY_INPUT_INVALID', `pullRequest.${field} must be a non-empty string.`);
+    }
+  }
+  return {
+    state: pullRequest.state,
+    ...(pullRequest.identity === undefined ? {} : { identity: pullRequest.identity }),
+    ...(pullRequest.url === undefined ? {} : { url: pullRequest.url }),
+  };
+}
+
+/** The frozen set is a set: duplicates collapse and order is work id, never selection order. */
+function frozenWorkIds(workIds) {
+  if (!Array.isArray(workIds) || workIds.length === 0) {
+    throw codedError('WORK_DELIVERY_INPUT_INVALID', 'workIds must name at least one selected work record.');
+  }
+  return [...new Set(workIds.map(validateWorkId))].sort();
+}
+
+function mergedPullRequestIds(existing, pullRequestId) {
+  return existing.includes(pullRequestId) ? existing : [...existing, pullRequestId];
+}
+
+function mergedCandidates(existing, candidate) {
+  const key = candidateAssociationKey(candidate);
+  return existing.some((stored) => candidateAssociationKey(stored) === key) ? existing : [...existing, candidate];
+}
+
+/** Clone, then touch exactly two fields. Everything the clone carries forward is unrewritten history. */
+function deliveredWorkRecord(current, delivery) {
+  const next = structuredClone(current);
+  next.work.associations.pullRequestIds = mergedPullRequestIds(
+    next.work.associations.pullRequestIds,
+    delivery.pullRequestId,
+  );
+  next.work.associations.candidates = mergedCandidates(next.work.associations.candidates, delivery.candidate);
+  if (delivery.pullRequest) next.work.pullRequest = delivery.pullRequest;
+  return next;
+}
+
+function blockedAssociation(storePath, workId, code, currentRevision) {
+  return {
+    workId,
+    status: 'blocked',
+    code,
+    currentRevision: currentRevision === undefined
+      ? readRecordRevision(path.join(storePath, 'knowledge', workId))
+      : currentRevision,
+  };
+}
+
+function planRecordAssociation(storePath, view, workId, delivery) {
+  if (view.unverifiedWorkIds.has(workId)) {
+    return blockedAssociation(storePath, workId, 'WORK_IDENTITY_UNVERIFIED');
+  }
+  const current = view.verifiedWorkRecords.get(workId);
+  if (!current) return blockedAssociation(storePath, workId, 'WORK_RECORD_MISSING', null);
+  const currentRevision = readRecordRevision(path.join(storePath, 'knowledge', workId));
+  const record = deliveredWorkRecord(current, delivery);
+  if (JSON.stringify(record.work) === JSON.stringify(current.work)) {
+    return { workId, status: 'unchanged', revision: currentRevision };
+  }
+  return {
+    workId,
+    status: 'revise',
+    record,
+    expectedRevision: delivery.expectedRevisions[workId] ?? currentRevision,
+  };
+}
+
+async function reviseRecordAssociation(query, storePath, planned) {
+  const proposal = writeRecordProposal(storePath, planned.record, 'spectre-work-delivery-');
+  try {
+    const { registerCanonicalKnowledge } = await import('./registration.mjs');
+    const registration = await registerCanonicalKnowledge({
+      projectDir: query.projectDir,
+      spectreHome: query.spectreHome,
+      gitRunner: query.gitRunner,
+      allocationLockOptions: query.allocationLockOptions,
+      recordPath: proposal.proposal,
+      expectedRevision: planned.expectedRevision,
+      lockOptions: query.lockOptions,
+    });
+    return {
+      workId: planned.workId,
+      status: registration.status === 'noop' ? 'unchanged' : 'associated',
+      revision: registration.revisionToken,
+    };
+  } catch (error) {
+    const code = error?.code || 'WORK_DELIVERY_ASSOCIATION_FAILED';
+    debugLog('work.delivery_association_blocked', { workId: planned.workId, code, message: error?.message });
+    return {
+      workId: planned.workId,
+      status: 'blocked',
+      code,
+      message: error?.message,
+      currentRevision: error?.currentRevision !== undefined
+        ? error.currentRevision
+        : readRecordRevision(path.join(storePath, 'knowledge', planned.workId)),
+    };
+  } finally {
+    fs.rmSync(proposal.root, { recursive: true, force: true });
+  }
+}
+
+function associationResult(pullRequestId, candidateKey, outcomes) {
+  const succeeded = outcomes
+    .filter((outcome) => outcome.status !== 'blocked')
+    .map(({ workId, status, revision }) => ({ workId, status, revision }));
+  const remaining = outcomes
+    .filter((outcome) => outcome.status === 'blocked')
+    .map(({ workId, code, message, currentRevision }) => ({
+      workId,
+      currentRevision,
+      code,
+      ...(message === undefined ? {} : { message }),
+      recovery: associationRecovery(code),
+    }));
+  const status = remaining.length > 0
+    ? 'partial'
+    : succeeded.every((entry) => entry.status === 'unchanged') ? 'noop' : 'associated';
+  return {
+    ok: remaining.length === 0,
+    status,
+    pullRequestId,
+    candidateKey,
+    succeeded,
+    remaining,
+    retry: remaining.length === 0 ? null : {
+      workIds: remaining.map((entry) => entry.workId),
+      expectedRevisions: Object.fromEntries(
+        remaining.map((entry) => [entry.workId, entry.currentRevision]),
+      ),
+    },
+  };
+}
+
+/**
+ * @param {object} options
+ * @param {string[]} options.workIds Frozen selected work ids; duplicates collapse.
+ * @param {string} options.pullRequestId Exact PR identity, plural by design across records.
+ * @param {{repository: string, base: string, head: string, diff: string}} options.candidate Frozen candidate evidence.
+ * @param {{state: string, identity?: string, url?: string}} [options.pullRequest] PR state to write.
+ * @param {Record<string, string>} [options.expectedRevisions] Per-record CAS guard; defaults to the revision read under the lock.
+ * @returns {Promise<{ok: boolean, status: 'associated'|'noop'|'partial', pullRequestId: string,
+ *   candidateKey: string, succeeded: {workId: string, status: 'associated'|'unchanged', revision: string|null}[],
+ *   remaining: {workId: string, currentRevision: string|null, code: string, message?: string, recovery: string}[],
+ *   retry: {workIds: string[], expectedRevisions: Record<string, string|null>}|null}>}
+ */
+export async function associateWorkDelivery(options = {}) {
+  const query = isPlainObject(options) ? options : {};
+  const workIds = frozenWorkIds(query.workIds);
+  if (!isNonEmptyString(query.pullRequestId)) {
+    throw codedError('WORK_DELIVERY_INPUT_INVALID', 'pullRequestId must be a non-empty string.');
+  }
+  const candidate = validateCandidate(query.candidate);
+  const delivery = {
+    pullRequestId: query.pullRequestId,
+    candidate,
+    pullRequest: query.pullRequest === undefined ? null : validateDeliveryPullRequest(query.pullRequest),
+    expectedRevisions: isPlainObject(query.expectedRevisions) ? query.expectedRevisions : {},
+  };
+  const candidateKey = candidateAssociationKey(candidate);
+  debugLog('work.delivery_association_started', {
+    workIds, pullRequestId: delivery.pullRequestId, candidateKey,
+  });
+
+  const resolved = await resolveStore(query, false);
+  const planned = await withStoreLock(resolved.storePath, 'plan-work-delivery-association', async () => {
+    const { view } = associationView(resolved.storePath);
+    return workIds.map((workId) => planRecordAssociation(resolved.storePath, view, workId, delivery));
+  }, query.lockOptions);
+
+  // One record's conflict is its own; the rest of a proven selection still earns its annotation.
+  const outcomes = [];
+  for (const entry of planned) {
+    outcomes.push(entry.status === 'revise'
+      ? await reviseRecordAssociation(query, resolved.storePath, entry)
+      : entry);
+  }
+  const result = associationResult(delivery.pullRequestId, candidateKey, outcomes);
+  debugLog('work.delivery_association_finished', {
+    status: result.status,
+    succeeded: result.succeeded.map((entry) => entry.workId),
+    remaining: result.remaining.map((entry) => entry.workId),
+  });
+  return result;
+}
+
+/**
  * Associates an explicit work id or allocates one once. The lock makes a repeated source
  * run or unchanged candidate converge on one identity without branch or recency guesses.
  * A new exact source run always allocates its own id, so an unrelated run on the same
@@ -744,9 +973,14 @@ function foldedWorkRecord(view, canonicalWorkId, oldWorkIds) {
   return record;
 }
 
-function writeFoldProposal(storePath, record) {
+/**
+ * Stages a revision of a stored package outside the store, because registration refuses a
+ * proposal that lives inside it. The whole package is copied so attached resources, and the
+ * revision token that digests them, survive a revision that only rewrites `record.json`.
+ */
+function writeRecordProposal(storePath, record, prefix) {
   const sourceDir = path.join(storePath, 'knowledge', record.id);
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spectre-work-fold-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   const proposal = path.join(root, record.id);
   fs.cpSync(sourceDir, proposal, { recursive: true });
   fs.writeFileSync(path.join(proposal, 'record.json'), `${JSON.stringify(record, null, 2)}\n`);
@@ -781,7 +1015,7 @@ export async function foldWorkIdentities(options) {
       return { ok: true, status: changed ? 'updated' : 'noop', workId: canonicalWorkId, foldedWorkIds: oldWorkIds };
     }, options.lockOptions);
   }
-  const proposal = writeFoldProposal(resolved.storePath, record);
+  const proposal = writeRecordProposal(resolved.storePath, record, 'spectre-work-fold-');
   try {
     const { registerCanonicalKnowledge } = await import('./registration.mjs');
     const registration = await registerCanonicalKnowledge({
