@@ -1,6 +1,6 @@
 {
   "name": "spectre",
-  "version": "7.5.0",
+  "version": "7.5.1",
   "owner": {
     "name": "Joe Fernandez",
     "email": "joe@bycodename.com"
@@ -27,7 +27,7 @@
         "knowledge",
         "codex"
       ],
-      "version": "7.5.0"
+      "version": "7.5.1"
     }
   ]
 }
