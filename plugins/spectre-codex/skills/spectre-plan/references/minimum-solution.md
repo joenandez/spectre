@@ -9,7 +9,7 @@ Persist `## Minimum Solution Selection` in existing `task_context.md`, bound to 
 - each required behavior → existing owner/seam → incumbent-only delivery path;
 - selected shape and admitted new owned concepts;
 - tier-below candidate, structural-shape and assurance-floor dispositions, and any concrete requirement, safety, or verification failure;
-- challenger trigger/candidate, disagreement, simpler-wins disposition, and evidence provenance.
+- challenger trigger/candidate, disagreement, simpler-wins disposition, evidence provenance, and each dimension's cite-or-dispatch disposition.
 
 Start from incumbent ownership: nothing new → reuse owner/lifecycle/state/operation → extend one boundary and derive state → existing platform/dependency → minimum new mechanism. Scope nouns do not mandate entities, identifiers, stores, interfaces, dependencies, migrations, lifecycle states, or workflows. New owned concepts need current requirement, safety, or verification evidence; future flexibility, optional diagnostics, and hypothetical scale are not evidence.
 
@@ -19,7 +19,7 @@ Default to the simpler qualifying option. Reject it only when it violates Scope,
 
 XS is the floor. S challenges XS; M challenges S; L challenges M; XL challenges L. Keep requirements, safety, and verification fixed while testing the tier below. Structural shape and assurance floor are separate: a smaller shape must not remove required review or other assurance.
 
-XS/S decide locally. M uses a fresh evidence-only challenger when its candidate adds durable state, identity, a public contract, migration, dependency, or workflow/lifecycle state. L/XL always use that challenger in the same evidence wave. The challenger returns an incumbent-first candidate only; it writes nothing and replaces one available evidence slot.
+XS/S decide locally. M uses a fresh evidence-only challenger when its candidate adds durable state, identity, a public contract, migration, dependency, or workflow/lifecycle state. L/XL always use it, with any evidence wave or alone when none runs. It returns an incumbent-first candidate only, writes nothing, and receives Scope and the tier-below target, never the selected shape.
 
 The simpler qualifying candidate wins. Retain the larger shape only when a lower tier concretely fails a current requirement, safety condition, or verification obligation with applicable repository evidence. A disagreement needs user input only for Scope or authority conflict.
 

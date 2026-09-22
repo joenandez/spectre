@@ -34,9 +34,9 @@ DONE: both; evidence traces mechanisms/exceptions; plan smaller or no safe reduc
 
 1. **Evidence.** Find unsupported claims; at most one each `@spectre_finder`, `@spectre_analyst`, `@spectre_patterns` for cited evidence/unknowns (≤1,000 tokens).
 
-2. **Correctness.** Read `references/correctness-review.md`; send it verbatim to a fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with plan, Scope, task-context, report paths/hashes, evidence, mode/bounds/metadata. Close after valid writeback.
+2. **Correctness.** Read `references/correctness-review.md`; send it verbatim to a fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with plan, Scope, task-context, report paths/hashes, evidence, mode/bounds/metadata.
 
-3. **Simplification.** Correctness closes before simplification: read `references/simplification-review.md`; send it verbatim to a second fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with corrected plan, Scope, correctness-report, output-report paths/hashes, selection, bounds/metadata/evidence, spot-check. Run.
+3. **Simplification.** Correctness closes before simplification: read `references/simplification-review.md`; send it verbatim to a fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with corrected plan, Scope, correctness-report, output-report paths/hashes, selection, bounds/metadata/evidence, spot-check, decisions.
 
 4. **Writeback.** Reviewer writes its report before selected-plan edits, then returns only:
 `REVIEW_COMPLETE
@@ -45,9 +45,9 @@ REPORT_SHA256 sha256:<hex>
 PLAN_SHA256 sha256:<hex>
 DISPOSITION <updated|no-op>
 PLAN_REVIEW_<STAGE>_OK`
-Post-write receipt hashes. Primary validates completed route, report, hashes/disposition/bounds; records attempt. Only reports and selected plan may change; `updated` changes plan, `no-op` does not; all else immutable. Primary never writes reviewer findings or plan edits. `--auto-apply scope-safe`: Blocker/High + unambiguous Medium; else ask `all|blockers|IDs|skip`, continue same route; record `addressed|skipped|unresolved|scope-change`. Stop on unresolved correctness Blocker/High, scope change, unavailable writeback, or failed receipt/hash/scope/bounds.
+Primary validates completed route, report, hashes/disposition/bounds; records attempt. Only reports and selected plan may change; `updated` changes plan, `no-op` does not; all else immutable. Primary never writes reviewer findings or plan edits. `--auto-apply scope-safe`: Blocker/High + unambiguous Medium; else ask `all|blockers|IDs|skip`; record `addressed|skipped|unresolved|scope-change`. Stop on unresolved correctness Blocker/High, scope change, unavailable writeback, or failed receipt/hash/scope/bounds. Decisions, even Scope edits, resume at simplification; correctness never reruns.
 
-5. **Route.** Run each stage fresh at high effort (20-minute limit): Codex → Claude Code `opus`: `claude -p --model opus --effort high --permission-mode dontAsk --allowedTools "Read,Grep,Glob,LS,Write,Edit,Bash(shasum -a 256 *)" --output-format text "$REVIEW_PROMPT"`; Claude Code → Codex `gpt-5.6-sol`: `codex exec -C "$PWD" -m gpt-5.6-sol -c 'model_reasoning_effort="high"' -s workspace-write "$REVIEW_PROMPT"`. Record each external attempt: launch route/status, failure class/fallback-used. Quiet output is not failure. Only missing, non-zero, absent/malformed completion receipt, hash mismatch, or out-of-bounds permits fallback: record failure before one fresh clean-context same-runtime CLI fallback with writable mode/prompt/bounds. A usable review is terminal; fallback once.
+5. **Route.** Run each stage fresh at high effort (20-minute limit): Codex → Claude Code `opus`: `claude -p --model opus --effort high --permission-mode dontAsk --allowedTools "Read,Grep,Glob,LS,Write,Edit,Bash(shasum -a 256 *)" --output-format text "$REVIEW_PROMPT"`; Claude Code → Codex `gpt-5.6-sol`: `codex exec -C "$PWD" -m gpt-5.6-sol -c 'model_reasoning_effort="high"' -s workspace-write "$REVIEW_PROMPT" < /dev/null`. Record each external attempt: launch route/status, failure class/fallback-used. Quiet output is not failure. Only missing, non-zero, absent/malformed completion receipt, hash mismatch, or out-of-bounds permits fallback: record failure before one fresh clean-context same-runtime CLI fallback with writable mode/prompt/bounds. A usable review is terminal.
 
 ## Handoff
 
@@ -61,4 +61,4 @@ Return outcome/reports/attempt/Scope/plan (≤1K). `--orchestrated`: return; sta
 
 ## Escalate-If
 
-Escalate: missing plan/claim, scope change, correctness Blocker/High, unavailable writeback/bounds.
+Step 4 stops; missing plan/claim.

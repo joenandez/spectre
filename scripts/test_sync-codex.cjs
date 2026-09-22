@@ -801,6 +801,7 @@ test('execute preflight reuses observed assessment and proportionally creates ta
     assert.doesNotMatch(execute, /Return recordonly/i);
     assert.match(execute, /ATOMIC\/DIRECT use the bounded local workstream\/Active Wave pattern/i);
     assert.match(execute, /dispatch `Skill\(spectre-plan_review\) --auto-apply scope-safe --orchestrated` once to fresh child/i);
+    assert.match(execute, /resume hash-valid or user-decided partial correctness or dispatch/i);
     assert.match(execute, /STRUCTURED invokes existing `Skill\(spectre-create_tasks\) --orchestrated` by fresh child-agent dispatch/i);
     assert.match(execute, /L → standard, XL → comprehensive/i);
     assert.match(execute, /No automatic task review/i);
@@ -1798,7 +1799,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    'cd5bbb36356ed186b5a92f667d5dd365133bf19a81a89ee66143475c945328f5',
+    'c58fdbb8ca897b62fb37dd8843ddb5cebc28b7c58d4fbe5f882e2103ac850a18',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
@@ -2510,6 +2511,7 @@ test('review gates pin route-specific opposing models and retain native fallback
         assert.match(skill, /Claude Code (?:→|->) Codex `gpt-5\.6-sol`/);
         assert.match(skill, /claude -p --model opus --effort high/);
         assert.match(skill, /codex exec -C "\$PWD" -m gpt-5\.6-sol -c 'model_reasoning_effort="high"'/);
+        assert.match(skill, /-s workspace-write "\$REVIEW_PROMPT" < \/dev\/null/);
         assert.match(skill, /missing, non-zero, absent\/malformed completion receipt, hash mismatch, or out-of-bounds/i);
         assert.match(skill, /record.*failure.*before one.*same-runtime CLI fallback/i);
         assert.match(skill, /REVIEW_COMPLETE[\s\S]*REPORT_SHA256 sha256:<hex>[\s\S]*PLAN_SHA256 sha256:<hex>/);
@@ -2537,6 +2539,7 @@ test('review gates pin route-specific opposing models and retain native fallback
             `codex exec -C "\\$PWD" -m gpt-5\\.6-sol -c 'model_reasoning_effort="${effort}"'`,
           ),
         );
+        assert.match(skill, /-s workspace-write "\$REVIEW_PROMPT" < \/dev\/null/);
         assert.match(skill, /Missing\/non-zero opposing CLI[\s\S]*permits one clean-context `@spectre(?::|_)reviewer`/i);
         assert.match(skill, /Fallback once/);
         assert.match(skill, new RegExp(`Claude Code\\|${claudeModel}\\|${effort}\\|Codex -> Claude Code`));
@@ -2601,7 +2604,12 @@ test('plan review bounds correctness and enforces subtraction-only simplificatio
     assert.match(skill, /3\. \*\*Simplification\.\*\*[\s\S]*inject direct-write receipt below into `REVIEW_PROMPT`/);
     assert.doesNotMatch(skill, /REVIEW MANIFEST|ADDITIONAL FOCUS|paraphrase|reorder|weaken|augment/i);
     assert.match(skill, /Stop on unresolved correctness Blocker\/High/);
-    assert.match(correctness, /one representative happy path and primary failure per distinct required behavior/i);
+    assert.match(skill, /Decisions, even Scope edits, resume at simplification; correctness never reruns/);
+    assert.doesNotMatch(skill, /continue same route/);
+    assert.match(skill, /spot-check, decisions\./);
+    assert.match(simplification, /Apply user decisions first; they may add detail/);
+    assert.match(simplification, /DONE when decisions are applied/);
+    assert.match(correctness,/one representative happy path and primary failure per distinct required behavior/i);
     assert.match(correctness, /another requirement, public boundary, credible regression, or materially different present risk/);
     assert.match(correctness, /concrete risks created by the changed boundaries/i);
     assert.match(correctness, /required now by \| simpler local option \| why it fails now \| verification/i);
@@ -2674,7 +2682,10 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
     assert.match(minimumSolution, /structural shape[\s\S]*assurance floor/i);
     assert.match(minimumSolution, /XS\/S.*local/i);
     assert.match(minimumSolution, /M.*durable state.*identity.*public contract.*migration.*dependency.*workflow\/lifecycle/i);
-    assert.match(minimumSolution, /L\/XL.*same evidence wave/i);
+    assert.match(minimumSolution, /L\/XL always use it[\s\S]*alone when none runs/i);
+    assert.match(minimumSolution, /never the selected shape/i);
+    assert.match(minimumSolution, /cite-or-dispatch disposition/i);
+    assert.doesNotMatch(minimumSolution, /evidence slot|same evidence wave/i);
     assert.match(minimumSolution, /simpler qualifying.*wins/i);
     assert.match(minimumSolution, /Future flexibility.*optional diagnostics.*hypothetical scale.*not evidence/i);
     assert.doesNotMatch(minimumSolution, /telemetry event|persistent.*store|evaluation framework/i);
@@ -2687,13 +2698,15 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
     const draft = plan.indexOf('Draft once with the observed route-mapped depth');
     assert.ok(initialRoute !== -1 && challenger > initialRoute && challenger < persistedEvidence && selection > persistedEvidence && observedRoute > selection && draft > observedRoute);
     assert.match(plan, /read `references\/minimum-solution\.md`/i);
-    assert.match(plan, /existing parallel research wave/i);
-    assert.match(plan, /reserves one available evidence slot/i);
+    assert.match(plan, /cited by path, knowledge ID\/revision, or thread decision/i);
+    assert.match(plan, /`evidence: SUFFICIENT` with uncertainty below HIGH/i);
+    assert.match(plan, /challenger is wave-independent/i);
     assert.match(plan, /task_context\.md[\s\S]*Scope\/authority[\s\S]*accepted evidence/i);
     assert.match(plan, /automatically uses the observed route[\s\S]*no paid rerun.*user tier gate/i);
     assert.match(plan, /conform.*selected record[\s\S]*raw-byte.*authority hash/i);
     assert.equal((plan.match(/Skill\(spectre-plan-route\)/g) || []).length, 2);
-    assert.match(plan, /dispatches it with the wave/i);
+    assert.match(plan, /L\/XL always, with the wave or alone/i);
+    assert.doesNotMatch(plan, /evidence slot|dispatches it with the wave\b/i);
     assert.deepEqual(planReferences, [
       'estimation-guidance.md',
       'high-level-design-gate.md',

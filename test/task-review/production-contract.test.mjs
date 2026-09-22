@@ -177,7 +177,7 @@ test("Plan Review validates bounded direct reviewer writeback", () => {
   assert.match(planReview, /only reports and selected plan may change/i);
   assert.match(planReview, /all else immutable/i);
   assert.match(planReview, /Quiet output is not failure/);
-  assert.match(execute, /resume hash-valid partial correctness/i);
+  assert.match(execute, /resume hash-valid or user-decided partial correctness/i);
   for (const name of ["correctness-review.md", "simplification-review.md"]) {
     const prompt = readFileSync(join(planReviewDir, "references", name), "utf8");
     assert.match(prompt, /Write report first.*authorized selected-plan edits/i);
@@ -305,7 +305,7 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.match(planReview, /REPORT_SHA256 sha256:<hex>[\s\S]*PLAN_SHA256 sha256:<hex>/i);
   assert.match(planReview, /addressed.*skipped.*unresolved.*scope-change/is);
   assert.match(correctness, /findings\/dispositions\/edits/i);
-  assert.match(planReview, /continue same route/i);
+  assert.match(planReview, /Decisions, even Scope edits, resume at simplification; correctness never reruns/i);
   assert.match(planReview, /failed receipt\/hash\/scope\/bounds/i);
   assert.match(planReview, /primary never writes reviewer findings or plan edits/i);
   assert.match(planReview, /A usable review is terminal/i);
