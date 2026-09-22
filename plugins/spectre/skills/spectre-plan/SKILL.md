@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 ## Purpose
 
-Turn confirmed Scope into the smallest sufficient draft and handoff. `spectre-plan-route` alone classifies; the primary owns synthesis, routing, and draft finalization. Scope remains the immutable user contract.
+Turn confirmed Scope into the smallest draft and handoff. `spectre-plan-route` classifies; primary owns plan. Scope remains immutable.
 
 ## Inputs
 
@@ -31,11 +31,13 @@ DONE when `task_context.md` binds initial/observed routing to draft/authority ha
 
 ## Method / guardrails
 
+Child skill DONE is internal: resume the next Plan step in this turn. Only Plan's own handoff or escalation ends it.
+
 1. Unresolved journeys/states/copy/accessibility route to `spectre-ux`; load-bearing interaction/layout validation routes to `spectre-prototype`.
-2. Scan once; invoke `Skill(spectre-plan-route)` in `initial` mode. Run `spectre-workflow plan start` with root/scope hash, returned record, size/route, reasons, design/probe flags, boundaries; retain `PLAN_RUN_ID` for `plan.started`. Show size/rationale, no approval.
+2. Scan once; invoke `Skill(spectre-plan-route)` in `initial` mode. Run `spectre-workflow plan start` with root/scope hash, returned record, size/route, reasons, design/probe flags, boundaries; retain `PLAN_RUN_ID` for `plan.started`. Report size/rationale as progress; continue to step 3.
 3. Gather proportional evidence: XS/S local except probe; M ≤2 relevant `@spectre:finder`, `@spectre:analyst`, or `@spectre:patterns`; L/XL necessary dimensions. Dispatch no dimension cited by path, knowledge ID/revision, or thread decision; `evidence: SUFFICIENT` with uncertainty below HIGH and full citation gathers locally at any size. The fresh evidence-only challenger is wave-independent: M triggers it for durable state, identity, public contract, migration, dependency, or workflow/lifecycle; L/XL always, with the wave or alone. Primary persists accepted evidence/IDs/revisions in `task_context.md`. `@spectre:web-research` only decides external API/framework. Refine knowledge search after affected files are known; load a work body only for a stated question, never reload an unchanged revision, and pass workers compact findings with provenance.
 4. Read `references/minimum-solution.md` after initial classification. From accepted evidence, select incumbent-first and persist `## Minimum Solution Selection` in `task_context.md`, bound to Scope/authority/accepted evidence. XS/S decide locally; primary applies the canonical simpler-wins result.
-5. Invoke `Skill(spectre-plan-route)` in `observed` mode with completed selection before drafting. It alone maps selected structural facts, uncertainty, boundaries, graph risk, and assurance floor through unchanged table. Plan automatically uses the observed route with no paid rerun or user tier gate unless Scope, explicit design, or authority conflicts; never silently rerun.
+5. Invoke `Skill(spectre-plan-route)` in `observed` mode with completed selection before drafting. Plan automatically uses the observed route with no paid rerun or user tier gate unless Scope, explicit design, or authority conflicts.
 6. Draft once with the observed route-mapped depth: XS → `Skill(spectre-create_plan) --depth light --no-review --execution structured`; S inherits it; M/L → `Skill(spectre-create_plan) --depth standard --no-review --execution structured`; XL → `Skill(spectre-create_plan) --depth comprehensive --no-review --execution structured`. Never review/task here. XS uses `light`, not `xs`, so no `Execution Mode: direct`.
 7. Validate Routing Observations and owned concepts conform to selected record; emit `plan.reclassified` with plan hash, records, regret. Append observed record to `task_context.md` with draft raw-byte hash plus Scope/authority hash; emit unchanged `plan.completed` artifact hashes/counts/planning elapsed. Telemetry failure is degraded and never blocks handoff.
 8. From `specs/plan.md` derive requested outcome, approach, material decisions, Scope/anti-scope boundaries, credible risks, verification intent, and ordering/shared-contract constraints. Immediately before Execute show Trade-offs verbatim (`None` allowed): Execute accepts them; feedback revises the draft. On Scope change, selected-design conflict, missing irreversible decision, or unavailable authority, withhold the handoff. Otherwise return exactly one copy-ready fenced command: `/spectre:spectre-execute <repo-relative plan.md> --origin plan --preflight-plan <xs|light|standard|comprehensive>`. observed XS → xs; S → light; M/L → standard; XL → comprehensive. Launching that command is the user's alignment signal. Never pass `--orchestrated` or wait for delivery insurance.

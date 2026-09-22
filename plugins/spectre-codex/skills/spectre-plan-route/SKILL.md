@@ -8,7 +8,7 @@ user-invocable: false
 
 ## Purpose
 
-Return deterministic plan-routing/v1 to Plan/Execute. Classify only; caller owns authority.
+Return plan-routing/v1 to Plan/Execute; caller owns authority.
 
 ## Inputs
 
@@ -50,7 +50,7 @@ DONE when fields validate; probe is consumed; STRUCTURED names workstreams; HIGH
 
 ## Handoff
 
-Return record/probe; caller owns persistence/explanation, orchestration, gates, telemetry.
+Return record/probe as data. DONE does not end caller's turn; caller owns persistence, explanation, orchestration, gates, telemetry.
 
 ## Escalate-If
 

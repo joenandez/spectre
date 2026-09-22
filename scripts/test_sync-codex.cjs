@@ -775,7 +775,7 @@ test('execute preflight reuses observed assessment and proportionally creates ta
     assert.doesNotMatch(plan, /spectre-plan_review|spectre-create_tasks|spectre-task_review/);
     assert.match(plan, /observed record[\s\S]*task_context\.md[\s\S]*raw-byte hash[\s\S]*authority hash/i);
     assert.match(route, /Plan-or-Execute|Plan or Execute/i);
-    assert.match(route, /Classify only/i);
+    assert.match(route, /caller owns authority/i);
     assert.match(route, /plan-routing\/v1/);
     assert.ok(reviewIndex >= 0);
     assert.ok(assessmentIndex >= 0);
@@ -1183,6 +1183,8 @@ test('Plan and Execute emit one non-authoritative calibration lifecycle', () => 
     const reclassified = plan.indexOf('plan.reclassified');
     assert.ok(initialRoute !== -1 && planStart > initialRoute);
     assert.ok(observedRoute > planStart && reclassified > observedRoute);
+    assert.match(plan, /Child skill DONE is internal: resume the next Plan step in this turn/i);
+    assert.match(plan, /Report size\/rationale as progress; continue to step 3/i);
     for (const eventType of [
       'plan.started',
       'plan.reclassified',
@@ -1317,8 +1319,8 @@ test('Plan delegates one semantic XS-S-M-L-XL classifier and keeps orchestration
     assert.doesNotMatch(plan, /goal-prompts\.md/);
     assert.doesNotMatch(plan, /Skill\(spectre-goal\)/);
     assert.match(plan, /Gather proportional evidence/i);
-    assert.match(plan, /draft finalization/i);
-    assert.match(plan, /never silently rerun/i);
+    assert.match(plan, /primary owns plan/i);
+    assert.match(plan, /automatically uses the observed route with no paid rerun/i);
     assert.match(plan, /plan\.completed/);
     assert.match(plan, /DONE when/i);
 
@@ -1338,7 +1340,7 @@ test('Plan defers design authority to its aligned-draft handoff', () => {
     const gate = fs.readFileSync(gatePath, 'utf8');
 
     assert.doesNotMatch(plan, /high-level-design-gate\.md/);
-    assert.match(plan, /Scope remains the immutable user contract/i);
+    assert.match(plan, /Scope remains immutable/i);
     assert.match(plan, /missing irreversible decision.*withhold the handoff/i);
     assert.match(plan, /Launch(?:ing)? that command is the user's alignment signal/i);
 
@@ -2720,6 +2722,7 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
     assert.match(route, /observed[\s\S]*completed minimum-solution selection[\s\S]*before drafting/i);
     assert.match(route, /selected structural facts[\s\S]*assurance floor/i);
     assert.match(route, /same routing table.*alone maps/i);
+    assert.match(route, /DONE does not end caller's turn/i);
 
     assert.match(
       createPlan,
@@ -2796,8 +2799,8 @@ test('planning artifact ownership confines reviewer-authored scope-safe writebac
     const taskReview = readSkill('spectre-task_review');
     const codeReview = readSkill('spectre-code_review');
 
-    assert.match(plan, /primary owns synthesis, routing, and draft finalization/i);
-    assert.match(plan, /Scope remains the immutable user contract/i);
+    assert.match(plan, /primary owns plan/i);
+    assert.match(plan, /Scope remains immutable/i);
     assert.doesNotMatch(plan, /spectre-plan_review|spectre-create_tasks|spectre-task_review/);
     assert.doesNotMatch(plan, /never write `plan\.md`, `execute\.md`, or `tasks\.json` content yourself/i);
 
