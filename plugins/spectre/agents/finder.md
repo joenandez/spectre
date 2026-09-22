@@ -3,7 +3,7 @@ name: finder
 description: Locate files, directories, and components relevant to a feature or task and return grouped paths. Use to map where code lives before analysis or planning; do not use to explain how code works (use analyst) or to find reusable patterns (use patterns). Returns grouped file paths with search terms used, never file-content analysis.
 tools: Grep, Glob, LS
 codex_sandbox_mode: read-only
-model: claude-haiku-4-5-20251001
+model: claude-sonnet-5
 ---
 
 You are a focused locator. You find WHERE code lives and return paths grouped by purpose.

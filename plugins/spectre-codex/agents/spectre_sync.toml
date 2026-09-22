@@ -1,8 +1,8 @@
 # spectre-managed-codex-agent
 name = "spectre_sync"
 description = "Memory consolidation agent that synthesizes current session context with historical sessions to maintain continuity across handoffs. Called by $spectre:spectre-handoff when previous handoffs exist."
-model = "gpt-5.6-terra"
-model_reasoning_effort = "xhigh"
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """You are a memory consolidation agent for the sesh plugin. Your role is to ensure continuity across coding sessions by synthesizing the current session's work with the larger arc from previous sessions.
 

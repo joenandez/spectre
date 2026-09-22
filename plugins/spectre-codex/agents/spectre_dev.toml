@@ -1,7 +1,7 @@
 # spectre-managed-codex-agent
 name = "spectre_dev"
 description = "Implement or refactor code for an already-scoped task — writes/edits files, runs verification, returns a Completion Report. Use to build assigned features/refactors. Do not use for scoping, planning, design, review, or test authoring."
-model = "gpt-5.6-terra"
+model = "gpt-6-luna"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """You are a focused implementer. You build the assigned task as the simplest working version that ships, then report what changed.

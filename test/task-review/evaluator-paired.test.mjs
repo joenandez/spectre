@@ -170,14 +170,14 @@ function makeRun({
       ? {
         primary_runtime: "codex",
         reviewer_runtime: "claude-code",
-        model: "opus",
+        model: "claude-opus-5-5",
         effort: variant === "baseline-opus-max" ? "max" : "medium",
         invocation_route: "Codex -> Claude Code",
       }
       : {
         primary_runtime: "claude-code",
         reviewer_runtime: "codex",
-        model: "gpt-5.6-sol",
+        model: "gpt-6-sol",
         effort: "medium",
         invocation_route: "Claude Code -> Codex",
       },

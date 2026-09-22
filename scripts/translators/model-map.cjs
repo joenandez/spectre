@@ -22,16 +22,12 @@ const roleHints = {
 
 const codexDefaultsByClaudeModel = {
   'claude-sonnet-5': {
-    model: 'gpt-5.6-terra',
+    model: 'gpt-6-luna',
     model_reasoning_effort: 'high',
   },
-  'claude-opus-5': {
-    model: 'gpt-5.6-sol',
-    model_reasoning_effort: 'xhigh',
-  },
-  'claude-haiku-4-5-20251001': {
-    model: 'gpt-5.6-terra',
-    model_reasoning_effort: 'xhigh',
+  'claude-opus-5-5': {
+    model: 'gpt-6-sol',
+    model_reasoning_effort: 'high',
   },
 };
 

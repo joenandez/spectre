@@ -106,30 +106,30 @@ test("review gates retain their route-specific models and efforts", () => {
   );
 
   assert.match(planReview, /high effort \(20-minute limit\)/);
-  assert.match(planReview, /Codex (?:→|->) Claude Code `opus`/);
-  assert.match(planReview, /Claude Code (?:→|->) Codex `gpt-5\.6-sol`/);
-  assert.match(planReview, /claude -p --model opus --effort high/);
-  assert.match(planReview, /codex exec -C "\$PWD" -m gpt-5\.6-sol -c 'model_reasoning_effort="high"'/);
+  assert.match(planReview, /Codex (?:→|->) Claude Code `claude-opus-5-5`/);
+  assert.match(planReview, /Claude Code (?:→|->) Codex `gpt-6-sol`/);
+  assert.match(planReview, /claude -p --model claude-opus-5-5 --effort high/);
+  assert.match(planReview, /codex exec -C "\$PWD" -m gpt-6-sol -c 'model_reasoning_effort="high"'/);
   assert.match(planReview, /missing, non-zero, absent\/malformed completion receipt, hash mismatch, or out-of-bounds/i);
   assert.match(planReview, /record.*failure.*before one.*same-runtime CLI fallback/i);
   assert.match(planReview, /reviewer writes its report before selected-plan edits/i);
   assert.match(planReview, /primary never writes reviewer findings or plan edits/i);
-  assert.match(codeReview, /claude -p --model opus --effort high/);
+  assert.match(codeReview, /claude -p --model claude-opus-5-5 --effort high/);
   assert.match(
     codeReview,
-    /-m gpt-5\.6-sol -c 'model_reasoning_effort="high"'/,
+    /-m gpt-6-sol -c 'model_reasoning_effort="high"'/,
   );
   assert.match(
     knowledge,
-    /`spectre-task_review`[^\n]*`--model opus --effort medium`[^\n]*model_reasoning_effort="medium"/,
+    /`spectre-task_review`[^\n]*`--model claude-opus-5-5 --effort medium`[^\n]*model_reasoning_effort="medium"/,
   );
   assert.match(taskReview, /pinned medium effort/);
-  assert.match(taskReview, /Codex → Claude `opus`/);
-  assert.match(taskReview, /Claude → Codex `gpt-5\.6-sol`/);
+  assert.match(taskReview, /Codex → Claude `claude-opus-5-5`/);
+  assert.match(taskReview, /Claude → Codex `gpt-6-sol`/);
   assert.match(taskReview, /no other canonical artifact may change/i);
   assert.match(
     knowledge,
-    /`spectre-code_review`[^\n]*`--model opus --effort high`[^\n]*model_reasoning_effort="high"/,
+    /`spectre-code_review`[^\n]*`--model claude-opus-5-5 --effort high`[^\n]*model_reasoning_effort="high"/,
   );
 });
 

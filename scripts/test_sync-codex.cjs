@@ -168,7 +168,7 @@ test('agent translator emits the expected Codex TOML shape', () => {
   const source = `---
 name: finder
 description: Locate files.
-model: claude-haiku-4-5-20251001
+model: claude-sonnet-5
 ---
 
 Find relevant files.
@@ -187,17 +187,16 @@ Find relevant files.
   ]);
   assert.equal(fields.name, 'spectre_finder');
   assert.equal(fields.description, 'Locate files.');
-  assert.equal(fields.model, 'gpt-5.6-terra');
-  assert.equal(fields.model_reasoning_effort, 'xhigh');
+  assert.equal(fields.model, 'gpt-6-luna');
+  assert.equal(fields.model_reasoning_effort, 'high');
   assert.equal(fields.sandbox_mode, 'read-only');
   assert.equal(fields.developer_instructions, 'Find relevant files.');
 });
 
-test('agent translator replaces Luna with Terra while preserving the Sol reviewer tier', () => {
+test('agent translator maps current Claude models to Codex tiers at high effort', () => {
   const cases = [
-    ['claude-sonnet-5', 'gpt-5.6-terra', 'high'],
-    ['claude-opus-5', 'gpt-5.6-sol', 'xhigh'],
-    ['claude-haiku-4-5-20251001', 'gpt-5.6-terra', 'xhigh'],
+    ['claude-sonnet-5', 'gpt-6-luna', 'high'],
+    ['claude-opus-5-5', 'gpt-6-sol', 'high'],
   ];
 
   for (const [claudeModel, codexModel, effort] of cases) {
@@ -227,7 +226,7 @@ test('sync generates agents, rewrites skills, and rewrites hook roots', () => {
       fs.readFileSync(path.join(codexRoot, 'agents', 'spectre_dev.toml'), 'utf8'),
     );
     assert.equal(agentFields.name, 'spectre_dev');
-    assert.equal(agentFields.model, 'gpt-5.6-terra');
+    assert.equal(agentFields.model, 'gpt-6-luna');
     assert.equal(agentFields.model_reasoning_effort, 'high');
     assert.equal(agentFields.sandbox_mode, 'workspace-write');
 
@@ -1799,7 +1798,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    'c58fdbb8ca897b62fb37dd8843ddb5cebc28b7c58d4fbe5f882e2103ac850a18',
+    'b7085dd996f5ec638107ad3dc87ca23b7c1a5f2e0d9620e0f74d8f0d1555e97a',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
@@ -2479,15 +2478,15 @@ test('review gates pin route-specific opposing models and retain native fallback
   const skillNames = ['spectre-plan_review', 'spectre-task_review', 'spectre-code_review'];
   const routes = {
     'spectre-plan_review': {
-      claudeModel: 'opus',
+      claudeModel: 'claude-opus-5-5',
       effort: 'high',
     },
     'spectre-task_review': {
-      claudeModel: 'opus',
+      claudeModel: 'claude-opus-5-5',
       effort: 'medium',
     },
     'spectre-code_review': {
-      claudeModel: 'opus',
+      claudeModel: 'claude-opus-5-5',
       effort: 'high',
     },
   };
@@ -2507,10 +2506,10 @@ test('review gates pin route-specific opposing models and retain native fallback
       const { claudeModel, effort } = routes[skillName];
       if (skillName === 'spectre-plan_review') {
         assert.match(skill, /high effort \(20-minute limit\)/);
-        assert.match(skill, /Codex (?:→|->) Claude Code `opus`/);
-        assert.match(skill, /Claude Code (?:→|->) Codex `gpt-5\.6-sol`/);
-        assert.match(skill, /claude -p --model opus --effort high/);
-        assert.match(skill, /codex exec -C "\$PWD" -m gpt-5\.6-sol -c 'model_reasoning_effort="high"'/);
+        assert.match(skill, /Codex (?:→|->) Claude Code `claude-opus-5-5`/);
+        assert.match(skill, /Claude Code (?:→|->) Codex `gpt-6-sol`/);
+        assert.match(skill, /claude -p --model claude-opus-5-5 --effort high/);
+        assert.match(skill, /codex exec -C "\$PWD" -m gpt-6-sol -c 'model_reasoning_effort="high"'/);
         assert.match(skill, /-s workspace-write "\$REVIEW_PROMPT" < \/dev\/null/);
         assert.match(skill, /missing, non-zero, absent\/malformed completion receipt, hash mismatch, or out-of-bounds/i);
         assert.match(skill, /record.*failure.*before one.*same-runtime CLI fallback/i);
@@ -2527,8 +2526,8 @@ test('review gates pin route-specific opposing models and retain native fallback
         assert.doesNotMatch(skill, /at least 20 minutes/);
       } else if (skillName === 'spectre-task_review') {
         assert.match(skill, /pinned medium effort/);
-        assert.match(skill, /Codex (?:→|->) Claude(?: Code)? `opus`/);
-        assert.match(skill, /Claude(?: Code)? (?:→|->) Codex `gpt-5\.6-sol`/);
+        assert.match(skill, /Codex (?:→|->) Claude(?: Code)? `claude-opus-5-5`/);
+        assert.match(skill, /Claude(?: Code)? (?:→|->) Codex `gpt-6-sol`/);
         assert.match(skill, /one clean-context `@(?:spectre(?::|_)?)?reviewer`/);
         assert.match(skill, /runtime\/model\/effort\/route/);
       } else {
@@ -2536,14 +2535,14 @@ test('review gates pin route-specific opposing models and retain native fallback
         assert.match(
           skill,
           new RegExp(
-            `codex exec -C "\\$PWD" -m gpt-5\\.6-sol -c 'model_reasoning_effort="${effort}"'`,
+            `codex exec -C "\\$PWD" -m gpt-6-sol -c 'model_reasoning_effort="${effort}"'`,
           ),
         );
         assert.match(skill, /-s workspace-write "\$REVIEW_PROMPT" < \/dev\/null/);
         assert.match(skill, /Missing\/non-zero opposing CLI[\s\S]*permits one clean-context `@spectre(?::|_)reviewer`/i);
         assert.match(skill, /Fallback once/);
         assert.match(skill, new RegExp(`Claude Code\\|${claudeModel}\\|${effort}\\|Codex -> Claude Code`));
-        assert.match(skill, new RegExp(`Codex\\|gpt-5\\.6-sol\\|${effort}\\|Claude Code -> Codex`));
+        assert.match(skill, new RegExp(`Codex\\|gpt-6-sol\\|${effort}\\|Claude Code -> Codex`));
         assert.match(skill, /native-subagent\|runtime-native\|inherited\|native-fallback/);
       }
 

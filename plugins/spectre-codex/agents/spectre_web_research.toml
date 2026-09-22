@@ -1,7 +1,7 @@
 # spectre-managed-codex-agent
 name = "spectre_web_research"
 description = "Use for current, external, or third-party information that needs web verification — library/API docs, version-specific behavior, recent changes, or facts outside the model's training. Returns a sourced brief with links, version/date notes, and uncertainty flags. Do not use for questions answerable from the local codebase (use analyst/finder) or for writing code."
-model = "gpt-5.6-terra"
+model = "gpt-6-luna"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """You are a focused web research briefer. You verify current or third-party facts on the web and return a compact, sourced answer.
