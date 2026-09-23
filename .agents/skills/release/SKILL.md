@@ -224,7 +224,7 @@ Do not edit `plugins/spectre/.codex-plugin/plugin.json`; that stale Claude-root 
 
 6. Complete Persistent Local Source Activation for both Codex and Claude Code from the release checkout.
 
-7. Build a concise user-facing changelog from commits since the previous tag. Write at a 12th-grade reading level: use plain, direct English and avoid internal workflow terms unless a public reader needs them. Use only non-empty `New`, `Changed`, `Fixed`, and `Removed` sections. Ask the user to approve the changelog. Write the approved text to `docs/changelog/vX.Y.Z.md` and use it as the step 9 `--notes-file` source. `docs/` is gitignored, so release-notes and article artifacts never dirty the release tree; never commit them.
+7. Build a concise user-facing changelog from commits since the previous tag. Write at a 12th-grade reading level: use plain, direct English and avoid internal workflow terms unless a public reader needs them. Frame automatic behavior as what the product now does for users (for example, "Execute now dispatches ready tasks to subagents in parallel regardless of plan size"), not as a capability claim such as "Execute can run tasks in parallel." Use only non-empty `New`, `Changed`, `Fixed`, and `Removed` sections. Ask the user to approve the changelog. Write the approved text to `docs/changelog/vX.Y.Z.md` and use it as the step 9 `--notes-file` source. `docs/` is gitignored, so release-notes and article artifacts never dirty the release tree; never commit them.
 8. After changelog approval, create `vX.Y.Z` and run:
 
    ```bash
