@@ -1,6 +1,6 @@
 {
   "name": "spectre",
-  "version": "7.5.1",
+  "version": "7.5.2",
   "description": "Contract-driven agentic coding workflow for Claude Code and Codex.",
   "author": {
     "name": "Joe Fernandez",
