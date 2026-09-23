@@ -833,7 +833,8 @@ test("quiescence uses injected pre/continuous/post snapshots, excludes the owned
         { pid: 100, ppid: 1, command: "node evaluate-task-review.mjs" },
         { pid: 200, ppid: 100, command: "codex exec" },
         { pid: 201, ppid: 200, command: "codex helper" },
-        { pid: 300, ppid: 1, command: "node --test unrelated.test.mjs" },
+        { pid: 300, ppid: 1, command: "node --test unrelated.test.mjs api_key=private" },
+        { pid: 301, ppid: 1, command: "codex exec --prompt refresh_token=private" },
       ],
       post: [
         { pid: 100, ppid: 1, command: "node evaluate-task-review.mjs" },
@@ -843,8 +844,10 @@ test("quiescence uses injected pre/continuous/post snapshots, excludes the owned
   assert.equal(contaminated.clean, false);
   assert.deepEqual(
     contaminated.continuous.contaminants.map(({ pid }) => pid),
-    [300],
+    [300, 301],
   );
+  assert.equal(contaminated.continuous.contaminants[0].command, "node --test");
+  assert.equal(contaminated.continuous.contaminants[1].command, "codex exec");
   assert.equal(
     contaminated.continuous.contaminants.some(({ pid }) =>
       [200, 201].includes(pid)

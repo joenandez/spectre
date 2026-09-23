@@ -805,6 +805,15 @@ function heavyProcess(processRecord) {
   );
 }
 
+function heavyProcessLabel(command) {
+  if (/(?:^|\/)codex\s+exec(?:\s|$)/i.test(command)) return "codex exec";
+  if (/(?:^|\/)claude(?:\s|$)/i.test(command)) return "claude";
+  if (/\bnode(?:\S*)?\s+--test(?:\s|$)/i.test(command)) return "node --test";
+  if (/scripts\/sync-codex\.cjs/i.test(command)) return "sync-codex";
+  if (/verify-spectre\/scripts\/verify\.mjs/i.test(command)) return "verify-spectre";
+  return "task-review evaluator";
+}
+
 function stageSnapshots(value) {
   if (!Array.isArray(value)) return [];
   if (value.length === 0) return [];
@@ -842,7 +851,7 @@ export function assessQuiescence({
             {
               pid: processRecord.pid,
               ppid: processRecord.ppid,
-              command: processRecord.command,
+              command: heavyProcessLabel(processRecord.command ?? ""),
             },
           );
         }

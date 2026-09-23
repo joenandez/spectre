@@ -900,6 +900,26 @@ test('plan-direct execute creates compact local execution state before dispatch'
   }
 });
 
+test('execute schedules ready parallel work from existing evidence for every source', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  for (const rootName of ['spectre', 'spectre-codex']) {
+    const execute = readExecuteContract(repoRoot, rootName);
+    const scheduling = fs.readFileSync(
+      path.join(repoRoot, 'plugins', rootName, 'skills', 'spectre-execute', 'references', 'parallel-scheduling.md'),
+      'utf8',
+    );
+    assert.match(execute, /Read `references\/parallel-scheduling\.md` before first dispatch; apply it to every source and frontier/);
+    assert.match(execute, /Source order alone does not block concurrent dispatch/i);
+    assert.match(scheduling, /Read the selected source, Scope, applicable `task_context\.md`, available `execute\.md` wave hints, and current execution state/);
+    assert.match(scheduling, /Do not launch another research wave, dispatch research agents, broadly rescan the repository, or delay ready work/i);
+    assert.match(scheduling, /independent assignments across or within a change set, workstream, or parent/i);
+    assert.match(scheduling, /Dispatch the ready assignments together/i);
+    assert.match(scheduling, /reason any apparently ready independent slice remains serialized/i);
+    assert.match(scheduling, /start newly ready assignments without waiting for unrelated workers/i);
+    assert.match(scheduling, /no new requirement, acceptance criterion, or synthetic Plan Direct task event/i);
+  }
+});
+
 test('autonomous plan execution instruction envelope stays token-neutral', () => {
   // Structured-handoff tokens are reallocated inside the fixed 28-skill aggregate ceiling below.
   const repoRoot = path.resolve(__dirname, '..');
@@ -1800,7 +1820,7 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
 
   assert.equal(
     crypto.createHash('sha256').update(beforeHandoff).digest('hex'),
-    'b7085dd996f5ec638107ad3dc87ca23b7c1a5f2e0d9620e0f74d8f0d1555e97a',
+    '066486169f293c55e275a15a15997c29d00aebdbc2eba0b3ff38bc08b425acac',
   );
   assert.match(beforeHandoff, /Keep the invocation checkout/);
   assert.match(
