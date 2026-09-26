@@ -85,8 +85,7 @@ function ensureCodexAgents(pluginRoot) {
   }
   const scriptPath = path.join(
     pluginRoot,
-    'skills',
-    'spectre-scope',
+    'hooks',
     'scripts',
     'ensure-codex-agents.mjs',
   );

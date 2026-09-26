@@ -26,7 +26,7 @@ claude plugin install spectre@spectre
 Then start building:
 
 ```plaintext
-/spectre:spectre-scope
+/spectre:spectre-plan
 ```
 
 That's it. You just start with 1 command to build features.
@@ -43,25 +43,25 @@ Restart or open a new Codex session after install so managed custom agents can b
 Then run a Spectre command such as:
 
 ```plaintext
-$spectre:spectre-scope
+$spectre:spectre-plan
 ```
 
-![SPECTRE scope command](./assets/images/spectre-scope.png)
+![SPECTRE Plan workflow](./assets/images/spectre-define-it-v1.png)
 
 ## 🔁 How It Works
 
-All feature work enters through Scope and continues through the adaptive Plan, regardless of the size of the feature.
+Repository changes start with Plan, which records settled Scope and creates a right-sized plan. Execute owns implementation, independent Validate, and observed Proof; Ship owns closeout.
 
-You really only need to remember `/spectre:spectre-scope`; every final agent response guides you to what is next.
+The three core workflows are `/spectre:spectre-plan`, `/spectre:spectre-execute`, and `/spectre:spectre-ship`.
 
 Read the "When not to use SPECTRE" below to learn when it isn't the right tool.
 
 ### How to use SPECTRE
 
-- run one of the kickoff prompts with your Agent
+- start with one of the focused workflow or utility skills
 
-  - `/spectre:spectre-scope` is the primary starting point. It helps you explore the edges of the proposed feature while clarifying what is specifically in, out, future, anti-scope, and maybe. The workflow asks questions to clarify until scope is clear and final.
-  - `/spectre:spectre-kickoff` is for high ambiguity new features and includes web research to explore what already exists and best practices. use if you have an idea but the exact scope is not clear yet.
+  - `/spectre:spectre-plan` is the primary starting point. It records settled boundaries and asks only when a material scope or authority decision remains open.
+  - `/spectre:spectre-research` is for high ambiguity new features and includes web research to explore what already exists and best practices. use if you have an idea but the exact scope is not clear yet.
   - `/spectre:spectre-research` is for highly technical explorations, focused on codebase research "how might we build …” style Qs
   - `/spectre:spectre-ux` I usually use after scope, but if the scope is clear from discussion its a good starting point to define user flows, components, and layout for a new feature.
 
@@ -74,9 +74,9 @@ Read the "When not to use SPECTRE" below to learn when it isn't the right tool.
 
 - SPECTRE saves canonical feature docs under `.spectre/features/<feature-name>/`, bug reports from `/spectre:spectre-fix` under `.spectre/bugs/<bug-name>/`, and `/spectre:spectre-handoff` saves branch-keyed session state under `.spectre/handoffs/<branch-name>/`. Keep `.spectre/features/` and `.spectre/bugs/` checked into git so your Agent and teammates can reference durable feature records in the future; handoffs remain local session state.
 
-#### Meta workflows
+#### Core workflows
 
-**Plan → Approve → Execute → Prove → Ship**
+**Plan → Execute → Ship**
 
 Spectre uses "meta skills". Meta Skills are skills that call other skills in one coordinated workflow. Your primary agent manages/orchestrates these workflows while focused subagents handle individual tasks.
 
@@ -86,19 +86,19 @@ Spectre uses "meta skills". Meta Skills are skills that call other skills in one
 | `/spectre:spectre-execute` | Orchestrated implementation, verification, review, and proof | When the plan is ready |
 | `/spectre:spectre-ship` | Cleanup, testing, rebase, and a pull request | When the feature is ready to check in |
 
-**/spectre:spectre-plan** — Scope and right-size the work
+**/spectre:spectre-plan** — Record settled Scope and right-size the work
 
 `/spectre:spectre-plan` classifies the work as XS, S, M, L, or XL based on its semantic shape, uncertainty, available evidence, protected boundaries, and task-graph risk.
 
 It will:
 
-- Create durable Scope and plan artifacts—even for XS changes.
+- Record durable Scope and plan artifacts—even for XS changes. Settled context proceeds without routine questions or a repeated confirmation pause.
 - Add proportional research and create one right-sized aligned draft; Plan owns no review or task pipeline.
 - Present a concise alignment brief and a marked Execute handoff for every size.
 - Wait for your explicit approval before any code changes.
 - Print the exact marked `/spectre:spectre-execute` command that starts preflight before any structured work exists.
 
-**/spectre:spectre-execute** — Implement, verify, and prove the feature</summary>
+**/spectre:spectre-execute** — Implement, verify, and prove the feature
 
 `/spectre:spectre-execute` guides the primary agent through the full implementation. Run the command that `/spectre:spectre-plan` prints when it finishes.
 
@@ -109,34 +109,28 @@ It will:
 - Run affected verification after every execution wave.
 - Add intermediate reviews when the plan records compounding risk.
 - Run one opposite-runtime adversarial code review, followed by one consolidated repair pass.
-- Finish with `/spectre:spectre-prove`, which turns the Scope and UX into explicit acceptance criteria and verifies them through your test harness or another suitable proof tool.
+- Finish with Execute’s independent Validate pass and observed public-interface Proof. Validation findings must be addressed or reported as blocked before PASS.
 - Capture screenshots or video for visual work, evaluate the evidence and logs, and produce a reviewable `proof.html`.
 
 **/spectre:spectre-ship** — Clean up and open the pull request
 
 Run `/spectre:spectre-ship` when the feature is ready to check in.
 
-It will:
-
-- Run `/spectre:spectre-clean`.
-  - `/spectre:spectre-prune` removes dead or unreachable code and flags duplication, temporary logs, and generated slop.
-  - `/spectre:spectre-test` assesses coverage by risk, classifies gaps from P0 through P3, and adds tests for the most important behaviors.
-- Run `/spectre:spectre-rebase` against the parent branch when one exists.
-- Run `/spectre:spectre-create_pr` to open the pull request.
+It loads its cleanup, risk-based testing, sweep, and rebase references, then runs `/spectre:spectre-create_pr` to open the pull request.
 
 ## 🛑 When NOT to use SPECTRE
 
-Scope → Plan scales from XS through XL. Use a specialist entry instead in these scenarios:
+Plan scales work from XS through XL. Use a specialist entry instead in these scenarios:
 
 - XXS changes - copy, layout iteration, styling, etc. These are the one case where the back/forth is by design.
-- Read-only diagnosis or review, release operations, and execution of an already-approved artifact do not need a new Scope → Plan cycle.
-- Use `/spectre:spectre-prototype` for throwaway interaction exploration; repository changes that result from it still return through Scope → Plan.
+- Read-only diagnosis or review, release operations, and execution of an already-approved artifact do not need a new Plan cycle.
+- Use `/spectre:spectre-prototype` for throwaway interaction exploration; repository changes that result from it still return through Plan.
 - For bugs, use `/spectre:spectre-fix`; diagnosis remains load-bearing, and any code-changing repair leaves a durable bug report under `.spectre/bugs/<bug-name>/bug-report.md` and waits for approval.
-- Massive multi-phase features. SPECTRE is designed for a relatively 'standard' sized feature. If you are building a huge product, and the work needs to be broken up into multiple-phases, typically what I'll do is run one `/spectre:spectre-scope` for the complete scope, then work with the agent to break it up into logical phases - saving that doc as `phases.md`. Then I'll run another `/spectre:spectre-scope` for the phase I'm building.
+- Massive multi-phase features. SPECTRE is designed for a relatively 'standard' sized feature. If you are building a huge product, and the work needs to be broken up into multiple-phases, typically what I'll do is run one `/spectre:spectre-plan` for the complete scope, then work with the agent to break it up into logical phases - saving that doc as `phases.md`. Then I'll run another `/spectre:spectre-plan` for the phase I'm building.
 
 ## Scenarios where SPECTRE is particularly useful
 
-- Building brand new products. Starting with `/spectre:spectre-kickoff` is a great starting point, including web research, identifying existing related products, and creating a high quality kick off document you can then take into `/spectre:spectre-scope`.
+- Building brand new products. Starting with `/spectre:spectre-research` is a great starting point, including web research, identifying existing related products, and creating a high quality kick off document you can then take into `/spectre:spectre-plan`.
 - Highly ambiguous, highly technical features or questions. `/spectre:spectre-research` is excellent for this because it includes usage of the `@spectre:web-research` subagent in Claude Code or `@spectre_web_research` in Codex, which searches the web exhaustively on the topic. The final report is sometimes good enough to jump straight into execution, and is almost always extremely clarifying.
 - Building internal developer tools, skills, workflows, personal software. Basically, if you have an idea, and you want to get clear on the scope, the process is generic enough to work for *anything* you want the agent to build.
 
@@ -203,12 +197,12 @@ I improve these Skills daily, and I didn't just prompt your Agent to generate th
 
 For example:
 
-- I iterated on `/spectre:spectre-scope` until I felt like the types of questions actually help me get clear on what I'm building, without asking questions that it could easily get from codebase research
+- I iterated on `/spectre:spectre-plan` until I felt like the types of questions actually help me get clear on what I'm building, without asking questions that it could easily get from codebase research
 - I iterated on the `/spectre:spectre-execute` workflow until it successfully delivered large tasks in a single context window using subagents that deliver completion reports to handoff to the next subagents, use TDD effectively, and autonomously adapt the tasks based on what was discovered DURING development instead of blindly
-- I iterated on the `/spectre:spectre-clean` and `/spectre:spectre-test` workflows until it felt automatic that we were sticking to our linting rules, every new feature was well tested/covered, the commits were grouped logically with the appropriate amount of detail.
+- I iterated on the `/spectre:spectre-ship` and `/spectre:spectre-ship` workflows until it felt automatic that we were sticking to our linting rules, every new feature was well tested/covered, the commits were grouped logically with the appropriate amount of detail.
 - I iterated on the knowledge search/load and capture lifecycle until 1) your Agent reaches for relevant knowledge before an affected decision, 2) the primary captures supported decisions, constraints, corrections, and work outcomes at the workflow boundary, and 3) `/spectre:spectre-learn` remains available when I explicitly want to preserve or summarize something.
 - I iterated on the `/spectre:spectre-handoff` workflow until the status update had the appropriate detail/context, and worked perfectly if I'm working across MANY sessions or just one.
-- I added the new `/spectre:spectre-prove` workflow when it became clear I was spending far too much time validating the features were built right, and gave the agent a feedback loop to check its own work.
+- I added the new `/spectre:spectre-execute` workflow when it became clear I was spending far too much time validating the features were built right, and gave the agent a feedback loop to check its own work.
 - I iterated on the `/spectre:spectre-plan` workflow until I could use it for *everything*. I didn't want to have to make decisions about using native plan mode or Spectre, but I also didn't want a Comprehensive 40m planning workflow for a small feature.
 
 SPECTRE made products like New June and Subspace possible, and it is making it possible for me, an ex-Meta, ex-Amazon Technical Product Manager to build, ship, and iterate on products 100x the complexity of anything I've ever built in the past.
@@ -289,86 +283,43 @@ Although I do sometimes use `@spectre:web-research` in Claude Code or `@spectre_
 
 ## 🛠️ How I Typically use SPECTRE
 
-99.9% of my day is spent using SPECTRE exactly like this.
-
-- start /spectre:spectre-scope to get crisp on what's in/out. this is the durable entry for repository-changing work, including one-line changes.
-
-  - if the feature's ux/user flow is unclear to me, or I want to make sure to really nail it, i run /spectre:spectre-ux. Its similar to /spectre:spectre-scope but focuses on getting clear on the core user flows.
-
-- /spectre:spectre-plan to choose the smallest sufficient XS–XL planning path, leave its aligned draft, and review the concise handoff before starting Execute
-
-  - once i have scope/plan, I typically run /spectre:spectre-handoff to get a fresh context window with awareness of what we're working on.
-
-- then run /spectre:spectre-execute to use parallel subagents to work through the tasks. Execute also runs one final /spectre:spectre-code_review and an end-only /spectre:spectre-prove pass.
-
-  - side note /spectre:spectre-validate is a killer prompt. It breaks down the original tasks and dispatches subagents to verify. find stuff missing all the time with this.
-
-  - when initial execution is complete, i run another /spectre:spectre-handoff to get the context window clean for fixes/touch ups.
-
-- for already-approved, tightly bounded autonomous delivery, I use /spectre:spectre-delegate as a specialist entry.
-
-- From here — I review the proof and do any additional manual testing and fixing.
-
-  - For bugs, I use `/spectre:spectre-fix`; a code-changing repair records the diagnosed work and waits for approval before mutation.
-
-  - If something new comes up, or if the scope is not what I'd hoped, I run a new /spectre:spectre-scope cycle from within the project.
-
-  - I liberally use /spectre:spectre-handoff here to keep context windows clean as I work through issues, and keep the sessions on track with the progress we're making.
-
-- During the process of manual testing/fixing, I typically accumulate uncommitted changes. /spectre:spectre-sweep will get your changes committed, while
-
-  - running and addressing lint
-  - running tests and related tests on touched files
-  - finding obvious dead code/AI slop, and
-  - grouping changes logically with descriptive conventional commits
-
-- Once wrapping up, /spectre:spectre-ship is a much deeper cleanup that
-
-  - dispatches subagents to find dead code, duplicates, verifies, lint, commits any stragglers, etc.
-  - runs /spectre:spectre-test does deep analysis and dispatches subagents to write tests based on a risk-adjusted framework focusing on behavior not implementation details,
-  - runs /spectre:spectre-rebase to get sync'd up with and address any merge conflicts with the target branch
-  - runs /spectre:spectre-create_pr to create the final PR.
-
-- Execute and Ship capture qualifying evidence and refresh the same work account automatically. When I have an additional evidenced insight, correction, or work-summary request, I can use `/spectre:spectre-learn` on demand; it is not a required post-Ship step.
+- Start repository-changing work with `/spectre:spectre-plan`. It settles Scope, selects a right-sized approach, and returns the exact Execute command.
+- Use `/spectre:spectre-ux` or `/spectre:spectre-prototype` when user journeys or interaction details need to be resolved before planning.
+- Run `/spectre:spectre-execute` with the Plan handoff. Execute owns implementation, focused verification, independent Validate, observed Proof, and its final review when it owns finalization.
+- Use `/spectre:spectre-handoff` when a fresh context window would help; the next session resumes from the saved state.
+- Run `/spectre:spectre-ship` after implementation. It owns risk-based cleanup and testing, sweep, rebase, the post-rebase suite, and PR creation.
+- Use `/spectre:spectre-fix` for diagnosed bugs. It records the repair plan before code mutation.
+- Use `/spectre:spectre-learn` to capture an evidenced insight or correction for future work.
 
 ## 📋 Slash Command Reference
 
-### Core Workflow
+### Core Workflows
 
 | Command | Description |
 | --- | --- |
-| `/spectre:spectre-scope` | Interactive feature scoping |
-| `/spectre:spectre-plan` | Research codebase, create implementation plan |
-| `/spectre:spectre-execute` | Wave-based parallel execution with code review |
-| `/spectre:spectre-delegate` | Autonomous compact flow for already-approved, tightly bounded delivery |
-| `/spectre:spectre-prove` | User-level acceptance proof with reviewed evidence |
-| `/spectre:spectre-ship` | Completed-branch closeout: clean, rebase, PR |
+| `/spectre:spectre-plan` | Settle Scope, create an aligned implementation plan, and hand off to Execute |
+| `/spectre:spectre-execute` | Implement, verify, review, Validate, and observe Proof |
+| `/spectre:spectre-ship` | Clean up completed work, rebase, verify, and open a pull request |
 
-### Discovery & Research
+### Design, Diagnosis, and Review
 
 | Command | Description |
 | --- | --- |
-| `/spectre:spectre-kickoff` | Deep research for high-ambiguity features |
-| `/spectre:spectre-research` | Parallel codebase research |
+| `/spectre:spectre-ux` | Resolve user flows, components, and layout |
+| `/spectre:spectre-prototype` | Explore an interaction in a throwaway prototype |
+| `/spectre:spectre-research` | Investigate technical questions and high-ambiguity ideas |
+| `/spectre:spectre-fix` | Diagnose a bug and prepare an authorized repair |
+| `/spectre:spectre-validate` | Check implementation against real requirements |
+| `/spectre:spectre-code_review` | Run a final adversarial code review |
+| `/spectre:spectre-create_pr` | Create or update a pull request |
 
 ### Session Memory
 
 | Command | Description |
 | --- | --- |
-| `/spectre:spectre-handoff` | Save session state snapshot |
-| `/spectre:spectre-forget` | Clear memory, archive logs |
-
-### Utilities
-
-These are situational commands.
-
-| Command | Description |
-| --- | --- |
-| `/spectre:spectre-fix` | Diagnose bugs, persist a bug report under `.spectre/bugs/`, and wait for approval before code mutation |
-| `/spectre:spectre-create_plan` | Internal plan producer used by the adaptive `/spectre:spectre-plan` workflow |
-| `/spectre:spectre-sweep` | Light cleanup pass — lint, test, descriptive commits. Great if i've accumulated a lot of changes and want to check them in while addressing lint/test failures in the process. |
-| `/spectre:spectre-prototype` | If the UX for a given feature is ambiguous, i live by this Skill. It creates HTML prototypes with your existing design system to get clear on the desired ux and interaction. |
-| `/spectre:spectre-goal` | Opt-in autonomous goal prompt for a narrowly scoped objective. The core workflow hands off to `/spectre:spectre-execute` directly, so use this only when you want an unattended run. |
+| `/spectre:spectre-handoff` | Save and resume session state |
+| `/spectre:spectre-forget` | Clear saved memory context |
+| `/spectre:spectre-learn` | Capture durable project knowledge or a work record |
 
 ## 📁 Repository Structure
 

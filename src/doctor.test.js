@@ -203,7 +203,7 @@ test('doctor reports native plugin generation, managed agents, and legacy residu
     path.join(fixture.codexHome, 'agents', 'spectre_dev.toml'),
   );
   fs.mkdirSync(path.join(fixture.codexHome, 'spectre', 'hooks'), { recursive: true });
-  for (const skillName of ['spectre-recall', 'spectre-find']) {
+  for (const skillName of ['spectre-recall', 'spectre-find', 'spectre-scope', 'spectre-prune']) {
     const skillPath = path.join(fixture.codexHome, 'skills', skillName, 'SKILL.md');
     fs.mkdirSync(path.dirname(skillPath), { recursive: true });
     fs.writeFileSync(skillPath, 'retired managed skill\n');
@@ -220,6 +220,8 @@ test('doctor reports native plugin generation, managed agents, and legacy residu
   assert.equal(doctor.nativePlugin.legacyResidue.runtimeDir, true);
   assert.ok(doctor.nativePlugin.legacyResidue.legacySkills.includes('spectre-recall'));
   assert.ok(doctor.nativePlugin.legacyResidue.legacySkills.includes('spectre-find'));
+  assert.ok(doctor.nativePlugin.legacyResidue.legacySkills.includes('spectre-scope'));
+  assert.ok(doctor.nativePlugin.legacyResidue.legacySkills.includes('spectre-prune'));
   assert.equal(doctor.nativePlugin.legacyResidue.present, true);
 });
 

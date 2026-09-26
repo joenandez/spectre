@@ -5,6 +5,7 @@ import {
   KNOWLEDGE_OVERRIDE_START,
   listSpectreAgents,
   listSpectreSkills,
+  RETIRED_SKILLS,
   MIN_CODEX_VERSION,
   SHARED_SKILLS,
   WORKFLOW_PROBE_SKILLS
@@ -335,12 +336,9 @@ function inspectLegacyResidue(config) {
   const legacySkills = [];
   for (const skillName of [
     ...listSpectreSkills(),
-    'spectre-apply',
+    ...RETIRED_SKILLS,
     'spectre-recall',
-    'spectre-find',
-    'spectre-guide',
-    'spectre-evaluate',
-    'spectre-architecture_review'
+    'spectre-find'
   ]) {
     if (fs.existsSync(path.join(codexSkillsDir(), skillName))) {
       legacySkills.push(skillName);

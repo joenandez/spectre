@@ -24,7 +24,8 @@ const helperPath = join(
   "plugins",
   "spectre",
   "skills",
-  "spectre-task_review",
+  "spectre-execute",
+  "references",
   "scripts",
   "task-review-safety.mjs",
 );

@@ -1,6 +1,6 @@
 ---
 name: "spectre-create_pr"
-description: "Generate a grounded draft pull request from the actual diff and open it via gh. Use when wrapping up a branch or writing a PR description; not to commit/clean (spectre-sweep), rebase (spectre-rebase), or autonomously deliver a request (spectre-delegate)."
+description: "Generate a grounded draft pull request from the actual diff and open it via gh. Use when wrapping up a branch or writing a PR description; not for Ship-owned cleanup, rebase, or delivery sequencing."
 user-invocable: true
 ---
 

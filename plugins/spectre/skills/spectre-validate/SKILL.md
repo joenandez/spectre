@@ -1,6 +1,6 @@
 ---
 name: "spectre-validate"
-description: "Validate that completed implementation actually delivers the scope/tasks requirements — chunks the work into areas, dispatches parallel @spectre:analyst validators that trace each requirement from user action to render, and writes one actionable validation_gaps.md ranking what's Delivered / Partial / Dead Code / Missing. Trigger after execute (or any build) when you need to confirm requirements are met before clean/test/ship. Do NOT trigger to fix the gaps (spectre-fix), to run the test suite (spectre-test), or to remove dead code (spectre-prune)."
+description: "Validate whether completed implementation delivers its scope/task requirements — dispatch independent @spectre:analyst checks for definition, connection, and reachability, then write one actionable validation_gaps.md. Trigger for standalone requirement validation or from Execute before observed Proof. Do NOT trigger to fix findings (spectre-fix) or as a substitute for observed Proof."
 user-invocable: true
 ---
 
@@ -19,8 +19,8 @@ Level 1 without 2/3 is **dead code that happens to match the description** — n
 
 ## Inputs
 
-- `$ARGUMENTS` — explicit feature name/root or descendant artifact, scope docs, an explicit arbitrary plan as a requirement source, and/or `tasks.json` to validate against (paths, or "use thread context"), plus optional `execution_state.md` focus evidence, an immutable `BASE_SHA`/`HEAD_SHA`/`DIFF_SHA256` candidate tuple, and `--orchestrated` when a parent workflow owns remediation and the next step. Requirement context is **REQUIRED**. If absent, ask for a scope or plan path, the task detail JSON path, or "use thread context" — then wait.
-- Treat the plan as authoritative when passed. Otherwise use task acceptance slices, scope docs, then usable thread context. Read the authoritative source in full. For `tasks.json`, extract validation slices from `phases[]` (parent title/description plus child acceptance criteria/context); do not use `execute.md` as the validation source except to locate the JSON path.
+- `$ARGUMENTS` — explicit feature name/root or descendant artifact, scope docs, an explicit plan or fix/bug report, and/or `tasks.json` to validate against (paths, or "use thread context"), plus optional `execution_state.md` focus evidence, an immutable `BASE_SHA`/`HEAD_SHA`/`DIFF_SHA256` candidate tuple, and `--orchestrated` when a parent workflow owns remediation and the next step. Requirement context is **REQUIRED**. If absent, ask for a scope, plan, fix/bug report, task detail JSON path, or "use thread context" — then wait.
+- Treat the supplied plan, fix/bug report, or other explicit source as authoritative. Otherwise use task acceptance slices, scope docs, then usable thread context. Read the authoritative source in full. For `tasks.json`, extract validation slices from `phases[]` (parent title/description plus child acceptance criteria/context); do not use `execute.md` as the validation source except to locate the JSON path.
 
 ## Working Set (late-bound — read at run-time, never inline)
 
@@ -31,7 +31,7 @@ Level 1 without 2/3 is **dead code that happens to match the description** — n
 
 ## Method / guardrails
 
-- **Chunk into 3–8 validation areas:** one per parent task in `tasks.json`; derive areas from plan outcomes/workstreams when tasks are absent; else use one per "In Scope" item in scope.md, then one per discussed feature. Merge small, split large.
+- **Chunk into 1–8 validation areas:** one per parent task in `tasks.json`; derive areas from plan outcomes/workstreams when tasks are absent; else use one per "In Scope" item in scope.md, then one per discussed feature. Keep at least one independent analyst and do not fabricate or pad areas to meet a minimum. Merge small, split large.
 - **Execution state is derivative:** `execution_state.md` is evidence/focus only for cross-wave wiring, scope-creep, and dead-computation checks; it is never requirements or acceptance authority.
 - **Dispatch one `@spectre:analyst` per area, ALL in parallel in a single message.** Brief each with: the area, its source requirement (exact text), expected deliverables, branch, and the status enum + evidence + reachability rules below. Subagents return compressed findings in-thread — no per-area files.
 - **Status enum (each requirement):** ✅ **Delivered** (defined AND connected AND reachable) · ⚠️ **Partial** (exists, broken/missing connection) · 🔌 **Dead Code** (exists, zero usage sites) · ❌ **Missing** (does not exist).
@@ -42,7 +42,7 @@ Level 1 without 2/3 is **dead code that happens to match the description** — n
 - **Note scope creep** — anything built beyond the requirements.
 - **Final wiring check before any ✅:** consumer connected? render chain unbroken? old path removed? no orphaned computation? single data source? Any failure downgrades ✅ → ⚠️ and adds a gap task.
 - **No fixes.** Report and hand back.
-- **Candidate pin.** When any candidate field is supplied, require all three; recompute the canonical hash using `git diff --binary --full-index --no-ext-diff --no-color --no-renames` before dispatch and after report creation. Record the unchanged tuple in the report; otherwise return a stale-candidate result.
+- **Candidate pin.** When any candidate field is supplied, require all three; recompute the canonical hash using `git diff --binary --full-index --no-ext-diff --no-color --no-renames` before dispatch and after report creation. Record the unchanged tuple in the report; otherwise return a stale-candidate result marked incomplete. Execute always supplies all three fields.
 
 ## Outputs + DONE
 
@@ -70,7 +70,7 @@ Return status/delivered/gap/scope-creep/findings/report; `--orchestrated`: summa
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone `Needs Work`/`Significant Gaps` → `/spectre:spectre-fix` then revalidate; Standalone `Complete` → `/spectre:spectre-prove`. Boundary ambiguity → Scope; flow/state/copy ambiguity → UX; pause → Handoff; Test/Clean only when proof is deferred.
+Standalone `Needs Work`/`Significant Gaps` → `/spectre:spectre-fix` then revalidate; Standalone `Complete` → `/spectre:spectre-execute` for observed acceptance. Boundary ambiguity → Plan; flow/state/copy ambiguity → UX; pause → Handoff.
 
 ## Escalate-If
 

@@ -29,23 +29,36 @@ export function listSpectreAgents() {
 }
 
 export const SHARED_SKILLS = [
-  'spectre-learn',
-  'spectre-tdd'
+  'spectre-learn'
 ];
 
 export const RETIRED_SKILLS = [
   'spectre-architecture_review',
   'spectre-apply',
   'spectre-evaluate',
-  'spectre-guide'
+  'spectre-guide',
+  'spectre-delegate',
+  'spectre-kickoff',
+  'spectre-goal',
+  'spectre-clean',
+  'spectre-create_test_guide',
+  'spectre-scope',
+  'spectre-create_plan',
+  'spectre-plan_review',
+  'spectre-create_tasks',
+  'spectre-task_review',
+  'spectre-tdd',
+  'spectre-prove',
+  'spectre-prune',
+  'spectre-test',
+  'spectre-sweep',
+  'spectre-rebase'
 ];
 
 export const WORKFLOW_PROBE_SKILLS = [
-  'spectre-scope',
   'spectre-plan',
   'spectre-execute',
-  'spectre-clean',
-  'spectre-test'
+  'spectre-ship'
 ];
 
 export function repoMetadata() {

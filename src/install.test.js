@@ -9,8 +9,7 @@ const CLI_PATH = path.resolve('bin/spectre.js');
 const CODEX_PLUGIN_ROOT = path.resolve('plugins/spectre-codex');
 const ENSURE_AGENTS = path.join(
   CODEX_PLUGIN_ROOT,
-  'skills',
-  'spectre-scope',
+  'hooks',
   'scripts',
   'ensure-codex-agents.mjs',
 );

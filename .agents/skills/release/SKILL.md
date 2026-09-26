@@ -81,7 +81,7 @@ The local and public catalogs intentionally share marketplace name `spectre` and
 5. Run the bundled managed-agent repair and compare generated agents to the active Codex agent files:
 
    ```bash
-   PLUGIN_ROOT="$PWD/plugins/spectre-codex" node "$PWD/plugins/spectre-codex/skills/spectre-scope/scripts/ensure-codex-agents.mjs" --ensure --json
+   PLUGIN_ROOT="$PWD/plugins/spectre-codex" node "$PWD/plugins/spectre-codex/hooks/scripts/ensure-codex-agents.mjs" --ensure --json
    for agent in "$PWD"/plugins/spectre-codex/agents/*.toml; do
      diff -q "$agent" "${CODEX_HOME:-$HOME/.codex}/agents/$(basename "$agent")"
    done
@@ -323,7 +323,7 @@ Codex, one-time persistent user-level native plugin install from this checkout:
 ```bash
 codex plugin marketplace add "$PWD"
 codex plugin add spectre@spectre
-PLUGIN_ROOT="$PWD/plugins/spectre-codex" node "$PWD/plugins/spectre-codex/skills/spectre-scope/scripts/ensure-codex-agents.mjs" --ensure --json
+PLUGIN_ROOT="$PWD/plugins/spectre-codex" node "$PWD/plugins/spectre-codex/hooks/scripts/ensure-codex-agents.mjs" --ensure --json
 for agent in "$PWD"/plugins/spectre-codex/agents/*.toml; do
   diff -q "$agent" "${CODEX_HOME:-$HOME/.codex}/agents/$(basename "$agent")"
 done
@@ -344,7 +344,7 @@ Codex, refresh an existing persistent user-level install from the configured loc
 ```bash
 codex plugin remove spectre@spectre
 codex plugin add spectre@spectre
-PLUGIN_ROOT="$PWD/plugins/spectre-codex" node "$PWD/plugins/spectre-codex/skills/spectre-scope/scripts/ensure-codex-agents.mjs" --ensure --json
+PLUGIN_ROOT="$PWD/plugins/spectre-codex" node "$PWD/plugins/spectre-codex/hooks/scripts/ensure-codex-agents.mjs" --ensure --json
 for agent in "$PWD"/plugins/spectre-codex/agents/*.toml; do
   diff -q "$agent" "${CODEX_HOME:-$HOME/.codex}/agents/$(basename "$agent")"
 done

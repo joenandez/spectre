@@ -37,7 +37,7 @@
   ],
   "scripts": {
     "check:boundary": "node scripts/check-repository-boundary.mjs",
-    "test": "node --test src/**/*.test.js plugins/spectre/hooks/scripts/test_*.mjs scripts/test_sync-codex.cjs test/task-review/*.test.mjs",
+    "test": "node --test src/**/*.test.js plugins/spectre/hooks/scripts/test_*.mjs scripts/test_sync-codex.cjs test/task-review/*.test.mjs test/workflow-*.test.mjs",
     "sync-codex": "node scripts/sync-codex.cjs",
     "tokens": "node scripts/count-tokens.js"
   },

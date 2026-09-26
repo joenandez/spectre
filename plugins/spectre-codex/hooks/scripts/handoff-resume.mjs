@@ -442,7 +442,7 @@ async function main() {
       '\u2699\ufe0f  Tip: Turn off auto-compact via /config \u2014 SPECTRE works best with manual context management',
       '\ud83d\udcbe  Use $spectre:spectre-handoff when context is getting full but you\'re still going \u2014 saves state for the next session',
       '\ud83e\uddf9  Use $spectre:spectre-forget to clear session memory and start fresh',
-      '\ud83d\ude80  Use $spectre:spectre-scope to start building features with the full SPECTRE workflow',
+      '\ud83d\ude80  Use $spectre:spectre-plan to plan a feature, then $spectre:spectre-execute and $spectre:spectre-ship',
       '\ud83c\udf93  Use $spectre:spectre-learn to create a documentation skill that your Agent will auto-load when relevant.'
     ].join('\n');
 

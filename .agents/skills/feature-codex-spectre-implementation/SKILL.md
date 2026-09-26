@@ -25,17 +25,17 @@ Reusable project knowledge is both configured as normal skills and injected as a
 - `spectre-apply` contains a `{{REGISTRY}}` placeholder that both the hook and `src/lib/knowledge.js` substitute before writing the managed knowledge block.
 - `bootstrap` → `handoff-resume` → `load-knowledge` is the required SessionStart order.
 
-Workflow task execution now uses a two-artifact contract:
+Execute task preparation uses a two-artifact contract:
 
-- `spectre-create_tasks` writes `{OUT_DIR}/specs/execute.md` plus `{OUT_DIR}/specs/tasks.json`.
+- `plugins/spectre/skills/spectre-execute/references/create-tasks.md` writes `{OUT_DIR}/specs/execute.md` plus `{OUT_DIR}/specs/tasks.json`.
 - `execute.md` is the compact primary-agent index (document manifest, task detail source, execution summary, wave plan, parent-task index, slicing rules).
 - `tasks.json` is the full mutable detail/status source (`meta` + `phases[]`); primary execution/review/validation consumers should slice it by parent task id instead of reading the whole file.
 - Do not reintroduce the old `specs/tasks.md` task-list flow or a Markdown fallback/converter.
 
-Review gates use one cross-runtime contract:
+Plan Review and Task Review references, plus the Code Review skill, use one cross-runtime contract:
 
-- `spectre-plan_review` prefers the opposing CLI with an explicit high-effort model: Codex launches Claude Code with `--model claude-opus-5-5 --effort high`; Claude Code launches Codex with `-m gpt-6-sol -c 'model_reasoning_effort="high"'`. The launcher allows each attempt up to 20 minutes, but passes no duration guidance to the reviewer.
-- `spectre-task_review` uses a focused medium-effort opposing-runtime contract: Codex launches Claude Code using `--model claude-opus-5-5 --effort medium`; Claude Code launches Codex using `-m gpt-6-sol -c 'model_reasoning_effort="medium"'`. The primary agent runs consumer-safety preflight, explicitly launches and monitors the reviewer for up to 20 minutes, validates the report, allows one repair, owns native fallback and write-back, and passes no duration guidance to the reviewer.
+- `spectre-execute/references/plan-review.md` prefers the opposing CLI with an explicit high-effort model: Codex launches Claude Code with `--model claude-opus-5-5 --effort high`; Claude Code launches Codex with `-m gpt-6-sol -c 'model_reasoning_effort="high"'`. The launcher allows each attempt up to 20 minutes, but passes no duration guidance to the reviewer.
+- `spectre-execute/references/task-review.md` uses a focused medium-effort opposing-runtime contract: Codex launches Claude Code using `--model claude-opus-5-5 --effort medium`; Claude Code launches Codex using `-m gpt-6-sol -c 'model_reasoning_effort="medium"'`. The primary agent runs consumer-safety preflight, explicitly launches and monitors the reviewer for up to 20 minutes, validates the report, allows one repair, owns native fallback and write-back, and passes no duration guidance to the reviewer.
 - `spectre-code_review` uses a high-effort opposing-runtime contract: Codex launches Claude Code using `--model claude-opus-5-5 --effort high`; Claude Code launches Codex using `-m gpt-6-sol -c 'model_reasoning_effort="high"'`.
 - If the opposing runtime is unavailable or fails validation after one repair attempt, the gate dispatches one native reviewer with the same manifest, adversarial lenses, severity/evidence rules, exclusions, and report schema. This fallback does not block completion and must record its reason plus runtime/model metadata.
 - `spectre-code_review` is an adversarial, evidence-gated review for correctness, regressions/integration, security, performance/reliability, overengineering, and test adequacy. It does not use subjective numeric scores.
@@ -86,9 +86,9 @@ Review gates use one cross-runtime contract:
    ```bash
    node --test src/install.test.js src/config.test.js scripts/test_sync-codex.cjs
    ```
-4. If changing `spectre-create_tasks` task artifacts, also validate both task fixtures parse:
+4. If changing Execute's create-tasks reference or its task fixtures, also validate both task fixtures parse:
    ```bash
-   node -e "JSON.parse(require('fs').readFileSync('plugins/spectre/skills/spectre-create_tasks/references/tasks.example.json','utf8'))"
+   node -e "JSON.parse(require('fs').readFileSync('plugins/spectre/skills/spectre-execute/references/create-tasks/tasks.example.json','utf8'))"
    ```
 
 ### Add a learned project skill and make sure Codex sees it
@@ -124,7 +124,8 @@ After `npx @codename_inc/spectre install codex --scope project`, expect files li
 .codex/config.toml
 .codex/hooks.json
 .codex/skills/spectre-apply/SKILL.md
-.codex/skills/spectre-scope/SKILL.md
+.codex/skills/spectre-plan/SKILL.md
+.codex/skills/spectre-execute/references/proof.md
 .codex/spectre/hooks/hooks.json
 .codex/spectre/hooks/scripts/bootstrap.mjs
 .codex/spectre/hooks/scripts/handoff-resume.mjs

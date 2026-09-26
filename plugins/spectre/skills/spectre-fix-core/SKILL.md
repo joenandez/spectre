@@ -1,6 +1,6 @@
 ---
 name: "spectre-fix-core"
-description: "Internal diagnose-and-repair engine for Spectre workflows. Use only when invoked by spectre-fix or spectre-delegate with an explicit phase and authorization contract. Do NOT invoke directly for user requests."
+description: "Internal diagnose-and-repair engine for the Spectre Fix workflow. Use only when invoked by spectre-fix with an explicit phase and authorization contract. Do NOT invoke directly for user requests."
 user-invocable: false
 ---
 
@@ -14,7 +14,7 @@ Own one reusable bug flow: reproduce the failure, ground the root cause and beha
 
 - Bug report: error, stack trace, reproduction, and referenced context.
 - `PHASE=diagnose | full`.
-- `full` requires `PARENT=spectre-delegate`, `PARENT_AUTHORIZATION={scope.md}`, `AUTHORIZED_SCOPE_SHA256`, and `ALIGNMENT_MODE=inferred`.
+- `full` requires `PARENT=spectre-fix`, `PARENT_AUTHORIZATION={scope.md}`, `AUTHORIZED_SCOPE_SHA256`, and `ALIGNMENT_MODE=inferred`.
 - `--orchestrated` — withhold user-facing routing, never content.
 
 ## Working Set

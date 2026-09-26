@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateProofArtifacts } from "../plugins/spectre/skills/spectre-prove/scripts/validate-proof-html.mjs";
+import { validateProofArtifacts } from "../plugins/spectre/skills/spectre-execute/references/proof/scripts/validate-proof-html.mjs";
 
 const SHA256 = "a".repeat(64);
 const IMAGE = `data:image/png;base64,${Buffer.from("embedded screenshot bytes").toString("base64")}`;

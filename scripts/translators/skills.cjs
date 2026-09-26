@@ -238,7 +238,7 @@ Clean expired local workflow data, remove only Spectre-managed Codex custom agen
    \`\`\`
 2. Run:
    \`\`\`bash
-   node "\${PLUGIN_ROOT}/skills/spectre-scope/scripts/ensure-codex-agents.mjs" --remove --json
+   node "\${PLUGIN_ROOT}/hooks/scripts/ensure-codex-agents.mjs" --remove --json
    \`\`\`
 3. If the helper reports \`collisions\`, stop and report the paths. Do not delete unowned files.
 4. Run:

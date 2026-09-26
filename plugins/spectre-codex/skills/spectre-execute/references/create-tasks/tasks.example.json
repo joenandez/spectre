@@ -1,0 +1,153 @@
+{
+  "meta": {
+    "feature": "Example Feature",
+    "feature_root": ".spectre/features/example-feature",
+    "generated_at": "2026-06-03T00:00:00Z",
+    "schema_version": 1,
+    "objective": "Deliver an example feature through a sliceable task artifact.",
+    "scope": {
+      "in_scope": [
+        "Create the example producer contract",
+        "Wire the example consumer contract"
+      ],
+      "out_of_scope": [
+        "Add unrelated workflow tooling"
+      ]
+    },
+    "out_of_bounds": [
+      "Do not add a helper CLI",
+      "Do not store wave or index data in tasks.json"
+    ],
+    "requirements_trace": [
+      {
+        "id": "REQ-001",
+        "description": "The producer emits a structured detail artifact.",
+        "source": "specs/plan.md ## Technical Approach",
+        "tasks": [
+          "1.1"
+        ]
+      },
+      {
+        "id": "REQ-002",
+        "description": "The consumer receives only the selected parent tasks.",
+        "source": "concepts/product-scope.md ## Success Criteria",
+        "tasks": [
+          "2.1"
+        ]
+      }
+    ],
+    "architecture_context": {
+      "where_this_fits": [
+        "The artifact belongs under the selected feature root's specs/ directory."
+      ],
+      "technical_approach": [
+        "Keep the compact execution index in execute.md and full task detail in this JSON file."
+      ],
+      "key_decisions": [
+        "Use indented JSON so direct agent edits remain reviewable."
+      ]
+    },
+    "coverage_summary": {
+      "requirements_extracted": 2,
+      "requirements_with_task_coverage": 2,
+      "phases": 2,
+      "parent_tasks": 2,
+      "subtasks": 2
+    }
+  },
+  "phases": [
+    {
+      "id": "1",
+      "title": "Define Contract",
+      "summary": "Create the producer-side task detail contract.",
+      "parents": [
+        {
+          "id": "1.1",
+          "title": "Example detail artifact",
+          "description": "Author the JSON task detail that downstream consumers slice by selected parent task ids.",
+          "predecessor": "none",
+          "unblocks": "2.1",
+          "subtasks": [
+            {
+              "id": "1.1.1",
+              "title": "Author parseable detail fixture with RED-first contract check",
+              "type": "Build",
+              "produces": "`plugins/spectre/skills/spectre-execute/references/create-tasks/tasks.example.json` with `meta` and `phases[]` detail",
+              "consumed_by": "create_tasks, execute, task_review, code_review, validate",
+              "replaces": "The implicit Markdown-only task body contract",
+              "context": [
+                {
+                  "path": "plugins/spectre/skills/spectre-execute/references/create-tasks.md",
+                  "anchor": "tasks.json",
+                  "note": "The producer skill owns the immutable authoritative schema."
+                }
+              ],
+              "predecessor": "none",
+              "acceptance_criteria": [
+                {
+                  "type": "test",
+                  "text": "A schema check fails for the documented missing contract before implementation and passes afterward."
+                },
+                {
+                  "type": "state",
+                  "text": "File `plugins/spectre/skills/spectre-execute/references/create-tasks/tasks.example.json` exists and parses as JSON."
+                },
+                {
+                  "type": "state",
+                  "text": "Top-level keys are exactly `meta` and `phases`."
+                },
+                {
+                  "type": "state",
+                  "text": "No lifecycle `status`, `index`, `wave_plan`, or `waves` key appears in the JSON fixture."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "title": "Consumer Slice",
+      "summary": "Show a consumer-owned parent-task slice with preserved task fields.",
+      "parents": [
+        {
+          "id": "2.1",
+          "title": "Inline selected parent tasks into dispatch",
+          "description": "Extract the assigned parent tasks and pass only those task bodies to the owner.",
+          "predecessor": "1.1",
+          "unblocks": "terminal",
+          "risk": "shared-contract: dispatch slice must preserve the consumer-visible task contract",
+          "subtasks": [
+            {
+              "id": "2.1.1",
+              "title": "Dispatch a selected parent-task slice",
+              "type": "Integration",
+              "produces": "An XML `<task_assignment>` envelope containing exactly parent task 2.1",
+              "consumed_by": "@spectre_dev owner for parent task 2.1",
+              "replaces": "Whole legacy Markdown task-list reads by execution owners",
+              "context": [
+                {
+                  "path": "plugins/spectre/skills/spectre-execute/SKILL.md",
+                  "anchor": "Dispatch wave",
+                  "note": "The orchestrator owns selected parent-task extraction."
+                }
+              ],
+              "predecessor": "none",
+              "acceptance_criteria": [
+                {
+                  "type": "state",
+                  "text": "The dispatch prompt contains parent task `\"id\": \"2.1\"` and no unrelated parent task id."
+                },
+                {
+                  "type": "observable",
+                  "text": "@spectre_dev receives the `<task_assignment>` envelope inline and is not instructed to read a tasks file."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

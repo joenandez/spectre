@@ -10,9 +10,10 @@ const canonicalSkillDir = join(
   "plugins",
   "spectre",
   "skills",
-  "spectre-task_review",
+  "spectre-execute",
+  "references",
 );
-const taskReview = readFileSync(join(canonicalSkillDir, "SKILL.md"), "utf8");
+const taskReview = readFileSync(join(canonicalSkillDir, "task-review.md"), "utf8");
 
 test("production task review owns safety, semantic review, and deterministic closure", () => {
   const orderedContract = [
@@ -78,8 +79,9 @@ test("review gates retain their route-specific models and efforts", () => {
       "plugins",
       "spectre",
       "skills",
-      "spectre-plan_review",
-      "SKILL.md",
+      "spectre-execute",
+      "references",
+      "plan-review.md",
     ),
     "utf8",
   );
@@ -121,7 +123,7 @@ test("review gates retain their route-specific models and efforts", () => {
   );
   assert.match(
     knowledge,
-    /`spectre-task_review`[^\n]*`--model claude-opus-5-5 --effort medium`[^\n]*model_reasoning_effort="medium"/,
+    /references\/task-review\.md[^\n]*`--model claude-opus-5-5 --effort medium`[^\n]*model_reasoning_effort="medium"/,
   );
   assert.match(taskReview, /pinned medium effort/);
   assert.match(taskReview, /Codex → Claude `claude-opus-5-5`/);
@@ -139,9 +141,10 @@ test("Plan Review requires a direct-write completion receipt for both external s
     "plugins",
     "spectre",
     "skills",
-    "spectre-plan_review",
+    "spectre-execute",
+    "references",
   );
-  const planReview = readFileSync(join(planReviewDir, "SKILL.md"), "utf8");
+  const planReview = readFileSync(join(planReviewDir, "plan-review.md"), "utf8");
   const receipt =
     "REVIEW_COMPLETE\\nROUTE <stage|runtime|model|effort>\\nREPORT_SHA256 sha256:<hex>\\nPLAN_SHA256 sha256:<hex>\\nDISPOSITION <updated|no-op>\\nPLAN_REVIEW_<STAGE>_OK";
 
@@ -149,7 +152,7 @@ test("Plan Review requires a direct-write completion receipt for both external s
   assert.match(planReview, /2\. \*\*Correctness\.\*\*[\s\S]*inject direct-write receipt below into `REVIEW_PROMPT`/);
   assert.match(planReview, /3\. \*\*Simplification\.\*\*[\s\S]*inject direct-write receipt below into `REVIEW_PROMPT`/);
   for (const name of ["correctness-review.md", "simplification-review.md"]) {
-    const prompt = readFileSync(join(planReviewDir, "references", name), "utf8");
+    const prompt = readFileSync(join(planReviewDir, "plan-review", name), "utf8");
     assert.match(prompt, /receipt.*REPORT_SHA256/i);
   }
 });
@@ -160,9 +163,10 @@ test("Plan Review validates bounded direct reviewer writeback", () => {
     "plugins",
     "spectre",
     "skills",
-    "spectre-plan_review",
+    "spectre-execute",
+    "references",
   );
-  const planReview = readFileSync(join(planReviewDir, "SKILL.md"), "utf8");
+  const planReview = readFileSync(join(planReviewDir, "plan-review.md"), "utf8");
   const execute = readFileSync(
     join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "SKILL.md"),
     "utf8",
@@ -179,7 +183,7 @@ test("Plan Review validates bounded direct reviewer writeback", () => {
   assert.match(planReview, /Quiet output is not failure/);
   assert.match(execute, /resume hash-valid or user-decided partial correctness/i);
   for (const name of ["correctness-review.md", "simplification-review.md"]) {
-    const prompt = readFileSync(join(planReviewDir, "references", name), "utf8");
+    const prompt = readFileSync(join(planReviewDir, "plan-review", name), "utf8");
     assert.match(prompt, /Write report first.*authorized selected-plan edits/i);
     assert.match(prompt, /PLAN_SHA256/i);
   }
@@ -195,7 +199,8 @@ test("Execute owns unified plan preparation with proportional task creation", ()
     "plugins",
     "spectre",
     "skills",
-    "spectre-plan_review",
+    "spectre-execute",
+    "references",
   );
   const execute = readFileSync(
     join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "SKILL.md"),
@@ -211,15 +216,15 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   );
   const architecture = readFileSync(join(repositoryRoot, "Architecture.md"), "utf8");
   const planReview = readFileSync(
-    join(planReviewDir, "SKILL.md"),
+    join(planReviewDir, "plan-review.md"),
     "utf8",
   );
   const correctness = readFileSync(
-    join(planReviewDir, "references", "correctness-review.md"),
+    join(planReviewDir, "plan-review", "correctness-review.md"),
     "utf8",
   );
   const simplification = readFileSync(
-    join(planReviewDir, "references", "simplification-review.md"),
+    join(planReviewDir, "plan-review", "simplification-review.md"),
     "utf8",
   );
 
@@ -231,9 +236,9 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.doesNotMatch(plan, /spectre-create_tasks/);
   assert.doesNotMatch(plan, /spectre-task_review/);
   assert.doesNotMatch(plan, /spectre-goal/);
-  const reviewIndex = execute.indexOf("Skill(spectre-plan_review) --auto-apply scope-safe --orchestrated");
+  const reviewIndex = execute.indexOf("references/plan-review.md --auto-apply scope-safe --orchestrated");
   const assessmentIndex = execute.toLowerCase().indexOf("reuse applicable");
-  const tasksIndex = execute.indexOf("STRUCTURED invokes existing `Skill(spectre-create_tasks) --orchestrated`");
+  const tasksIndex = execute.indexOf("references/create-tasks.md --orchestrated");
   assert.ok(reviewIndex >= 0);
   assert.ok(assessmentIndex >= 0);
   assert.ok(tasksIndex > assessmentIndex);
@@ -268,10 +273,10 @@ test("Execute owns unified plan preparation with proportional task creation", ()
     assert.match(execute, /topology\/uncertainty is unchanged/i);
     assert.doesNotMatch(execute, /Re-bind routing to finalized plan/i);
   assert.match(execute, /ATOMIC\/DIRECT use the bounded local workstream\/Active Wave pattern/i);
-  assert.match(execute, /dispatch `Skill\(spectre-plan_review\) --auto-apply scope-safe --orchestrated` once to fresh child/i);
+  assert.match(execute, /references\/plan-review\.md --auto-apply scope-safe --orchestrated` once to fresh child/i);
   assert.match(planDirect, /Plan Review state \(`not-required:<XS\|S>\|closed`\).*external-attempt/i);
-  assert.match(execute, /STRUCTURED invokes existing `Skill\(spectre-create_tasks\) --orchestrated` by fresh child-agent dispatch/i);
-  assert.match(execute, /finalized plan path\/hash[\s\S]*closed review evidence[\s\S]*Skill\(spectre-create_tasks\)/i);
+  assert.match(execute, /STRUCTURED dispatches a fresh child with[\s\S]*references\/create-tasks\.md --orchestrated/i);
+  assert.match(execute, /finalized plan path\/hash[\s\S]*closed review evidence[\s\S]*references\/create-tasks\.md/i);
   assert.match(execute, /L → standard, XL → comprehensive/i);
   assert.match(execute, /No automatic task review/i);
   assert.match(execute, /Scope\/explicit-design changes remain withheld/i);
@@ -285,7 +290,7 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.match(execute, /scope-safe result proceeds without a second user gate/i);
   assert.match(execute, /bug-report path\/root or identifying content—not `--origin`—selects `fix`/i);
   assert.match(execute, /load `references\/fix-source\.md`, not Plan preparation/i);
-  assert.match(fixSource, /Never invoke `spectre-plan_review`/i);
+  assert.match(fixSource, /No Plan Review/i);
   assert.match(fixSource, /ATOMIC\/DIRECT[^\n]*coarse-map path/i);
   assert.match(fixSource, /STRUCTURED[^\n]*task-generation path/i);
   assert.match(architecture, /Execute.*reuses applicable plan-routing records.*classifies once when absent/i);
@@ -325,11 +330,14 @@ test("Execute owns unified plan preparation with proportional task creation", ()
 });
 
 test("usable review reports are normalized by the primary without reviewer repair", () => {
-  const skill = (name) =>
-    readFileSync(
-      join(repositoryRoot, "plugins", "spectre", "skills", name, "SKILL.md"),
-      "utf8",
-    );
+  const skill = (name) => readFileSync(
+    name === "spectre-plan_review"
+      ? join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "references", "plan-review.md")
+      : name === "spectre-task_review"
+        ? join(repositoryRoot, "plugins", "spectre", "skills", "spectre-execute", "references", "task-review.md")
+        : join(repositoryRoot, "plugins", "spectre", "skills", name, "SKILL.md"),
+    "utf8",
+  );
 
   for (const name of ["spectre-plan_review", "spectre-task_review", "spectre-code_review"]) {
     const review = skill(name);
@@ -359,8 +367,9 @@ test("preflight leaves task-review and task-definition contracts unchanged", () 
       "plugins",
       "spectre",
       "skills",
-      "spectre-create_tasks",
-      "SKILL.md",
+      "spectre-execute",
+      "references",
+      "create-tasks.md",
     ),
     "utf8",
   );

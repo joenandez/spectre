@@ -28,8 +28,7 @@ const CODEX_HOOKS = path.join(CODEX_PLUGIN, 'hooks', 'scripts');
 const CLI = path.join(REPO, 'bin', 'spectre.js');
 const ENSURE_CODEX_AGENTS = path.join(
   CODEX_PLUGIN,
-  'skills',
-  'spectre-scope',
+  'hooks',
   'scripts',
   'ensure-codex-agents.mjs',
 );
@@ -170,11 +169,13 @@ function shellQuote(value) {
 function featureHostSourceHashes() {
   const files = {
     gate4_cli: path.join(REPO, '.agents', 'skills', 'verify-spectre', 'scripts', 'gate4_cli.mjs'),
-    scope_skill: path.join(PLUGIN, 'skills', 'spectre-scope', 'SKILL.md'),
+    plan_skill: path.join(PLUGIN, 'skills', 'spectre-plan', 'SKILL.md'),
+    scope_reference: path.join(PLUGIN, 'skills', 'spectre-plan', 'references', 'scope.md'),
     execute_skill: path.join(PLUGIN, 'skills', 'spectre-execute', 'SKILL.md'),
     handoff_skill: path.join(PLUGIN, 'skills', 'spectre-handoff', 'SKILL.md'),
     session_start_runtime: path.join(HOOKS, 'handoff-resume.mjs'),
-    codex_scope_skill: path.join(CODEX_PLUGIN, 'skills', 'spectre-scope', 'SKILL.md'),
+    codex_plan_skill: path.join(CODEX_PLUGIN, 'skills', 'spectre-plan', 'SKILL.md'),
+    codex_scope_reference: path.join(CODEX_PLUGIN, 'skills', 'spectre-plan', 'references', 'scope.md'),
     codex_handoff_skill: path.join(CODEX_PLUGIN, 'skills', 'spectre-handoff', 'SKILL.md'),
   };
   return Object.fromEntries(
@@ -652,7 +653,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'creator',
     creatorProject,
     [
-      '/spectre:spectre-scope',
+      '/spectre:spectre-plan',
       'Scope a feature whose exact user-facing title is "Hosted Feature Proof".',
       'The problem is that operators cannot export one local report for offline review.',
       'Primary user: local CLI operator. IN: one offline Markdown export.',
@@ -755,7 +756,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'creator-blanket-ignore',
     blanketIgnoreProject,
     [
-      '/spectre:spectre-scope',
+      '/spectre:spectre-plan',
       'Scope a feature whose exact user-facing title is "Blanket Ignore Proof".',
       'The problem is that operators cannot inspect a local archive manifest before export.',
       'Primary user: local CLI operator. IN: one readable archive manifest.',
@@ -811,7 +812,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'standalone-plan',
     standalonePlanProject,
     [
-      '/spectre:spectre-create_plan --depth light',
+      '/spectre:spectre-plan --depth light',
       'Plan a scoped change that adds a local --health CLI flag returning process status.',
       'IN: the flag and focused tests. OUT: network health endpoints. ANTI-SCOPE: telemetry.',
       'There is deliberately no feature name or root. Derive one, create it, and proceed without asking.',
@@ -840,7 +841,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'orchestrated-missing-root',
     missingRootProject,
     [
-      '/spectre:spectre-create_test_guide --orchestrated',
+      '/spectre:spectre-execute --orchestrated',
       'No feature root, feature artifact, or current-thread feature exists.',
       'Return the required feature-root escalation without initializing a root,',
       'writing a test guide, or asking for a feature name.',
@@ -859,7 +860,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'rescope',
     creatorProject,
     [
-      '/spectre:spectre-scope .spectre/features/hosted-feature-proof',
+      '/spectre:spectre-plan .spectre/features/hosted-feature-proof',
       'Explicitly re-scope this existing managed feature.',
       'The confirmed delta adds encrypted local export as IN and keeps cloud sync OUT.',
       'All other boundaries remain confirmed. Do not ask another question.',
@@ -902,7 +903,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'collision',
     collisionProject,
     [
-      '/spectre:spectre-scope',
+      '/spectre:spectre-plan',
       'Scope a new feature whose exact title is "Occupied Collision Proof".',
       'It adds one local diagnostic report. IN: local report.',
       'OUT: remote upload. ANTI-SCOPE: telemetry.',
@@ -1082,28 +1083,23 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'renamed-nested-artifact',
     renameProject,
     [
-      `/spectre:spectre-create_test_guide ${path.relative(renameProject, renamedPlan)} --orchestrated`,
-      'The supplied nested plan is the sole feature locator and has sufficient test context.',
-      'Use the physical enclosing feature directory as authority, repair touched self-location',
-      'metadata before writing, and produce the canonical guide now without questions.',
+      `/spectre:spectre-plan ${path.relative(renameProject, renamedPlan)}`,
+      'The supplied nested plan is the sole feature locator. Use the physical enclosing',
+      'feature directory as authority and keep its Feature Root self-location accurate.',
     ].join(' '),
   );
-  const renamedGuide = path.join(renamedRoot, 'testing', 'test_guide.md');
   const repairedPlanBody = fs.readFileSync(renamedPlan, 'utf8');
-  const renamedGuideBody = fs.existsSync(renamedGuide)
-    ? fs.readFileSync(renamedGuide, 'utf8')
-    : '';
   g.check(
-    nestedRun.code === 0 && fs.existsSync(renamedGuide),
+    nestedRun.code === 0 && fs.existsSync(renamedPlan),
     'nested artifact alone resolves the renamed physical feature root',
     nestedRun.stderr || `transcript: ${nestedRun.stdoutPath}`,
   );
   g.check(
     /^Feature: Renamed Low Context$/m.test(repairedPlanBody) &&
       /^Feature Root: \.spectre\/features\/renamed-low-context$/m.test(repairedPlanBody) &&
-      /^Feature Root: \.spectre\/features\/renamed-low-context$/m.test(renamedGuideBody),
-    'touched nested artifact metadata is repaired before the new write',
-    `plan: ${renamedPlan}; guide: ${renamedGuide}`,
+      /^Feature Root: \.spectre\/features\/renamed-low-context$/m.test(repairedPlanBody),
+    'Plan keeps the nested artifact bound to its physical feature root',
+    `plan: ${renamedPlan}`,
   );
 
   g.check(

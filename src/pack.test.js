@@ -78,8 +78,9 @@ test('packed npm artifact contains portable Claude and Codex knowledge runtimes 
     assert.equal(marketplace.plugins[0].version, packageVersion);
 
     for (const relativePath of [
-      'skills/spectre-scope/SKILL.md',
-      'skills/spectre-scope/scripts/ensure-codex-agents.mjs',
+      'hooks/scripts/ensure-codex-agents.mjs',
+      'skills/spectre-plan/SKILL.md',
+      'skills/spectre-execute/references/proof.md',
       'skills/spectre-learn/scripts/register-knowledge.mjs',
       'skills/spectre-capture/references/knowledge-capture-input.json',
       'skills/spectre-work-record/references/work-capture-input.json',
