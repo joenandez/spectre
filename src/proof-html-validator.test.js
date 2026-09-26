@@ -70,3 +70,34 @@ test("proof HTML permits non-visual PASS rows without media", () => {
 
   assert.equal(validateProofArtifacts(proof, "<pre>200 OK</pre>").ok, true);
 });
+
+test("aggregate PASS requires Complete validation persisted for the same candidate and displayed in HTML", () => {
+  const proof = {
+    aggregate_status: "PASS",
+    candidate: { base_sha: "b".repeat(40), head_sha: "c".repeat(40), diff_sha256: SHA256 },
+    validation: {
+      report: ".spectre/features/demo/validation/validation_gaps.md",
+      status: "Complete",
+      tuple: { base_sha: "b".repeat(40), head_sha: "c".repeat(40), diff_sha256: SHA256 },
+    },
+    matrix: [{ id: "api", surface: "non-visual", status: "PASS", evidence_ids: [] }],
+    evidence: [],
+  };
+  const html = `<section id="validation"><h2>Validation</h2><p>${proof.validation.report}</p><p>Complete ${proof.candidate.base_sha} ${proof.candidate.head_sha} ${SHA256}</p></section>`;
+
+  assert.equal(validateProofArtifacts(proof, html).ok, true);
+  assert.ok(validateProofArtifacts({ ...proof, validation: undefined }, html).failures.some(
+    ({ code }) => code === "PROOF_VALIDATION_REPORT_MISSING",
+  ));
+  assert.ok(validateProofArtifacts({
+    ...proof,
+    validation: { ...proof.validation, status: "Needs Work" },
+  }, html).failures.some(({ code }) => code === "PROOF_VALIDATION_INCOMPLETE"));
+  assert.ok(validateProofArtifacts({
+    ...proof,
+    validation: { ...proof.validation, tuple: { ...proof.validation.tuple, head_sha: "stale" } },
+  }, html).failures.some(({ code }) => code === "PROOF_VALIDATION_TUPLE_MISMATCH"));
+  assert.ok(validateProofArtifacts(proof, "<p>Validation omitted</p>").failures.some(
+    ({ code }) => code === "PROOF_VALIDATION_NOT_DISPLAYED",
+  ));
+});

@@ -6,8 +6,7 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 ## Inputs
 
 - `$ARGUMENTS` — feature/problem request plus any established thread decisions. If no usable context exists, ask for the problem and wait. If context already settles boundaries, draft Scope directly.
-- Existing root/artifact: context for new work; reuse only for the same scope run, `FROM_KICKOFF=true`, or explicit resume/re-scope. On re-scope, read `concepts/scope.md` fully, surface settled decisions and the delta, and confirm before rewriting the immutable downstream anchor.
-- `FROM_KICKOFF=true` + `KICKOFF_DOC` → read the doc, extract (Core Problem, User Value, Decisions Made, Remaining Ambiguities, Key Code Refs), then **skip grounding + exploration** and go straight to clarifications. Already-grounded.
+- Existing root/artifact: context for new work; reuse only for the same scope run or explicit resume/re-scope. On re-scope, read `concepts/scope.md` fully, surface settled decisions and the delta, and confirm before rewriting the immutable downstream anchor.
 
 ## Working Set (late-bound — read at run-time, never inline)
 
@@ -21,7 +20,7 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 
 ## Method / guardrails
 
-- **Reply before tools.** Acknowledge first; never go silent to "think." No tool calls in the opening reply except reading `KICKOFF_DOC` when `FROM_KICKOFF=true`.
+- **Reply before tools.** Acknowledge first; never go silent to "think."
 - **WHAT, not HOW.** Ask only about boundaries, user value, and anti-scope. Defer architecture/trade-offs/integration to `$spectre:spectre-plan`. Exception: scope that is inherently technical (e.g. "migrate DB X→Y").
 - **Ground once.** Start with exactly **one** fast lookup to anchor the hypothesis in repo reality — a single `@spectre_finder` query, or one `grep`/`glob`; skip it if slow. Needing broader grounding exceeds this fast scope pass.
 - **Use knowledge before affected decisions.** Discovery is per question, not skill: never repeat an equivalent query merely because Scope began. A work body answers only a stated question, including a potentially critical imported constraint without a maintained equivalent. Do not reload an unchanged revision already in context; workers receive compact applicable findings and provenance, never record bodies.

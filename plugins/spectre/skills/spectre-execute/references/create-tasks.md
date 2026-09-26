@@ -15,7 +15,7 @@ Produce a source-faithful task graph and compact execution index. The primary wr
 - Fix: `{FEATURE_ROOT}` = `BUG_ROOT`.
 - Reuse a managed `FEATURE_ROOT` only when explicit/current-thread evidence ties it to this work (physical directory wins; never branch/recency/lifecycle/scans); distinct work ignores ambient roots. Otherwise, including on collision, standalone MUST first load and follow `@skill-spectre:spectre-feature-root` through DONE; orchestrated calls escalate. Keep writes beneath it and pass it unchanged.
 - Repair stale feature/root metadata in artifacts this workflow touches.
-- Ensure `{FEATURE_ROOT}/specs`. Default pair: `EXECUTE_FILE={FEATURE_ROOT}/specs/execute.md`, `DETAIL_FILE={FEATURE_ROOT}/specs/tasks.json`; use same-basename feature-scoped pairs on collision. Fixtures: `references/tasks.example.json`, `execute.example.md`.
+- Ensure `{FEATURE_ROOT}/specs`. Default pair: `EXECUTE_FILE={FEATURE_ROOT}/specs/execute.md`, `DETAIL_FILE={FEATURE_ROOT}/specs/tasks.json`; use same-basename feature-scoped pairs on collision. Fixtures: `${CLAUDE_PLUGIN_ROOT}/skills/spectre-execute/references/create-tasks/tasks.example.json` and `${CLAUDE_PLUGIN_ROOT}/skills/spectre-execute/references/create-tasks/execute.example.md`.
 - When targets/patterns are unclear, use read-only `@spectre:finder`, `@spectre:analyst`, or `@spectre:patterns`; skip for LIGHT/clear work. Agents return <=2,000 tokens; fold accepted evidence into `task_context.md`.
 
 ## Outputs + DONE

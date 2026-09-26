@@ -95,7 +95,7 @@ The npm package also exposes `bin/spectre.js`. In the current native-plugin arch
 
 ### 3.2 Orchestration plane
 
-The 32 skill directories under `plugins/spectre/skills/` are executable contracts. User-facing skills such as `spectre-scope`, `spectre-plan`, `spectre-execute`, and `spectre-ship` coordinate internal skills and subagents. Internal skills such as `spectre-plan-route`, `spectre-feature-root`, and `spectre-fix-core` centralize policies that should not be duplicated.
+The canonical skills under `plugins/spectre/skills/` are executable contracts. The public core workflows are `spectre-plan`, `spectre-execute`, and `spectre-ship`; Plan owns Scope, Execute owns review/task preparation/TDD/Proof references, and Ship owns cleanup/testing/rebase references. The ten retained utilities include `spectre-fix`, `spectre-validate`, and `spectre-code_review`. Internal skills such as `spectre-plan-route`, `spectre-feature-root`, and `spectre-fix-core` centralize policies that should not be duplicated.
 
 A compact skill contract normally contains:
 
@@ -186,25 +186,24 @@ The normal lifecycle is:
 
 ```mermaid
 flowchart LR
-    I[Idea] --> S[Scope]
-    S -->|UI ambiguity| U[UX / Prototype]
-    S --> P[Adaptive Plan]
+    I[Idea] --> P[Plan / Scope]
+    P -->|UI ambiguity| U[UX / Prototype]
     U --> P
     P --> A{User approves?}
     A -->|No / feedback| P
     A -->|Yes| E[Execute]
     E --> R[Final adversarial review]
     R --> V[Proof]
-    V --> C[Clean]
-    C --> B[Rebase]
+    V --> C[Ship]
+    C --> B[Cleanup / tests / rebase]
     B --> PR[Draft PR]
 ```
 
-Specialist entry points deliberately bypass this full path when appropriate: `spectre-fix` for bugs, `spectre-research` for read-only technical exploration, `spectre-tdd` for an already-scoped atomic change, and release workflows for release operations.
+Focused utilities remain available when appropriate: `spectre-fix` prepares a bug report for Execute, `spectre-validate` checks requirement delivery, `spectre-code_review` performs adversarial review, and `spectre-research` supports read-only technical exploration. Release workflows remain separate.
 
-### 5.1 Scope: define what, not how
+### 5.1 Plan-owned Scope: define what, not how
 
-`spectre-scope` converts an unstructured request into explicit IN, OUT, ANTI-SCOPE, Maybe, assumptions, and user value. It performs only a small grounding lookup and defers architectural choices to Plan. The output becomes immutable downstream intent unless the user explicitly approves a scope change.
+Plan converts an unstructured request into explicit IN, OUT, ANTI-SCOPE, Maybe, assumptions, and user value when Scope is absent. It asks only about material boundary or authority uncertainty, then proceeds to planning when context settles the request. The output becomes immutable downstream intent unless the user explicitly approves a scope change.
 
 A managed feature or bug gets a collision-safe root:
 
@@ -254,7 +253,7 @@ The execution algorithm is:
 8. Route intermediate review only when compounding risk warrants it.
 9. After all work is accepted, run one final adversarial review.
 10. Repair attributable high-severity findings once, then run end-only proof.
-11. Finish the run truthfully and hand off to cleanup or remediation.
+11. Finish the run truthfully and hand off to Ship or remediation.
 
 Waves are scheduling hints, phases are review boundaries, and actual accepted dependencies determine readiness. This allows parallelism without allowing the task graph to override observed repository reality.
 
@@ -266,14 +265,14 @@ Verification and proof answer different questions:
 - **Review:** is the cumulative implementation correct, secure, connected, reachable, and within scope?
 - **Proof:** can the user-observable acceptance criteria be demonstrated with reviewed evidence?
 
-`spectre-prove` emits `proof/proof.json` and mandatory `proof/proof.html`. A self-owned execution run cannot finish as passed without all tasks terminal and a passing proof gate. This makes proof an architectural acceptance boundary rather than a decorative report.
+Execute's Proof reference invokes independent Validate on the authoritative source and current candidate tuple, then observes the uncovered public-interface journeys. It emits `proof/proof.json` and mandatory `proof/proof.html`; aggregate PASS includes the validation report, status, and matching tuple. A self-owned execution run cannot finish as passed without all tasks terminal and a passing proof gate.
 
 ### 5.5 Ship: production handoff
 
 `spectre-ship` composes the closeout path:
 
-1. `spectre-clean` orchestrates pruning, risk-based tests, and sweep/commit hygiene.
-2. `spectre-rebase` creates a backup reference, rebases onto the target, and verifies the affected surface.
+1. Ship orchestrates pruning, risk-based tests, and sweep/commit hygiene through its owner references.
+2. Its Rebase reference creates a backup reference, rebases onto the target, and verifies the affected surface.
 3. `spectre-create_pr` derives a draft PR from the actual diff and verification summary.
 
 The PR is downstream of accepted implementation and evidence; it is not used as the workflow's state database.

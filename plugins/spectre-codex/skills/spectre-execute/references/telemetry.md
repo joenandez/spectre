@@ -4,7 +4,7 @@ Load for structured `tasks.json` and plan-direct execution. Plan-direct passes i
 
 ## Start or resume
 
-Run once after resolving source (`TASKS_JSON`, or `PLAN_SOURCE`), `FEATURE_ROOT`, and caller-owned `ORIGIN` (`plan`, `fix`, or `delegate`). Omit unknown origin:
+Run once after resolving source (`TASKS_JSON`, or `PLAN_SOURCE`), `FEATURE_ROOT`, and caller-owned `ORIGIN` (`plan` or `fix`). Omit unknown origin:
 
 ```bash
 node "${PLUGIN_ROOT}/hooks/scripts/workflow-cli.mjs" run start --source "$TASKS_JSON" --owner "$FINALIZATION_OWNER" --project-dir "$PROJECT_ROOT" --json

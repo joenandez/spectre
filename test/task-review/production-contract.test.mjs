@@ -301,8 +301,8 @@ test("Execute owns unified plan preparation with proportional task creation", ()
   assert.match(planReview, /exact selected-plan path/i);
   assert.match(planReview, /root\/path; sources/i);
   assert.match(planReview, /hashes\/disposition\/bounds/i);
-  assert.match(planReview, /references\/correctness-review\.md/);
-  assert.match(planReview, /references\/simplification-review\.md/);
+  assert.match(planReview, /\$\{CLAUDE_PLUGIN_ROOT\}\/skills\/spectre-execute\/references\/plan-review\/correctness-review\.md/);
+  assert.match(planReview, /\$\{CLAUDE_PLUGIN_ROOT\}\/skills\/spectre-execute\/references\/plan-review\/simplification-review\.md/);
   assert.match(planReview, /send it verbatim to a fresh reviewer/i);
   assert.match(planReview, /correctness.*closes before.*simplification/i);
   assert.match(correctness, /direct-write receipt/i);

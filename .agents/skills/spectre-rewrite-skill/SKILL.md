@@ -80,7 +80,7 @@ You output **proposals for human review**. When a load-bearing element cannot su
 - **Cache-stable:** durable contract content up front and byte-stable; dynamic per-run data (branch, diff, file lists, paths) referenced via just-in-time tool reads, never inlined.
 - **Description:** rewrite for WHAT + WHEN-to-trigger, *more specific not longer*, with a "do not trigger" boundary; counter undertriggering; keep within the skills-menu budget.
 - Domain shorthand ("red/green TDD") instead of expanded procedure. Phrase guardrails **positive over negative**, except destructive-op prohibitions. Reserve `YOU MUST` for the load-bearing few.
-- Remap cross-refs: Type A `@skill-spectre:spectre-guide|tdd` → inline Next-Steps / `@skill-spectre:spectre-tdd`; Type B `Skill(spectre-*)` → `Skill(spectre-*)`; **Type C `@spectre:*` agents → keep as-is**; Type D `/spectre:` → `/spectre:`. Never copy the known bad token `@spectre:spectre-tdd`.
+- Remap cross-refs: Type A `@skill-spectre:spectre-guide` → inline Next-Steps; moved TDD guidance → `${CLAUDE_PLUGIN_ROOT}/skills/spectre-execute/references/tdd.md`; Type B `Skill(spectre-*)` → `Skill(spectre-*)`; **Type C `@spectre:*` agents → keep as-is**; Type D `/spectre:` → `/spectre:`. Never refer to retired `spectre-tdd` as an entry point.
 - No intermediate-doc writes (`area_reports`/tmp/lens/clarification files) — return findings in-thread as 1–2K compressed summaries; only canonical artifacts persist.
 
 **5 — Self-verify and report deltas.** Run the checks below and report results honestly (including failures).

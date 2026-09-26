@@ -1,6 +1,6 @@
 ---
 name: "spectre-plan"
-description: "Create a repository-grounded aligned draft after confirmed Scope, present its concise alignment brief, and hand it to Execute preflight. Do not use for scoping, bug diagnosis, read-only work, or execution of approved artifacts."
+description: "Scope a request when boundaries need to be recorded, then create a repository-grounded plan and hand it to Execute. Use for feature requests or confirmed Scope; do not use for bug diagnosis, read-only work, or execution of approved artifacts."
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 ## Purpose
 
-Turn confirmed Scope into the smallest draft and handoff. `spectre-plan-route` classifies; primary owns plan. Scope remains immutable.
+Turn a request and established decisions into Scope when needed, create the smallest aligned draft, and hand it off. `spectre-plan-route` classifies; primary owns Scope and plan. Scope remains immutable once established.
 
 ## Inputs
 

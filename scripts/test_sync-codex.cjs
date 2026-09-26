@@ -984,7 +984,7 @@ test('plan-direct quality gates use the explicit plan and derivative execution e
     );
     assert.match(validate, /explicit plan or fix\/bug report/i);
     assert.match(validate, /supplied plan, fix\/bug report, or other explicit source as authoritative/i);
-    assert.match(proof, /explicitly passed source plan[^\n]*acceptance source/i);
+    assert.match(proof, /explicitly passed source plan or fix\/bug report/);
     assert.match(execute, /never create one merely to satisfy a gate/i);
     assert.doesNotMatch(execute, /Skill\(spectre-create_test_guide\)/);
   }
@@ -1031,7 +1031,8 @@ test('prove contract is one reviewed evidence pass that owns its proof path', ()
     assert.match(skill, /focused profile records affected rows `PARTIAL`/);
     assert.match(skill, /without research or a user gate/);
     assert.match(skill, /DONE means the pass completed, regardless of status/);
-    assert.match(skill, /Standalone `PASS` → `(?:\/|\$)spectre:spectre-execute` for the acceptance workflow/);
+    assert.match(skill, /Orchestrated: return proof result to Execute/);
+    assert.doesNotMatch(skill, /Standalone `PASS`/);
     assert.doesNotMatch(skill, /Skill\(spectre-tdd\)/);
     assert.doesNotMatch(skill, /@spectre(?::|_)dev/);
     assert.match(skill, /current `BASE_SHA`, `HEAD_SHA`, and `DIFF_SHA256` tuple/);
@@ -1039,7 +1040,7 @@ test('prove contract is one reviewed evidence pass that owns its proof path', ()
     assert.match(skill, /proof\/proof\.json/);
     assert.match(skill, /proof\/proof\.html/);
     assert.match(skill, /proof\/proof\.html` - \*\*required\*\*/i);
-    assert.match(skill, /For visual work \(including TUI\), load `references\/proof-html\.md`/);
+    assert.match(skill, /For visual work \(including TUI\), load `\$\{(?:CLAUDE_)?PLUGIN_ROOT\}\/skills\/spectre-execute\/references\/proof\/proof-html\.md`/);
     assert.match(skill, /embed in `proof\.html` actual screenshots and video/);
     assert.match(skill, /paths, links, hashes, manifests, and prose are provenance only/);
     assert.match(skill, /required displayed media/);
@@ -1078,7 +1079,7 @@ test('Plan and Execute preserve the owned phase handoffs and acceptance boundary
     assert.match(plan, /spectre-execute <repo-relative plan\.md> --origin plan/);
     assert.match(execute, /explicitly requests a task-graph audit[\s\S]*references\/task-review\.md/i);
     assert.match(execute, /parent.*ACCEPTANCE_PENDING[\s\S]*references\/proof\.md/i);
-    assert.match(proof, /Before selecting or observing journeys, invoke `Skill\(spectre-validate\)`/);
+    assert.match(proof, /Before selecting or observing journeys, invoke `Skill\(spectre-validate\)` with `--orchestrated`/);
     assert.match(taskReview, /task detail|tasks\.json/i);
   }
 });
@@ -1242,7 +1243,7 @@ test('Plan delegates one semantic XS-S-M-L-XL classifier and keeps orchestration
     assert.doesNotMatch(plan, /goal-prompts\.md/);
     assert.doesNotMatch(plan, /Skill\(spectre-goal\)/);
     assert.match(plan, /Gather proportional evidence/i);
-    assert.match(plan, /primary owns plan/i);
+    assert.match(plan, /primary owns Scope and plan/i);
     assert.match(plan, /automatically uses the observed route with no paid rerun/i);
     assert.match(plan, /plan\.completed/);
     assert.match(plan, /DONE when/i);
@@ -1263,7 +1264,7 @@ test('Plan defers design authority to its aligned-draft handoff', () => {
     const gate = fs.readFileSync(gatePath, 'utf8');
 
     assert.doesNotMatch(plan, /high-level-design-gate\.md/);
-    assert.match(plan, /Scope remains immutable/i);
+    assert.match(plan, /Scope remains immutable/);
     assert.match(plan, /missing irreversible decision.*withhold the handoff/i);
     assert.match(plan, /Launch(?:ing)? that command is the user's alignment signal/i);
 
@@ -1560,7 +1561,7 @@ test('Plan, Execute, and Ship load their phase references in sequence', () => {
     assert.match(execute, /references\/tdd\.md[\s\S]*references\/proof\.md/);
     assert.match(execute, /parent.*ACCEPTANCE_PENDING[\s\S]*references\/proof\.md/i);
     assert.match(ship, /references\/prune\.md[\s\S]*references\/test\.md[\s\S]*references\/sweep\.md[\s\S]*references\/rebase\.md/);
-    assert.match(proof, /invoke `Skill\(spectre-validate\)` once/);
+    assert.match(proof, /invoke `Skill\(spectre-validate\)` with `--orchestrated`/);
   }
 });
 
@@ -1631,7 +1632,7 @@ test('Execute self-owned handoff links proof without contaminating parent delive
     assert.match(execute, /Never publish\/share proof/i);
     assert.match(
       handoff,
-      /High.*Fix[\s\S]*coverage.*Test[\s\S]*spectre[-:]ship/i,
+      /High.*Fix[\s\S]*coverage or any other closeout.*spectre[-:]ship/i,
     );
     assert.match(
       handoff,
@@ -1833,7 +1834,7 @@ test('Ship/Clean pin one parallel cleanup boundary and a single post-rebase suit
     assert.equal((ship.match(/measure start --label "Full suite"/g) ?? []).length, 1);
     assert.match(ship, /one full suite after rebase[\s\S]*In parallel[\s\S]*Skill\(spectre-create_pr\)[\s\S]*--orchestrated[\s\S]*--pr-phase pending/i);
     assert.match(ship, /rerun only failing\/affected checks[\s\S]*never the full suite/i);
-    assert.match(execute, /else `(?:\/spectre:spectre-ship|\$spectre:spectre-ship)`/);
+    assert.match(execute, /coverage or any other closeout.*`(?:\/spectre:spectre-ship|\$spectre:spectre-ship)`/);
   }
 });
 
@@ -2114,7 +2115,8 @@ test('retired orchestration commands route through their owner workflows', () =>
     assert.match(execute, /references\/plan-review\.md[\s\S]*references\/create-tasks\.md/);
     assert.match(execute, /references\/proof\.md/);
     assert.match(ship, /references\/prune\.md[\s\S]*references\/test\.md[\s\S]*references\/sweep\.md[\s\S]*references\/rebase\.md/);
-    assert.match(fixCore, /PARENT=spectre-fix/);
+    assert.match(fixCore, /`PHASE=diagnose`/);
+    assert.doesNotMatch(fixCore, /PHASE=full|Delegate supplies/);
     assert.doesNotMatch(fixCore, /PARENT=spectre-delegate/);
     assert.doesNotMatch(createPr, /spectre-delegate|spectre-rebase|spectre-sweep/);
   }
@@ -2227,8 +2229,8 @@ test('plan review bounds correctness and enforces subtraction-only simplificatio
     assert.match(skill, /evidence\/unknowns/i);
     assert.match(skill, /evidence\/constraints\/tests/i);
     assert.match(skill, /at most one each `@spectre(?::|_)finder`.*`@spectre(?::|_)analyst`.*`@spectre(?::|_)patterns`/);
-    assert.match(skill, /references\/correctness-review\.md/);
-    assert.match(skill, /references\/simplification-review\.md/);
+    assert.match(skill, /\$\{(?:CLAUDE_)?PLUGIN_ROOT\}\/skills\/spectre-execute\/references\/plan-review\/correctness-review\.md/);
+    assert.match(skill, /\$\{(?:CLAUDE_)?PLUGIN_ROOT\}\/skills\/spectre-execute\/references\/plan-review\/simplification-review\.md/);
     assert.match(skill, /send it verbatim to a fresh reviewer/i);
     assert.match(skill, /plan, Scope, task-context, report paths\/hashes/i);
     assert.match(skill, /corrected plan, Scope, correctness-report, output-report paths\/hashes/i);
@@ -2429,7 +2431,7 @@ test('planning artifact ownership confines reviewer-authored scope-safe writebac
     const taskReview = readSkill('spectre-task_review');
     const codeReview = readSkill('spectre-code_review');
 
-    assert.match(plan, /primary owns plan/i);
+    assert.match(plan, /primary owns Scope and plan/i);
     assert.match(plan, /Scope remains immutable/i);
     assert.doesNotMatch(plan, /spectre-plan_review|spectre-create_tasks|spectre-task_review/);
     assert.doesNotMatch(plan, /never write `plan\.md`, `execute\.md`, or `tasks\.json` content yourself/i);

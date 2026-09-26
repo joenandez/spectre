@@ -29,9 +29,9 @@ DONE: both; evidence traces mechanisms/exceptions; plan smaller or no safe reduc
 
 1. **Evidence.** Find unsupported claims; at most one each `@spectre_finder`, `@spectre_analyst`, `@spectre_patterns` for cited evidence/unknowns (≤1,000 tokens).
 
-2. **Correctness.** Read `references/correctness-review.md`; send it verbatim to a fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with plan, Scope, task-context, report paths/hashes, evidence, mode/bounds/metadata.
+2. **Correctness.** Read `${PLUGIN_ROOT}/skills/spectre-execute/references/plan-review/correctness-review.md`; send it verbatim to a fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with plan, Scope, task-context, report paths/hashes, evidence, mode/bounds/metadata.
 
-3. **Simplification.** Correctness closes before simplification: read `references/simplification-review.md`; send it verbatim to a fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with corrected plan, Scope, correctness-report, output-report paths/hashes, selection, bounds/metadata/evidence, spot-check, decisions.
+3. **Simplification.** Correctness closes before simplification: read `${PLUGIN_ROOT}/skills/spectre-execute/references/plan-review/simplification-review.md`; send it verbatim to a fresh reviewer; inject direct-write receipt below into `REVIEW_PROMPT` with corrected plan, Scope, correctness-report, output-report paths/hashes, selection, bounds/metadata/evidence, spot-check, decisions.
 
 4. **Writeback.** Reviewer writes its report before selected-plan edits, then returns only:
 `REVIEW_COMPLETE

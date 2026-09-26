@@ -13,7 +13,7 @@ Produce one HTML prototype at `{FEATURE_ROOT}/prototypes/{slug}_{MMDDYY}.html`. 
 
 ## Inputs
 
-- `$ARGUMENTS`: feature root/name or descendant, description, optional `--explore`; markers `FROM_UX=true`, `FROM_KICKOFF=true`.
+- `$ARGUMENTS`: feature root/name or descendant, description, optional `--explore`; marker `FROM_UX=true`.
 - Read existing `concepts/scope.md`, `specs/prd.md`, `ux.md`, then legacy `specs/ux.md` fully before questions.
 - Silently read repo-root `product.md` when present, plus `design.md` or fallback `design/design.md`; apply them; do not mention missing files.
 
@@ -61,7 +61,7 @@ Use inline SVG/data URIs/CSS shapes only: no remote images, relative assets, cus
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Return path/screens/fidelity/anchor/assumptions/NOT included; opens/shareable; revalidate edits/research; promote post-UX to `ux.md`. explore → Scope; flows-only UX → Stage 2; post-UX contradiction/assumption → UX, else Plan; post-scope unresolved UX → UX, post-scope validated scope → `$spectre:spectre-plan`; standalone no scope → Scope, else reclassify as `post-scope`. One route/conditional/pause.
+Return path/screens/fidelity/anchor/assumptions/NOT included; opens/shareable; revalidate edits/research; promote post-UX to `ux.md`. explore → `$spectre:spectre-plan`; flows-only UX → Stage 2; post-UX contradiction/assumption → UX, else Plan; post-scope unresolved UX → UX, post-scope validated scope → `$spectre:spectre-plan`; standalone without Scope → `$spectre:spectre-plan`, else reclassify as `post-scope`. One route/conditional/pause.
 
 ## Escalate-If
 

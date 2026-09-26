@@ -49,7 +49,7 @@ DONE when schema validation passes; scope/tuple are unchanged; every requirement
 | 📦 **What was just done** | Result |
 | ▶️ **Proposed next step** | Render resolved action. |
 
-Standalone: verdict/runtime/fallback/report + numbered CRITICAL/HIGH; blockers → Fix, else Prove/Test gap/deferred Clean.
+Standalone: verdict/runtime/fallback/report + numbered CRITICAL/HIGH; blockers → Fix, otherwise uncovered acceptance → Execute and closeout → Ship.
 
 ## Escalate-If
 

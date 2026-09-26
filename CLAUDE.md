@@ -4,7 +4,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-spectre is a Claude Code and Codex plugin providing a structured agentic workflow: Scope → Plan → Execute → Clean → Rebase, with standalone prune/test/sweep prompts available when only one closeout phase is needed. It's a meta-prompt orchestration system where prompts invoke subagents.
+spectre is a Claude Code and Codex plugin providing three core workflows—Plan, Execute, and Ship—and ten retained public utilities. Plan owns scoping and planning; Execute owns implementation, review, and proof; Ship owns cleanup, testing, rebase, and pull request closeout. It's a meta-prompt orchestration system where prompts invoke subagents.
 
 ## Repository Structure
 

@@ -67,7 +67,7 @@ function parseArgs(argv) {
 function usage() {
   return [
     'Usage:',
-    '  spectre-workflow run start --source <tasks.json|plan.md|bug-report.md> [--origin plan|fix|delegate] [--owner self|parent] [--provider <id> --model <id> --effort <id>] [--project-dir <path>] --json',
+    '  spectre-workflow run start --source <tasks.json|plan.md|bug-report.md> [--origin plan|fix] [--owner self|parent] [--provider <id> --model <id> --effort <id>] [--project-dir <path>] --json',
     '  spectre-workflow run status --run-id <id> [--project-dir <path>] --json',
     '  spectre-workflow run finish --run-id <id> --actor-id <id> --status <status> --json',
     '  spectre-workflow stage|phase|wave start|finish --run-id <id> --actor-id <id> --id <value> --json',

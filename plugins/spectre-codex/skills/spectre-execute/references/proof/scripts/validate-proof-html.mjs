@@ -95,6 +95,47 @@ function failure(code, message, details = {}) {
 
 export function validateProofArtifacts(proof, html) {
   const failures = [];
+  const aggregateStatus = proof?.aggregate_status;
+  const candidate = proof?.candidate;
+  const validation = proof?.validation;
+  const tupleFields = ["base_sha", "head_sha", "diff_sha256"];
+  const candidateTupleValid = /^[a-f\d]{40,64}$/i.test(candidate?.base_sha ?? "") &&
+    /^[a-f\d]{40,64}$/i.test(candidate?.head_sha ?? "") &&
+    /^[a-f\d]{64}$/i.test(candidate?.diff_sha256 ?? "");
+  const validationTupleMatches = tupleFields.every((field) =>
+    typeof validation?.tuple?.[field] === "string" && validation.tuple[field] === candidate?.[field],
+  );
+
+  if (aggregateStatus === "PASS") {
+    if (typeof validation?.report !== "string" || !validation.report.trim()) {
+      failures.push(failure(
+        "PROOF_VALIDATION_REPORT_MISSING",
+        "Aggregate PASS requires a persisted validation report path.",
+      ));
+    }
+    if (!candidateTupleValid || !validationTupleMatches) {
+      failures.push(failure(
+        "PROOF_VALIDATION_TUPLE_MISMATCH",
+        "Aggregate PASS requires a complete validation tuple matching the current candidate.",
+      ));
+    }
+    if (validation?.status !== "Complete") {
+      failures.push(failure(
+        "PROOF_VALIDATION_INCOMPLETE",
+        "Aggregate PASS requires validation status Complete.",
+      ));
+    }
+    const validationSection = String(html).match(/<section\b[^>]*id=["']validation["'][^>]*>[\s\S]*?<\/section>/i)?.[0] ?? "";
+    if (!validationSection || !validationSection.includes(validation?.report ?? "") ||
+        !validationSection.includes(validation?.status ?? "") ||
+        !validationTupleMatches || !tupleFields.every((field) => validationSection.includes(candidate[field]))) {
+      failures.push(failure(
+        "PROOF_VALIDATION_NOT_DISPLAYED",
+        "Aggregate PASS requires a Validation section displaying the report and matching candidate tuple.",
+      ));
+    }
+  }
+
   const matrix = Array.isArray(proof?.matrix) ? proof.matrix : [];
   const evidence = Array.isArray(proof?.evidence) ? proof.evidence : [];
   const evidenceById = new Map(
