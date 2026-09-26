@@ -25,7 +25,7 @@ const RUN_ID_PATTERN = /^run_[0-9a-f-]{36}$/;
 const ACTOR_ID_PATTERN = /^actor_[0-9a-f-]{36}$/;
 const SAFE_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ROUTING_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
-const EXECUTE_ORIGINS = new Set(['plan', 'fix', 'delegate', 'unknown']);
+const EXECUTE_ORIGINS = new Set(['plan', 'fix', 'unknown']);
 
 function codedError(code, message) {
   const error = new Error(message);
@@ -186,7 +186,7 @@ export function readTaskSource(projectDir, sourcePath) {
 function normalizeOriginWorkflow(value) {
   if (value === null || value === undefined || value === '') return 'unknown';
   if (!EXECUTE_ORIGINS.has(value)) {
-    throw codedError('INVALID_EXECUTE_ORIGIN', 'Execute origin must be plan, fix, delegate, or unknown');
+    throw codedError('INVALID_EXECUTE_ORIGIN', 'Execute origin must be plan, fix, or unknown');
   }
   return value;
 }
@@ -194,7 +194,7 @@ function normalizeOriginWorkflow(value) {
 function provenanceFor(origin, source) {
   const originWorkflow = normalizeOriginWorkflow(origin);
   const executionShape = source?.planDirect ? 'direct' : 'structured';
-  const category = originWorkflow === 'fix' || originWorkflow === 'delegate'
+  const category = originWorkflow === 'fix'
     ? originWorkflow
     : originWorkflow === 'plan' && executionShape === 'direct'
       ? 'plan-direct'

@@ -145,7 +145,6 @@ test('Execute runs retain explicit provenance and privacy-safe measurement defau
     { source: value.sourcePath, origin: 'plan', category: 'plan', shape: 'structured', featureRoot: '.spectre/features/cli' },
     { source: directPlan, origin: 'plan', category: 'plan-direct', shape: 'direct', featureRoot: '.spectre/features/cli' },
     { source: bugReport, origin: 'fix', category: 'fix', shape: 'direct', featureRoot: '.spectre/bugs/cli-bug' },
-    { source: value.sourcePath, origin: 'delegate', category: 'delegate', shape: 'structured', featureRoot: '.spectre/features/cli' },
   ];
 
   for (const item of cases) {
@@ -194,6 +193,64 @@ test('Execute runs retain explicit provenance and privacy-safe measurement defau
   assert.equal(legacy.provenance.category, 'unknown');
   assert.equal(legacy.measurement.totalTokens, 'unavailable');
   assert.doesNotMatch(JSON.stringify(legacy), /session|hostCounters|prompt|transcript|command/i);
+});
+
+test('Execute rejects Delegate origin for new starts while retaining historical Delegate provenance reads', async (t) => {
+  const value = makeFixture(t);
+  const common = ['--project-dir', value.projectDir, '--json'];
+
+  await assert.rejects(startWorkflowRun({
+    projectDir: value.projectDir,
+    spectreHome: value.spectreHome,
+    source: value.sourcePath,
+    origin: 'delegate',
+  }), { code: 'INVALID_EXECUTE_ORIGIN' });
+
+  for (const { script, prefix } of [
+    { script: CLI_PATH, prefix: ['workflow'] },
+    { script: BUNDLED_CLI_PATH, prefix: [] },
+  ]) {
+    const invalid = invoke(script, [
+      ...prefix, 'run', 'start', '--source', value.sourcePath, '--origin', 'delegate', ...common,
+    ], value);
+    assert.notEqual(invalid.status, 0, script);
+    assert.deepEqual(JSON.parse(invalid.stdout), {
+      ok: false,
+      code: 'INVALID_EXECUTE_ORIGIN',
+      message: 'Execute origin must be plan, fix, or unknown',
+    });
+  }
+
+  const run = await startWorkflowRun({
+    projectDir: value.projectDir,
+    spectreHome: value.spectreHome,
+    source: value.sourcePath,
+    origin: 'plan',
+  });
+  const { paths } = await readWorkflowRun({
+    projectDir: value.projectDir,
+    spectreHome: value.spectreHome,
+    runId: run.runId,
+  });
+  const historical = JSON.parse(fs.readFileSync(paths.statePath, 'utf8'));
+  historical.provenance = {
+    category: 'delegate',
+    originWorkflow: 'delegate',
+    executionShape: 'structured',
+  };
+  fs.writeFileSync(paths.statePath, JSON.stringify(historical));
+
+  const read = await readWorkflowRun({
+    projectDir: value.projectDir,
+    spectreHome: value.spectreHome,
+    runId: run.runId,
+  });
+  assert.deepEqual(read.state.provenance, historical.provenance);
+  const status = invoke(BUNDLED_CLI_PATH, [
+    'run', 'status', '--run-id', run.runId, ...common,
+  ], value);
+  assert.equal(status.status, 0, status.stderr);
+  assert.equal(JSON.parse(status.stdout).status, 'active');
 });
 
 test('Execute resumes legacy or origin-unknown runs without weakening explicit origin matching', async (t) => {
