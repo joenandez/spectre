@@ -285,7 +285,7 @@ Although I do sometimes use `@spectre:web-research` in Claude Code or `@spectre_
 
 ## 🛠️ How I Typically use SPECTRE
 
-- Start repository-changing work with `/spectre:spectre-plan`. It settles Scope, selects a right-sized approach, and returns the exact Execute command.
+- Start new or unclear repository-changing work with `/spectre:spectre-scope` to record feature boundaries. Run `/spectre:spectre-plan` with confirmed Scope to select a right-sized approach and get the exact Execute command.
 - Use `/spectre:spectre-ux` or `/spectre:spectre-prototype` when user journeys or interaction details need to be resolved before planning.
 - Run `/spectre:spectre-execute` with the Plan handoff. Execute owns implementation, focused verification, independent Validate, observed Proof, and its final review when it owns finalization.
 - Use `/spectre:spectre-handoff` when a fresh context window would help; the next session resumes from the saved state.
@@ -299,7 +299,8 @@ Although I do sometimes use `@spectre:web-research` in Claude Code or `@spectre_
 
 | Command | Description |
 | --- | --- |
-| `/spectre:spectre-plan` | Settle Scope, create an aligned implementation plan, and hand off to Execute |
+| `/spectre:spectre-scope` | Define feature boundaries and write `scope.md` |
+| `/spectre:spectre-plan` | Create an aligned implementation plan from confirmed Scope and hand off to Execute |
 | `/spectre:spectre-execute` | Implement, verify, review, Validate, and observe Proof |
 | `/spectre:spectre-ship` | Clean up completed work, rebase, verify, and open a pull request |
 
