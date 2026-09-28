@@ -76,7 +76,7 @@ function repositoryTokenCount(repoRoot, filePath) {
 const USER_HANDOFF_SKILLS = [
   'spectre-code_review', 'spectre-create_pr', 'spectre-execute', 'spectre-fix',
   'spectre-plan', 'spectre-prototype', 'spectre-research', 'spectre-ship',
-  'spectre-ux', 'spectre-validate',
+  'spectre-scope', 'spectre-ux', 'spectre-validate',
 ];
 const INTERNAL_HANDOFF_SKILLS = [
   'spectre-capture', 'spectre-feature-root', 'spectre-fix-core', 'spectre-plan-route',
@@ -84,7 +84,6 @@ const INTERNAL_HANDOFF_SKILLS = [
 ];
 
 const MIGRATED_SKILL_REFERENCES = {
-  'spectre-scope': ['spectre-plan', 'references/scope.md'],
   'spectre-create_plan': ['spectre-plan', 'references/create-plan.md'],
   'spectre-plan_review': ['spectre-execute', 'references/plan-review.md'],
   'spectre-create_tasks': ['spectre-execute', 'references/create-tasks.md'],
@@ -575,7 +574,8 @@ test('spectre-execute preserves affected verification, risk-triggered review rou
       /do not terminalize until aggregate `PASS` or every remainder is `NEEDS_AUTHORITY`/,
     );
     assert.match(contract, /Classify each non-PASS as `repairable\|needs-authority\|unrelated`/);
-    assert.match(contract, /continue independent work and repeat plan-backed repair/);
+    assert.match(contract, /continue independent work and batch compatible root-cause repairs/);
+    assert.match(contract, /Before another full Proof pass, recheck failed and changed-seam public journeys/);
     assert.match(
       contract,
       /Stop only at aggregate `PASS` or when every remainder is `NEEDS_AUTHORITY`/,
@@ -1041,7 +1041,9 @@ test('prove contract is one reviewed evidence pass that owns its proof path', ()
     assert.match(skill, /proof\/proof\.html/);
     assert.match(skill, /proof\/proof\.html` - \*\*required\*\*/i);
     assert.match(skill, /For visual work \(including TUI\), load `\$\{(?:CLAUDE_)?PLUGIN_ROOT\}\/skills\/spectre-execute\/references\/proof\/proof-html\.md`/);
-    assert.match(skill, /embed in `proof\.html` actual screenshots and video/);
+    assert.match(skill, /screenshots of material states and video when the claim needs sequence evidence/);
+    assert.match(skill, /give a fresh agent user goals rather than implementation notes/);
+    assert.match(skill, /targeted post-repair rechecks are diagnostic, not cross-candidate PASS evidence/);
     assert.match(skill, /paths, links, hashes, manifests, and prose are provenance only/);
     assert.match(skill, /required displayed media/);
     assert.match(skill, /proof embeds review renditions/);
@@ -1062,9 +1064,25 @@ test('prove contract is one reviewed evidence pass that owns its proof path', ()
     ), 'utf8');
     assert.match(proofHtml, /<img>/);
     assert.match(proofHtml, /<video controls>/);
+    assert.match(proofHtml, /visual_claim: state\|sequence/);
     assert.match(proofHtml, /textual paths, links, manifests, hashes, thumbnails, or unavailable sources do not qualify/i);
     assert.match(proofHtml, /PROOF_MEDIA_NOT_PRESENTED/);
     assert.match(proofHtml, /validate-proof-html\.mjs/);
+  }
+});
+
+test('external probes and proof repair stay with their phase owners', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  for (const rootName of ['spectre', 'spectre-codex']) {
+    const skills = path.join(repoRoot, 'plugins', rootName, 'skills');
+    const read = (name) => fs.readFileSync(path.join(skills, name), 'utf8');
+    assert.match(read('spectre-plan/SKILL.md'), /Live external captures belong to Execute, never Plan's evidence dispatch/);
+    assert.match(read('spectre-plan/references/create-plan.md'), /Plan does no live probe; Execute obtains the sample/);
+    assert.match(read('spectre-ux/SKILL.md'), /common observed events with no state for Execute's probe/);
+    assert.match(read('spectre-execute/SKILL.md'), /Assign plan-required real-input probes to `@spectre(?::|_)dev` before dependent implementation/);
+    assert.match(read('spectre-execute/SKILL.md'), /independent ready work may proceed/);
+    assert.match(read('spectre-execute/references/repair-policy.md'), /changed-seam public journeys plus Proof's cheap invariants/);
+    assert.match(read('spectre-execute/references/repair-policy.md'), /replay is diagnostic, never live acceptance/);
   }
 });
 
@@ -1243,7 +1261,9 @@ test('Plan delegates one semantic XS-S-M-L-XL classifier and keeps orchestration
     assert.doesNotMatch(plan, /goal-prompts\.md/);
     assert.doesNotMatch(plan, /Skill\(spectre-goal\)/);
     assert.match(plan, /Gather proportional evidence/i);
-    assert.match(plan, /primary owns Scope and plan/i);
+    assert.match(plan, /primary owns plan/i);
+    assert.match(plan, /Repository changes without Scope return to `spectre-scope`/);
+    assert.doesNotMatch(plan, /references\/scope\.md/);
     assert.match(plan, /automatically uses the observed route with no paid rerun/i);
     assert.match(plan, /plan\.completed/);
     assert.match(plan, /DONE when/i);
@@ -1301,10 +1321,11 @@ test('public guidance and compatibility preserve one adaptive XS-S-M-L-XL route'
     ['COMPREHENSIVE', 'XL'],
   ];
 
-  assert.match(readme, /Repository changes start with Plan/i);
+  assert.match(readme, /Scope records feature boundaries and can stop there/i);
+  assert.match(readme, /Plan turns confirmed Scope into a right-sized plan/i);
   assert.match(readme, /bugs?[^\n]*spectre:spectre-fix/i);
   assert.match(readme, /XS[^\n]*S[^\n]*M[^\n]*L[^\n]*XL/);
-  assert.match(readme, /durable[^\n]*artifact/i);
+  assert.match(readme, /Feature boundaries in `scope\.md`/i);
   assert.match(readme, /Wait for your explicit approval before any code changes/i);
   assert.doesNotMatch(readme, /unless the feature is a one line ask/i);
   assert.doesNotMatch(readme, /Tiny or Small[^\n]*prefer[^\n]*(?:Claude Code|Codex)[^\n]*plan mode/i);
@@ -1408,11 +1429,16 @@ test('Scope, UX, and prototype make Plan the canonical repository-change handoff
     const scope = readSkill('spectre-scope');
     const ux = readSkill('spectre-ux');
     const prototype = readSkill('spectre-prototype');
-    assert.match(scope, /continue Plan/i);
+    assert.match(scope, /otherwise confirmed repository-changing work → `spectre-plan`/i);
+    assert.match(scope, /Write `\{FEATURE_ROOT\}\/concepts\/scope\.md`/);
+    assert.match(scope, /the user has confirmed the boundaries/);
+    assert.doesNotMatch(scope, /Present recorded boundaries\/assumptions and continue Plan/i);
     assert.doesNotMatch(scope, /well-understood non-UI work[^\n]*spectre-create_tasks/i);
     assert.match(ux, /confirmed repository-changing work[^\n]*spectre-plan/i);
+    assert.match(ux, /recommend `spectre-scope` first/);
     assert.doesNotMatch(ux, /spectre-create_tasks|spectre-tdd|genuinely MICRO/i);
     assert.match(prototype, /post-scope[^\n]*validated scope[^\n]*spectre-plan/i);
+    assert.match(prototype, /standalone no scope → Scope/);
     assert.doesNotMatch(prototype, /post-scope[^\n]*spectre-create_tasks/i);
   }
 });
@@ -1485,7 +1511,7 @@ test('moved phase references retain their owner boundaries and assets', () => {
   for (const rootName of ['spectre', 'spectre-codex']) {
     const roots = path.join(repoRoot, 'plugins', rootName, 'skills');
     const expected = [
-      'spectre-plan/references/scope.md', 'spectre-plan/references/create-plan.md',
+      'spectre-plan/references/create-plan.md',
       'spectre-execute/references/plan-review.md', 'spectre-execute/references/create-tasks.md',
       'spectre-execute/references/task-review.md', 'spectre-execute/references/tdd.md',
       'spectre-execute/references/proof.md', 'spectre-ship/references/prune.md',
@@ -1500,6 +1526,8 @@ test('moved phase references retain their owner boundaries and assets', () => {
     for (const retired of Object.keys(MIGRATED_SKILL_REFERENCES)) {
       assert.equal(fs.existsSync(path.join(roots, retired, 'SKILL.md')), false);
     }
+    assert.ok(fs.existsSync(path.join(roots, 'spectre-scope', 'SKILL.md')));
+    assert.equal(fs.existsSync(path.join(roots, 'spectre-plan', 'references', 'scope.md')), false);
   }
 });
 
@@ -1556,7 +1584,8 @@ test('Plan, Execute, and Ship load their phase references in sequence', () => {
     const execute = readContractSkill(repoRoot, rootName, 'spectre-execute');
     const ship = readContractSkill(repoRoot, rootName, 'spectre-ship');
     const proof = readContractSkill(repoRoot, rootName, 'spectre-prove');
-    assert.match(plan, /references\/scope\.md[\s\S]*references\/create-plan\.md/);
+    assert.match(plan, /references\/create-plan\.md/);
+    assert.doesNotMatch(plan, /references\/scope\.md/);
     assert.match(execute, /references\/plan-review\.md[\s\S]*references\/create-tasks\.md[\s\S]*references\/task-review\.md/);
     assert.match(execute, /references\/tdd\.md[\s\S]*references\/proof\.md/);
     assert.match(execute, /parent.*ACCEPTANCE_PENDING[\s\S]*references\/proof\.md/i);
@@ -1766,7 +1795,8 @@ test('Plan, Execute, and Ship keep phase routing in their owner workflows', () =
     const proof = readContractSkill(repoRoot, rootName, 'spectre-prove');
     const ship = readContractSkill(repoRoot, rootName, 'spectre-ship');
 
-    assert.match(plan, /references\/scope\.md[\s\S]*references\/create-plan\.md/);
+    assert.match(plan, /references\/create-plan\.md/);
+    assert.doesNotMatch(plan, /references\/scope\.md/);
     assert.match(execute, /references\/plan-review\.md[\s\S]*references\/create-tasks\.md/);
     assert.match(execute, /user explicitly requests a task-graph audit, load[^\n]*references\/task-review\.md/);
     assert.match(execute, /parent.*ACCEPTANCE_PENDING[\s\S]*references\/proof\.md/i);
@@ -2095,7 +2125,7 @@ test('retired orchestration commands route through their owner workflows', () =>
     'spectre-clean', 'spectre-create_plan', 'spectre-create_tasks',
     'spectre-create_test_guide', 'spectre-delegate', 'spectre-goal',
     'spectre-kickoff', 'spectre-plan_review', 'spectre-prove',
-    'spectre-prune', 'spectre-rebase', 'spectre-scope', 'spectre-sweep',
+    'spectre-prune', 'spectre-rebase', 'spectre-sweep',
     'spectre-task_review', 'spectre-tdd', 'spectre-test',
   ];
 
@@ -2111,7 +2141,8 @@ test('retired orchestration commands route through their owner workflows', () =>
     const fixCore = readContractSkill(repoRoot, rootName, 'spectre-fix-core');
     const createPr = readContractSkill(repoRoot, rootName, 'spectre-create_pr');
 
-    assert.match(plan, /references\/scope\.md[\s\S]*references\/create-plan\.md/);
+    assert.match(plan, /references\/create-plan\.md/);
+    assert.doesNotMatch(plan, /references\/scope\.md/);
     assert.match(execute, /references\/plan-review\.md[\s\S]*references\/create-tasks\.md/);
     assert.match(execute, /references\/proof\.md/);
     assert.match(ship, /references\/prune\.md[\s\S]*references\/test\.md[\s\S]*references\/sweep\.md[\s\S]*references\/rebase\.md/);
@@ -2346,7 +2377,6 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
       'estimation-guidance.md',
       'high-level-design-gate.md',
       'minimum-solution.md',
-      'scope.md',
     ]);
     assert.deepEqual(
       [...new Set(plan.match(/\bplan\.(?!md\b)[a-z_]+/g) || [])].sort(),
@@ -2431,7 +2461,7 @@ test('planning artifact ownership confines reviewer-authored scope-safe writebac
     const taskReview = readSkill('spectre-task_review');
     const codeReview = readSkill('spectre-code_review');
 
-    assert.match(plan, /primary owns Scope and plan/i);
+    assert.match(plan, /primary owns plan/i);
     assert.match(plan, /Scope remains immutable/i);
     assert.doesNotMatch(plan, /spectre-plan_review|spectre-create_tasks|spectre-task_review/);
     assert.doesNotMatch(plan, /never write `plan\.md`, `execute\.md`, or `tasks\.json` content yourself/i);

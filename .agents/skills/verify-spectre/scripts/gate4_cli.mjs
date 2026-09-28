@@ -170,12 +170,12 @@ function featureHostSourceHashes() {
   const files = {
     gate4_cli: path.join(REPO, '.agents', 'skills', 'verify-spectre', 'scripts', 'gate4_cli.mjs'),
     plan_skill: path.join(PLUGIN, 'skills', 'spectre-plan', 'SKILL.md'),
-    scope_reference: path.join(PLUGIN, 'skills', 'spectre-plan', 'references', 'scope.md'),
+    scope_skill: path.join(PLUGIN, 'skills', 'spectre-scope', 'SKILL.md'),
     execute_skill: path.join(PLUGIN, 'skills', 'spectre-execute', 'SKILL.md'),
     handoff_skill: path.join(PLUGIN, 'skills', 'spectre-handoff', 'SKILL.md'),
     session_start_runtime: path.join(HOOKS, 'handoff-resume.mjs'),
     codex_plan_skill: path.join(CODEX_PLUGIN, 'skills', 'spectre-plan', 'SKILL.md'),
-    codex_scope_reference: path.join(CODEX_PLUGIN, 'skills', 'spectre-plan', 'references', 'scope.md'),
+    codex_scope_skill: path.join(CODEX_PLUGIN, 'skills', 'spectre-scope', 'SKILL.md'),
     codex_handoff_skill: path.join(CODEX_PLUGIN, 'skills', 'spectre-handoff', 'SKILL.md'),
   };
   return Object.fromEntries(
@@ -653,7 +653,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'creator',
     creatorProject,
     [
-      '/spectre:spectre-plan',
+      '/spectre:spectre-scope',
       'Scope a feature whose exact user-facing title is "Hosted Feature Proof".',
       'The problem is that operators cannot export one local report for offline review.',
       'Primary user: local CLI operator. IN: one offline Markdown export.',
@@ -672,11 +672,13 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
   );
   const creatorManifest = path.join(creatorRoot, 'feature.json');
   const creatorScope = path.join(creatorRoot, 'concepts', 'scope.md');
+  const creatorPlan = path.join(creatorRoot, 'specs', 'plan.md');
   g.check(
     creatorRun.code === 0 &&
       fs.existsSync(creatorManifest) &&
-      fs.existsSync(creatorScope),
-    'feature creator accepts the proposed name without a second naming prompt',
+      fs.existsSync(creatorScope) &&
+      !fs.existsSync(creatorPlan),
+    'standalone Scope writes its artifact without starting Plan',
     creatorRun.stderr || `transcript: ${creatorRun.stdoutPath}`,
   );
   let manifest = null;
@@ -756,7 +758,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'creator-blanket-ignore',
     blanketIgnoreProject,
     [
-      '/spectre:spectre-plan',
+      '/spectre:spectre-scope',
       'Scope a feature whose exact user-facing title is "Blanket Ignore Proof".',
       'The problem is that operators cannot inspect a local archive manifest before export.',
       'Primary user: local CLI operator. IN: one readable archive manifest.',
@@ -860,7 +862,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'rescope',
     creatorProject,
     [
-      '/spectre:spectre-plan .spectre/features/hosted-feature-proof',
+      '/spectre:spectre-scope .spectre/features/hosted-feature-proof',
       'Explicitly re-scope this existing managed feature.',
       'The confirmed delta adds encrypted local export as IN and keeps cloud sync OUT.',
       'All other boundaries remain confirmed. Do not ask another question.',
@@ -903,7 +905,7 @@ if (process.env.SPECTRE_GATE4_FEATURE_HOST !== '1') {
     'collision',
     collisionProject,
     [
-      '/spectre:spectre-plan',
+      '/spectre:spectre-scope',
       'Scope a new feature whose exact title is "Occupied Collision Proof".',
       'It adds one local diagnostic report. IN: local report.',
       'OUT: remote upload. ANTI-SCOPE: telemetry.',

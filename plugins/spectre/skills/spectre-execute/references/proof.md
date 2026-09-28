@@ -17,7 +17,7 @@ Each invocation is exactly one proof pass. Derive a candidate key from relevant 
 
 ## Proof Surface
 
-- Inventory existing tools, scripts, runnable interfaces, and scenarios; prefer the established proof stack.
+- Inventory existing tools, scripts, runnable interfaces, and scenarios; prefer the established proof stack. Persist named journeys in-repo when repeated runs need them.
 - Match the mechanism to the actual surface: visible app, browser, desktop/mobile runtime, CLI/TUI, API/service, library, or background workflow. Exercise the same public controls and interfaces a user would use.
 - When no adequate proof tool exists: focused profile records affected rows `PARTIAL` with `PROOF_TOOLING_UNAVAILABLE` and continues without research or a user gate. Otherwise read `${CLAUDE_PLUGIN_ROOT}/skills/spectre-execute/references/proof/proof-tools.md`, use `@spectre:web-research` when available to verify current options against primary sources, then offer the user 2-4 suitable choices with a recommendation, trade-offs, installation impact, and evidence capabilities; hold for selection before adding a dependency or committing to a materially weaker proof method.
 - Own the proof path: fix broken or misconfigured proof tooling (helpers, drivers, fixtures, seeds, runner config) in place and rerun; completing established-stack setup is pre-authorized. Record every harness change as a proof-infrastructure finding. Only genuinely absent capability follows the selection gate above.
@@ -28,7 +28,7 @@ Build a proof matrix first. Each row contains:
 
 - requirement and source;
 - realistic start state, user action, and observable result;
-- surface (`visual|non-visual`; TUI is visual), mechanism, and evidence ids;
+- surface (`visual|non-visual`; TUI is visual), visual claim (`state|sequence`) when applicable, mechanism, and evidence ids;
 - supporting diagnostics;
 - status and limitations.
 
@@ -39,15 +39,17 @@ Use `PASS`, `PARTIAL`, `DIAGNOSTIC_ONLY`, or `FAIL` per row:
 - `DIAGNOSTIC_ONLY` - code paths, state, logs, or tests were proven without proving the public workflow.
 - `FAIL` - observed behavior, pixels, output, persistence, or errors contradict the contract.
 
-For visual work (including TUI), load `${CLAUDE_PLUGIN_ROOT}/skills/spectre-execute/references/proof/proof-html.md`: capture, inspect, and embed in `proof.html` actual screenshots and video of each realistic end-to-end journey; paths, links, hashes, manifests, and prose are provenance only. Pixels overrule assertions.
+For visual work (including TUI), load `${CLAUDE_PLUGIN_ROOT}/skills/spectre-execute/references/proof/proof-html.md`: capture, inspect, and embed in `proof.html` actual screenshots of material states and video when the claim needs sequence evidence; paths, links, hashes, manifests, and prose are provenance only. Pixels overrule assertions.
 
 For non-visual work, use the public interface and preserve observable output, persistence, and relevant logs. Do not manufacture visuals. Internal tests/state/logs may support but never replace the promised outcome.
+
+For user-facing work, give a fresh agent user goals rather than implementation notes for one public journey. Judge observed behavior against a short rubric from approved UX/design (comprehension, wording, recovery, accessibility); compare only design-bearing states with the prototype. Machine probes establish repeatable facts and cheap journey-stage invariants.
 
 ## Proof Pass
 
 Before selecting or observing journeys, invoke `Skill(spectre-validate)` with `--orchestrated`, the same authoritative source path, the resolved `FEATURE_ROOT`, and the complete current `BASE_SHA`, `HEAD_SHA`, and `DIFF_SHA256` tuple. Plans, structured task slices, scope, and fix/bug reports are valid sources. Require a completed report bound to that exact tuple; missing authority, an unusable report, or a stale-candidate result is incomplete. Validation cannot be skipped for atomic work. Require at least one independent analyst and one to eight real requirement areas without fabricating or padding areas. Persist the report path, `Complete` status, and exact tuple in `proof.json` and display them in a Validation section in `proof.html`. Any `Partial`, `Dead Code`, or `Missing` requirement blocks aggregate `PASS`; route attributable gaps through Execute's repair policy and rerun Validate against the repaired candidate. Report genuine authority blocks truthfully. Static definition/connection/reachability evidence remains separate from observed public-interface journeys and their primary evidence.
 
-1. Reuse fresh inspected primary evidence only when its candidate key and matrix rows match exactly. Run the smallest set of uncovered journeys that completes the matrix. Expensive harness/performance/full qualification allows at most one run per candidate key; rerun only after relevant inputs change or a diagnosed infrastructure failure invalidates it.
+1. Reuse fresh inspected primary evidence only when its candidate key and matrix rows match exactly. Complete the current matrix through the smallest set of live public journeys; Execute's targeted post-repair rechecks are diagnostic, not cross-candidate PASS evidence. Expensive harness/performance/full qualification allows at most one run per candidate key; rerun only after relevant inputs change or a diagnosed infrastructure failure invalidates it.
 2. Inspect primary evidence before reading diagnostic summaries. Then review logs/errors and durable state for silent failures.
 3. Classify each finding as product behavior, UX/cosmetic, proof infrastructure, specification ambiguity, or environment/authority constraint. Record the failed claim, expected/observed result, reproduction, evidence paths, fingerprint, and limitation.
 4. Repair the proof path, never the verdict: fix harness/tooling defects and rerun affected journeys until each row reflects observed product behavior. A harness defect is never terminal and never the sole basis for `PARTIAL`. Never modify product code to influence an outcome, dispatch an implementer, or invoke TDD. Then write the artifacts and return.
@@ -56,7 +58,7 @@ Before selecting or observing journeys, invoke `Skill(spectre-validate)` with `-
 
 Write:
 
-- `{FEATURE_ROOT}/proof/proof.json` - compact current-candidate snapshot with `feature`, `feature_root`, acceptance sources, scope hash, candidate key, `candidate: {base_sha, head_sha, diff_sha256}`, `validation: {report, status, tuple: {base_sha, head_sha, diff_sha256}}`, observed start/finish state, scenarios, matrix, evidence references/hashes, findings, harness changes, limitations, and aggregate status. A `PASS` requires validation status `Complete` and an exact tuple match to `candidate`. Replace prior snapshots; git history preserves them. Never embed raw harness output or accumulating run history.
+- `{FEATURE_ROOT}/proof/proof.json` - compact current-candidate snapshot with `feature`, `feature_root`, acceptance sources, scope hash, candidate key, `candidate: {base_sha, head_sha, diff_sha256}`, `validation: {report, status, tuple: {base_sha, head_sha, diff_sha256}}`, observed start/finish state, scenarios, matrix, cheap invariant checks/results, evidence references/hashes, findings, harness changes, limitations, and aggregate status. A `PASS` requires validation status `Complete` and an exact tuple match to `candidate`. Replace prior snapshots; git history preserves them. Never embed raw harness output or accumulating run history.
 - `{FEATURE_ROOT}/proof/proof.html` - **required**, self-contained review artifact beginning with `Feature: <feature-name>` and `Feature Root: {FEATURE_ROOT}`, then the Validation section (report, status, tuple), matrix, findings, required displayed media, redacted diagnostics, current relevant repair dispositions, harness changes, limitations, and final status. Replace the prior current-candidate report; do not publish or share unless asked.
 
 Exclude secrets, credentials, private customer data, and unnecessary local paths. Raw evidence stays tool-owned; proof embeds review renditions and cites original URI/path plus hash.

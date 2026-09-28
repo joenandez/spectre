@@ -158,6 +158,14 @@ export function validateProofArtifacts(proof, html) {
       continue;
     }
 
+    const visualClaim = row.visual_claim;
+    if (visualClaim !== "state" && visualClaim !== "sequence") {
+      failures.push(failure(
+        "PROOF_VISUAL_CLAIM_MISSING",
+        `Visual PASS row ${rowId} must declare visual_claim as state or sequence.`,
+        { row_id: rowId },
+      ));
+    }
     const evidenceIds = Array.isArray(row.evidence_ids) ? row.evidence_ids : [];
     const rowEvidence = evidenceIds.map((id) => evidenceById.get(id)).filter(Boolean);
     for (const id of evidenceIds) {
@@ -170,7 +178,7 @@ export function validateProofArtifacts(proof, html) {
       }
     }
 
-    for (const kind of MEDIA_KINDS) {
+    for (const kind of visualClaim === "state" ? ["screenshot"] : MEDIA_KINDS) {
       if (!rowEvidence.some((item) => item.kind === kind)) {
         failures.push(failure(
           "PROOF_MEDIA_NOT_PRESENTED",

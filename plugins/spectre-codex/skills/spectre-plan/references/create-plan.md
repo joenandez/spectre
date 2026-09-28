@@ -30,6 +30,7 @@ Every plan contains:
 4. **Critical Files** — 1–7 verified files tagged Core logic / Pattern / Interface / Test.
 5. **External Dependencies — Verify Before Implementation** — exact package versions plus existence commands, or `No new packages`.
 6. **Verification — How We Know This Works** — 1–3 falsifiable test/observable/state signals per major behavior; direct-mode signals are executable.
+   If behavior depends on uncertain external runtime IDs, payloads, ordering, or retries, reuse an inspected capture already in context or record a falsifiable capture gate before dependent implementation. Plan does no live probe; Execute obtains the sample.
 7. **Out-of-Bounds — DO NOT add** — carry forward canonical OUT/ANTI-SCOPE and only evidence-backed technical exclusions; never pad a generic list.
 8. **Risks & Filled Assumptions** — current credible risks with minimum mitigation or accept-and-monitor; silent-spec defaults only.
 9. **Routing Observations** — exact `## Routing Observations` heading with workstream count, independent workstreams, dependency sequencing, shared-contract consumers, staged rollout/migration, new abstraction, unresolved material decision, and observed uncertainty; observations only, never route selection.

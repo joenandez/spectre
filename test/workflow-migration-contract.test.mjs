@@ -27,21 +27,21 @@ test('canonical entry points retain only the reviewed workflow and utility inven
     'spectre-capture', 'spectre-code_review', 'spectre-create_pr', 'spectre-execute',
     'spectre-feature-root', 'spectre-fix', 'spectre-fix-core', 'spectre-forget',
     'spectre-handoff', 'spectre-learn', 'spectre-plan', 'spectre-plan-route',
-    'spectre-prototype', 'spectre-research', 'spectre-ship', 'spectre-validate',
+    'spectre-prototype', 'spectre-research', 'spectre-scope', 'spectre-ship', 'spectre-validate',
     'spectre-ux', 'spectre-work-record',
   ].sort());
 });
 
 test('moved phase guidance lives under its owning surviving workflow only', () => {
   const moved = {
-    'spectre-plan': ['scope', 'create-plan'],
+    'spectre-plan': ['create-plan'],
     'spectre-execute': ['plan-review', 'create-tasks', 'task-review', 'tdd', 'proof'],
     'spectre-ship': ['prune', 'test', 'sweep', 'rebase'],
   };
   const retiredEntryPoints = [
     'spectre-clean', 'spectre-create_test_guide', 'spectre-delegate', 'spectre-goal',
     'spectre-kickoff', 'spectre-prove',
-    'spectre-scope', 'spectre-create_plan', 'spectre-plan_review', 'spectre-create_tasks',
+    'spectre-create_plan', 'spectre-plan_review', 'spectre-create_tasks',
     'spectre-task_review', 'spectre-tdd', 'spectre-proof', 'spectre-prune', 'spectre-test',
     'spectre-sweep', 'spectre-rebase',
   ];
@@ -54,6 +54,8 @@ test('moved phase guidance lives under its owning surviving workflow only', () =
   for (const name of retiredEntryPoints) {
     assert.equal(fs.existsSync(path.join(skillsRoot, name, 'SKILL.md')), false, `${name} remains a live entry point`);
   }
+  assert.ok(fs.existsSync(path.join(skillsRoot, 'spectre-scope', 'SKILL.md')));
+  assert.equal(fs.existsSync(path.join(skillsRoot, 'spectre-plan', 'references', 'scope.md')), false);
 });
 
 test('Execute Finalization keeps parent, self review, and proof instructions as sibling bullets', () => {
@@ -123,14 +125,17 @@ test('Validate accepts fix reports and requires one to eight real requirement ar
   assert.match(validate, /Standalone `Needs Work`\/`Significant Gaps` → `\/spectre:spectre-fix` then revalidate/);
 });
 
-test('Plan discovery and Scope fast path accept settled request context and ask only material questions', () => {
+test('Plan consumes confirmed Scope and standalone Scope retains its boundary gate', () => {
   const plan = readSkill('spectre-plan');
-  const scope = fs.readFileSync(path.join(skillsRoot, 'spectre-plan/references/scope.md'), 'utf8');
+  const scope = readSkill('spectre-scope');
 
-  assert.match(plan.split('---')[1], /Scope a request[\s\S]*do not use for bug diagnosis/i);
-  assert.match(plan, /feature request, established thread decisions, or confirmed Scope/);
-  assert.match(scope, /If context already settles boundaries, draft Scope directly/);
-  assert.match(scope, /Ask only questions whose answer materially changes the outcome or authority/);
+  assert.match(plan.split('---')[1], /after confirmed Scope[\s\S]*Do not use for scoping/i);
+  assert.match(plan, /Repository changes without Scope return to `spectre-scope`/);
+  assert.doesNotMatch(plan, /references\/scope\.md/);
+  assert.match(scope, /user-invocable: true/);
+  assert.match(scope, /Write `\{FEATURE_ROOT\}\/concepts\/scope\.md`/);
+  assert.match(scope, /the user has confirmed the boundaries/);
+  assert.match(scope, /otherwise confirmed repository-changing work → `\/spectre:spectre-plan`/);
 });
 
 test('Fix-core exposes only the reachable diagnose phase and delegates implementation to Execute', () => {
@@ -149,15 +154,15 @@ test('Execute origin documentation and CLI usage exclude retired Delegate origin
   assert.doesNotMatch(workflowCli, /--origin plan\|fix\|delegate/);
 });
 
-test('live workflow handoffs target retained Plan, Execute, and Ship entries', () => {
+test('live workflow handoffs target standalone Scope and retained Plan, Execute, and Ship entries', () => {
   const prototype = readSkill('spectre-prototype');
   const codeReview = readSkill('spectre-code_review');
-  const scope = readReference('spectre-plan', 'scope');
+  const scope = readSkill('spectre-scope');
   const proof = readReference('spectre-execute', 'proof');
 
-  assert.match(prototype, /standalone without Scope → `\/spectre:spectre-plan`/);
+  assert.match(prototype, /standalone no scope → Scope/);
   assert.doesNotMatch(prototype, /FROM_KICKOFF/);
-  assert.doesNotMatch(scope, /FROM_KICKOFF|KICKOFF_DOC/);
+  assert.match(scope, /otherwise confirmed repository-changing work → `\/spectre:spectre-plan`/);
   assert.match(codeReview, /uncovered acceptance → Execute and closeout → Ship/);
   assert.doesNotMatch(proof, /Standalone `PASS`/);
   assert.match(proof, /Orchestrated: return proof result to Execute/);
@@ -168,8 +173,8 @@ test('repository workflow documentation describes current owners and moved TDD r
   const architecture = fs.readFileSync(path.join(root, 'Architecture.md'), 'utf8');
   const rewriteSkill = fs.readFileSync(path.join(root, '.agents/skills/spectre-rewrite-skill/SKILL.md'), 'utf8');
 
-  assert.match(claude, /Plan, Execute, and Ship/);
-  assert.match(architecture, /Plan-owned Scope/);
+  assert.match(claude, /standalone Scope, then Plan, Execute, and Ship/);
+  assert.match(architecture, /Standalone `spectre-scope` owns feature boundaries/i);
   assert.match(architecture, /Execute's Proof reference invokes independent Validate/);
   assert.match(rewriteSkill, /skills\/spectre-execute\/references\/tdd\.md/);
   assert.doesNotMatch(rewriteSkill, /`@skill-spectre:spectre-tdd`/);
@@ -181,9 +186,9 @@ test('installer lists retire folded phases and expose only surviving shared and 
     'spectre-create_plan', 'spectre-create_tasks', 'spectre-create_test_guide',
     'spectre-delegate', 'spectre-evaluate', 'spectre-goal', 'spectre-guide',
     'spectre-kickoff', 'spectre-plan_review', 'spectre-prove', 'spectre-prune',
-    'spectre-rebase', 'spectre-scope', 'spectre-sweep', 'spectre-task_review',
+    'spectre-rebase', 'spectre-sweep', 'spectre-task_review',
     'spectre-test', 'spectre-tdd',
   ].sort());
   assert.deepEqual(SHARED_SKILLS, ['spectre-learn']);
-  assert.deepEqual(WORKFLOW_PROBE_SKILLS, ['spectre-plan', 'spectre-execute', 'spectre-ship']);
+  assert.deepEqual(WORKFLOW_PROBE_SKILLS, ['spectre-scope', 'spectre-plan', 'spectre-execute', 'spectre-ship']);
 });

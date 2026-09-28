@@ -95,7 +95,7 @@ The npm package also exposes `bin/spectre.js`. In the current native-plugin arch
 
 ### 3.2 Orchestration plane
 
-The canonical skills under `plugins/spectre/skills/` are executable contracts. The public core workflows are `spectre-plan`, `spectre-execute`, and `spectre-ship`; Plan owns Scope, Execute owns review/task preparation/TDD/Proof references, and Ship owns cleanup/testing/rebase references. The ten retained utilities include `spectre-fix`, `spectre-validate`, and `spectre-code_review`. Internal skills such as `spectre-plan-route`, `spectre-feature-root`, and `spectre-fix-core` centralize policies that should not be duplicated.
+The canonical skills under `plugins/spectre/skills/` are executable contracts. Standalone `spectre-scope` owns feature boundaries; `spectre-plan`, `spectre-execute`, and `spectre-ship` own planning, implementation and acceptance, and closeout. The ten retained utilities include `spectre-fix`, `spectre-validate`, and `spectre-code_review`. Internal skills such as `spectre-plan-route`, `spectre-feature-root`, and `spectre-fix-core` centralize policies that should not be duplicated.
 
 A compact skill contract normally contains:
 
@@ -186,8 +186,9 @@ The normal lifecycle is:
 
 ```mermaid
 flowchart LR
-    I[Idea] --> P[Plan / Scope]
-    P -->|UI ambiguity| U[UX / Prototype]
+    I[Idea] --> S[Scope]
+    S -->|UI ambiguity| U[UX / Prototype]
+    S --> P[Plan]
     U --> P
     P --> A{User approves?}
     A -->|No / feedback| P
@@ -201,9 +202,9 @@ flowchart LR
 
 Focused utilities remain available when appropriate: `spectre-fix` prepares a bug report for Execute, `spectre-validate` checks requirement delivery, `spectre-code_review` performs adversarial review, and `spectre-research` supports read-only technical exploration. Release workflows remain separate.
 
-### 5.1 Plan-owned Scope: define what, not how
+### 5.1 Scope: define what, not how
 
-Plan converts an unstructured request into explicit IN, OUT, ANTI-SCOPE, Maybe, assumptions, and user value when Scope is absent. It asks only about material boundary or authority uncertainty, then proceeds to planning when context settles the request. The output becomes immutable downstream intent unless the user explicitly approves a scope change.
+`spectre-scope` converts an unstructured request into explicit IN, OUT, ANTI-SCOPE, Maybe, assumptions, and user value. It performs a small grounding lookup and ends with `concepts/scope.md`; Plan is a later step. The output becomes immutable downstream intent unless the user explicitly approves a scope change.
 
 A managed feature or bug gets a collision-safe root:
 

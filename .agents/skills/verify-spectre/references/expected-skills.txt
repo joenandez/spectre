@@ -1,6 +1,6 @@
 # Skills expected in plugins/spectre/skills/.
 # Gate 1 fails if any is missing, or if an unlisted one appears.
-# Core workflows, ten public utilities, and five internal skills.
+# Core workflows, standalone Scope, ten public utilities, and five internal skills.
 
 spectre-capture
 spectre-code_review
@@ -16,6 +16,7 @@ spectre-plan
 spectre-plan-route
 spectre-prototype
 spectre-research
+spectre-scope
 spectre-ship
 spectre-ux
 spectre-validate

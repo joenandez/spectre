@@ -16,7 +16,7 @@ Turn requirements into a behavioral spec — **what users see/do and the system 
   1. `{OUT_DIR}/concepts/scope.md` (canonical, preferred)
   2. `{OUT_DIR}/specs/prd.md`
   3. `{OUT_DIR}/task_summary.md`
-- **If none exist → ask for scope context or recommend `$spectre:spectre-plan` first; do not invent scope.**
+- **If none exist → ask for scope context or recommend `$spectre:spectre-scope` first; do not invent scope.**
 
 ## Working Set (late-bound — read at run-time, never inline)
 
@@ -64,7 +64,7 @@ Derive both values from the physical feature directory.
 5. **Layouts** — header/main/footer and responsive behavior (**desktop >1024 · tablet 768–1024 · mobile <768**)
 6. **Components** — interactive purpose, location, applicable State Vocabulary
 7. **Interactions** — table: **Element | Action | Result** (exhaustive)
-8. **States** — table: **State | Trigger | Appearance | Available Actions**
+8. **States** — table: **State | Trigger | Appearance | Available Actions**. For externally driven states, tie triggers to observed events when available; flag assumptions and common observed events with no state for Execute's probe.
 9. **Content** — exact titles, buttons, empty/error/confirmation copy
 10. **Edge Cases** — limits, data, permission, network, segments
 11. **Accessibility** — tab order, Enter/Space/Escape, announcements, focus
@@ -88,7 +88,7 @@ Confirm UX/doc path. Material visual/interaction/stakeholder/prose-limit → Pro
 
 ## Escalate-If
 
-- No scope/PRD/summary found → stop; get scope context or route to `$spectre:spectre-plan` before specifying.
+- No scope/PRD/summary found → stop; get scope context or route to `$spectre:spectre-scope` before specifying.
 - User pushes for implementation/architecture decisions → note them, defer to `$spectre:spectre-plan`; keep this pass on behavior.
 - Flows won't converge after iterating → surface the specific unresolved divergence (usually a segment conflict) and ask the user to decide before Stage 2.
 - Feature has no user-facing surface → this spec adds nothing; route back to `$spectre:spectre-plan`.

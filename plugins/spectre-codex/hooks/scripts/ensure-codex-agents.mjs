@@ -21,7 +21,6 @@ const RETIRED_SKILLS = [
   'spectre-goal',
   'spectre-clean',
   'spectre-create_test_guide',
-  'spectre-scope',
   'spectre-create_plan',
   'spectre-plan_review',
   'spectre-create_tasks',

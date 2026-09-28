@@ -1,6 +1,6 @@
 ---
 name: "spectre-plan"
-description: "Scope a request when boundaries need to be recorded, then create a repository-grounded plan and hand it to Execute. Use for feature requests or confirmed Scope; do not use for bug diagnosis, read-only work, or execution of approved artifacts."
+description: "Create a repository-grounded aligned draft after confirmed Scope, present its concise alignment brief, and hand it to Execute preflight. Do not use for scoping, bug diagnosis, read-only work, or execution of approved artifacts."
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -9,17 +9,17 @@ disable-model-invocation: true
 
 ## Purpose
 
-Turn a request and established decisions into Scope when needed, create the smallest aligned draft, and hand it off. `spectre-plan-route` classifies; primary owns Scope and plan. Scope remains immutable once established.
+Turn confirmed Scope into the smallest draft and handoff. `spectre-plan-route` classifies; primary owns plan. Scope remains immutable.
 
 ## Inputs
 
-- `$ARGUMENTS`: a feature request, established thread decisions, or confirmed Scope—thread or managed root/descendant. Bugs use `spectre-fix`; read-only diagnosis/review, release, and approved-artifact execution remain direct.
+- `$ARGUMENTS`: confirmed Scope—thread or managed root/descendant. Repository changes without Scope return to `spectre-scope`; bugs use `spectre-fix`. Read-only diagnosis/review, release, and approved-artifact execution remain direct.
 - Existing Scope/PRD, `ux.md` (preferred) or legacy `specs/ux.md`, `task_context.md`, and prior plans.
 
 ## Working Set
 
 - Reuse a managed `FEATURE_ROOT` only when explicit/current-thread evidence ties it to this work (physical directory wins; never branch/recency/lifecycle/scans); distinct work ignores ambient roots. Otherwise, including on collision, standalone MUST first load and follow `@skill-spectre:spectre-feature-root` through DONE; orchestrated calls escalate. Keep writes beneath it and pass it unchanged.
-- Immutable canonical Scope: `concepts/scope.md` when present, else draft it by loading `${CLAUDE_PLUGIN_ROOT}/skills/spectre-plan/references/scope.md`. Treat established request and thread decisions as authority: ask only about a material boundary or authority uncertainty, record settled boundaries, and continue without a repeated confirmation pause. Never change existing Scope without explicit scope-change approval.
+- Immutable canonical Scope: `concepts/scope.md` when present, else confirmed thread; never change it without explicit scope-change approval.
 - Read `references/estimation-guidance.md` when applicable; each estimate excludes waits and never delays or blocks the gate.
 - Reuse current-request knowledge results/loads; otherwise follow Project knowledge routing. Search actual task across mixed knowledge/work previews; assess, then exact-load applicable records. Standalone #tag: exact search `--tag`, assess previews, then exact-load applicable matches; never guessed loads. Refine only for an unresolved question or new subject. Keep IDs/revisions in `task_context.md`; previews/unloaded candidates are not evidence.
 
@@ -33,9 +33,9 @@ DONE when `task_context.md` binds initial/observed routing to draft/authority ha
 
 Child skill DONE is internal: resume the next Plan step in this turn. Only Plan's own handoff or escalation ends it.
 
-1. When Scope is absent, load `${CLAUDE_PLUGIN_ROOT}/skills/spectre-plan/references/scope.md`; record it and continue when context settles boundaries. Ask only for a material unresolved boundary or authority choice. Unresolved journeys/states/copy/accessibility route to `spectre-ux`; load-bearing interaction/layout validation routes to `spectre-prototype`.
+1. Unresolved journeys/states/copy/accessibility route to `spectre-ux`; load-bearing interaction/layout validation routes to `spectre-prototype`.
 2. Scan once; invoke `Skill(spectre-plan-route)` in `initial` mode. Run `spectre-workflow plan start` with root/scope hash, returned record, size/route, reasons, design/probe flags, boundaries; retain `PLAN_RUN_ID` for `plan.started`. Report size/rationale as progress; continue to step 3.
-3. Gather proportional evidence: XS/S local except probe; M ≤2 relevant `@spectre:finder`, `@spectre:analyst`, or `@spectre:patterns`; L/XL necessary dimensions. Dispatch no dimension cited by path, knowledge ID/revision, or thread decision; `evidence: SUFFICIENT` with uncertainty below HIGH and full citation gathers locally at any size. The fresh evidence-only challenger is wave-independent: M triggers it for durable state, identity, public contract, migration, dependency, or workflow/lifecycle; L/XL always, with the wave or alone. Primary persists accepted evidence/IDs/revisions in `task_context.md`. `@spectre:web-research` only decides external API/framework. Refine knowledge search after affected files are known; load a work body only for a stated question, never reload an unchanged revision, and pass workers compact findings with provenance.
+3. Gather proportional evidence: XS/S local except probe; M ≤2 relevant `@spectre:finder`, `@spectre:analyst`, or `@spectre:patterns`; L/XL necessary dimensions. Live external captures belong to Execute, never Plan's evidence dispatch. Dispatch no dimension cited by path, knowledge ID/revision, or thread decision; `evidence: SUFFICIENT` with uncertainty below HIGH and full citation gathers locally at any size. The fresh evidence-only challenger is wave-independent: M triggers it for durable state, identity, public contract, migration, dependency, or workflow/lifecycle; L/XL always, with the wave or alone. Primary persists accepted evidence/IDs/revisions in `task_context.md`. `@spectre:web-research` only decides external API/framework. Refine knowledge search after affected files are known; load a work body only for a stated question, never reload an unchanged revision, and pass workers compact findings with provenance.
 4. Read `references/minimum-solution.md` after initial classification. From accepted evidence, select incumbent-first and persist `## Minimum Solution Selection` in `task_context.md`, bound to Scope/authority/accepted evidence. XS/S decide locally; primary applies the canonical simpler-wins result.
 5. Invoke `Skill(spectre-plan-route)` in `observed` mode with completed selection before drafting. Plan automatically uses the observed route with no paid rerun or user tier gate unless Scope, explicit design, or authority conflicts.
 6. Draft once by loading `${CLAUDE_PLUGIN_ROOT}/skills/spectre-plan/references/create-plan.md` with the observed route-mapped depth: XS → `light --no-review --execution structured`; S inherits it; M/L → `standard --no-review --execution structured`; XL → `comprehensive --no-review --execution structured`. Never review/task here. XS uses `light`, not `xs`, so no `Execution Mode: direct`.

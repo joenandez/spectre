@@ -42,7 +42,6 @@ export const RETIRED_SKILLS = [
   'spectre-goal',
   'spectre-clean',
   'spectre-create_test_guide',
-  'spectre-scope',
   'spectre-create_plan',
   'spectre-plan_review',
   'spectre-create_tasks',
@@ -56,6 +55,7 @@ export const RETIRED_SKILLS = [
 ];
 
 export const WORKFLOW_PROBE_SKILLS = [
+  'spectre-scope',
   'spectre-plan',
   'spectre-execute',
   'spectre-ship'

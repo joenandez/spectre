@@ -12,6 +12,7 @@ function visualProof(overrides = {}) {
     matrix: [{
       id: "journey",
       surface: "visual",
+      visual_claim: "sequence",
       status: "PASS",
       evidence_ids: ["shot", "recording"],
     }],
@@ -50,9 +51,9 @@ test("proof HTML rejects path-only evidence for a visual PASS row", () => {
   );
 });
 
-test("proof HTML requires both screenshot and video evidence for visual PASS rows", () => {
+test("proof HTML requires video for sequence claims", () => {
   const proof = visualProof({
-    matrix: [{ id: "journey", surface: "tui", status: "PASS", evidence_ids: ["shot"] }],
+    matrix: [{ id: "journey", surface: "tui", visual_claim: "sequence", status: "PASS", evidence_ids: ["shot"] }],
     evidence: [{ id: "shot", kind: "screenshot", inspected: true, uri: "raw/shot.png", sha256: SHA256 }],
   });
   const html = `<img data-evidence-id="shot" src="${IMAGE}" alt="TUI result">`;
@@ -60,6 +61,20 @@ test("proof HTML requires both screenshot and video evidence for visual PASS row
 
   assert.equal(result.ok, false);
   assert.ok(result.failures.some(({ code, kind }) => code === "PROOF_MEDIA_NOT_PRESENTED" && kind === "video"));
+});
+
+test("proof HTML accepts a state claim with an inspected screenshot and rejects an undeclared claim", () => {
+  const proof = visualProof({
+    matrix: [{ id: "state", surface: "visual", visual_claim: "state", status: "PASS", evidence_ids: ["shot"] }],
+    evidence: [{ id: "shot", kind: "screenshot", inspected: true, uri: "raw/shot.png", sha256: SHA256 }],
+  });
+  const html = `<img data-evidence-id="shot" src="${IMAGE}" alt="Observed state">`;
+
+  assert.equal(validateProofArtifacts(proof, html).ok, true);
+  const undeclared = { ...proof, matrix: [{ ...proof.matrix[0], visual_claim: undefined }] };
+  assert.ok(validateProofArtifacts(undeclared, html).failures.some(
+    ({ code }) => code === "PROOF_VISUAL_CLAIM_MISSING",
+  ));
 });
 
 test("proof HTML permits non-visual PASS rows without media", () => {

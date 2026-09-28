@@ -1,3 +1,8 @@
+---
+name: "spectre-scope"
+description: "Scope a feature or improvement into explicit IN / OUT / ANTI-SCOPE boundaries before planning or code — grounds a hypothesis in repo reality, resolves blocking questions, and writes scope.md. Trigger for new or fuzzy work or re-scoping. Do NOT trigger for technical design/research (spectre-plan) or standalone bug diagnosis (spectre-fix)."
+user-invocable: true
+---
 
 # scope
 
@@ -5,8 +10,9 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 
 ## Inputs
 
-- `$ARGUMENTS` — feature/problem request plus any established thread decisions. If no usable context exists, ask for the problem and wait. If context already settles boundaries, draft Scope directly.
-- Existing root/artifact: context for new work; reuse only for the same scope run or explicit resume/re-scope. On re-scope, read `concepts/scope.md` fully, surface settled decisions and the delta, and confirm before rewriting the immutable downstream anchor.
+- `$ARGUMENTS` — the feature/problem brain-dump. If empty → greet, ask for context, and **WAIT** for the user.
+- Existing root/artifact: context for new work; reuse only for the same scope run, `FROM_KICKOFF=true`, or explicit resume/re-scope. On re-scope, read `concepts/scope.md` fully, surface settled decisions and the delta, and confirm before rewriting the immutable downstream anchor.
+- `FROM_KICKOFF=true` + `KICKOFF_DOC` → read the doc, extract (Core Problem, User Value, Decisions Made, Remaining Ambiguities, Key Code Refs), then **skip grounding + exploration** and go straight to clarifications. Already-grounded.
 
 ## Working Set (late-bound — read at run-time, never inline)
 
@@ -20,11 +26,11 @@ Turn an unstructured request into clear scope boundaries (IN / OUT / ANTI-SCOPE)
 
 ## Method / guardrails
 
-- **Reply before tools.** Acknowledge first; never go silent to "think."
+- **Reply before tools.** Acknowledge first; never go silent to "think." No tool calls in the opening reply except reading `KICKOFF_DOC` when `FROM_KICKOFF=true`.
 - **WHAT, not HOW.** Ask only about boundaries, user value, and anti-scope. Defer architecture/trade-offs/integration to `$spectre:spectre-plan`. Exception: scope that is inherently technical (e.g. "migrate DB X→Y").
 - **Ground once.** Start with exactly **one** fast lookup to anchor the hypothesis in repo reality — a single `@spectre_finder` query, or one `grep`/`glob`; skip it if slow. Needing broader grounding exceeds this fast scope pass.
 - **Use knowledge before affected decisions.** Discovery is per question, not skill: never repeat an equivalent query merely because Scope began. A work body answers only a stated question, including a potentially critical imported constraint without a maintained equivalent. Do not reload an unchanged revision already in context; workers receive compact applicable findings and provenance, never record bodies.
-- Lead with a grounded hypothesis (problem, who it affects, proposed feature name/root, IN / OUT / ANTI-SCOPE). Ask only questions whose answer materially changes the outcome or authority; use `AskUserQuestion` for at most four unresolved decisions at a time. When request and thread context settle the boundaries, record them and continue without routine questions or a confirmation pause. No clarification files.
+- Lead with a grounded hypothesis (problem, who it affects, proposed feature name/root, IN / OUT / ANTI-SCOPE) and 5–8 questions tagged **(blocking)** / *(optional)*. Iterate boundaries (IN / OUT / ANTI-SCOPE / Unsure) until confirmed, then clarify remaining ambiguity with `AskUserQuestion` (≤4 at a time). No clarification files.
 
 ## Outputs + DONE
 
@@ -43,7 +49,7 @@ Write `{FEATURE_ROOT}/concepts/scope.md`, beginning immediately below the title 
 
 **ANTI-SCOPE ≠ OUT.** OUT = not building it (yet/this release). ANTI-SCOPE = a problem we are *intentionally not solving* — the philosophical edge of what the feature is for. Both are required.
 
-**DONE when:** scope.md exists with all 10 sections; IN / OUT / ANTI-SCOPE are explicit; every load-bearing assumption carries its "if false" consequence; boundaries are established by the request/thread or the user resolves material uncertainty.
+**DONE when:** scope.md exists with all 10 sections; IN / OUT / ANTI-SCOPE are explicit; every load-bearing assumption carries its "if false" consequence; the user has confirmed the boundaries.
 
 ## Handoff
 
@@ -54,10 +60,10 @@ Write `{FEATURE_ROOT}/concepts/scope.md`, beginning immediately below the title 
 | ▶️ **Proposed next step** | Render resolved action. |
 | 🔀 **Alternative** | Pause: `$spectre:spectre-handoff` with the resolved feature when stopping. |
 
-Present recorded boundaries/assumptions and continue Plan. Unsettled material boundary or authority → resolve it before drafting; UI journeys/states/copy/accessibility unresolved → UX; interaction/layout/visual validation materially matters → Prototype. One route/conditional; edits re-route.
+Present boundaries/assumptions/path; unsettled → Scope; UI load-bearing and journeys, segments, states, copy, or accessibility unresolved → UX; interaction/layout/visual validation materially matters → Prototype; otherwise confirmed repository-changing work → `$spectre:spectre-plan`. One route/conditional; edits re-route.
 
 ## Escalate-If
 
 - Grounding needs more than one lookup, or the request spans several unknowns → this exceeds a fast scope pass; gather context more fully before proceeding.
-- The user asks for implementation/architecture answers → continue in Plan's create-plan reference; keep this phase on WHAT.
+- The user pushes for implementation/architecture answers → note them and defer to `$spectre:spectre-plan`; keep this pass on WHAT.
 - Boundaries won't converge after iterating → surface the specific unresolved tension and ask the user to decide before writing the doc.

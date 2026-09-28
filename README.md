@@ -23,13 +23,13 @@ claude plugin marketplace add joenandez/spectre
 claude plugin install spectre@spectre
 ```
 
-Then start building:
+Then start scoping:
 
 ```plaintext
-/spectre:spectre-plan
+/spectre:spectre-scope
 ```
 
-That's it. You just start with 1 command to build features.
+Scope can finish with `scope.md`; run Plan later when you're ready to design implementation.
 
 ### Within Codex
 
@@ -43,16 +43,16 @@ Restart or open a new Codex session after install so managed custom agents can b
 Then run a Spectre command such as:
 
 ```plaintext
-$spectre:spectre-plan
+$spectre:spectre-scope
 ```
 
-![SPECTRE Plan workflow](./assets/images/spectre-define-it-v1.png)
+![SPECTRE Scope workflow](./assets/images/spectre-scope.png)
 
 ## 🔁 How It Works
 
-Repository changes start with Plan, which records settled Scope and creates a right-sized plan. Execute owns implementation, independent Validate, and observed Proof; Ship owns closeout.
+Scope records feature boundaries and can stop there. Plan turns confirmed Scope into a right-sized plan. Execute owns implementation, independent Validate, and observed Proof; Ship owns closeout.
 
-The three core workflows are `/spectre:spectre-plan`, `/spectre:spectre-execute`, and `/spectre:spectre-ship`.
+The core workflows are `/spectre:spectre-scope`, `/spectre:spectre-plan`, `/spectre:spectre-execute`, and `/spectre:spectre-ship`.
 
 Read the "When not to use SPECTRE" below to learn when it isn't the right tool.
 
@@ -60,7 +60,8 @@ Read the "When not to use SPECTRE" below to learn when it isn't the right tool.
 
 - start with one of the focused workflow or utility skills
 
-  - `/spectre:spectre-plan` is the primary starting point. It records settled boundaries and asks only when a material scope or authority decision remains open.
+  - `/spectre:spectre-scope` defines feature boundaries and writes `scope.md` without starting Plan.
+  - `/spectre:spectre-plan` turns confirmed Scope into an implementation plan.
   - `/spectre:spectre-research` is for high ambiguity new features and includes web research to explore what already exists and best practices. use if you have an idea but the exact scope is not clear yet.
   - `/spectre:spectre-research` is for highly technical explorations, focused on codebase research "how might we build …” style Qs
   - `/spectre:spectre-ux` I usually use after scope, but if the scope is clear from discussion its a good starting point to define user flows, components, and layout for a new feature.
@@ -76,23 +77,24 @@ Read the "When not to use SPECTRE" below to learn when it isn't the right tool.
 
 #### Core workflows
 
-**Plan → Execute → Ship**
+**Scope → Plan → Execute → Ship**
 
 Spectre uses "meta skills". Meta Skills are skills that call other skills in one coordinated workflow. Your primary agent manages/orchestrates these workflows while focused subagents handle individual tasks.
 
 | Workflow | What it delivers | When to use it |
 | --- | --- | --- |
+| `/spectre:spectre-scope` | Feature boundaries in `scope.md` | When defining what a feature should include |
 | `/spectre:spectre-plan` | An aligned draft plan and Execute-preflight handoff | Before changing code |
 | `/spectre:spectre-execute` | Orchestrated implementation, verification, review, and proof | When the plan is ready |
 | `/spectre:spectre-ship` | Cleanup, testing, rebase, and a pull request | When the feature is ready to check in |
 
-**/spectre:spectre-plan** — Record settled Scope and right-size the work
+**/spectre:spectre-plan** — Plan confirmed Scope at the right size
 
 `/spectre:spectre-plan` classifies the work as XS, S, M, L, or XL based on its semantic shape, uncertainty, available evidence, protected boundaries, and task-graph risk.
 
 It will:
 
-- Record durable Scope and plan artifacts—even for XS changes. Settled context proceeds without routine questions or a repeated confirmation pause.
+- Consume confirmed Scope and create a plan artifact—even for XS changes.
 - Add proportional research and create one right-sized aligned draft; Plan owns no review or task pipeline.
 - Present a concise alignment brief and a marked Execute handoff for every size.
 - Wait for your explicit approval before any code changes.

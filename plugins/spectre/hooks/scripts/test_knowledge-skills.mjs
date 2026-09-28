@@ -30,7 +30,6 @@ const TAGGING_POLICY_PATH = path.join(
 
 function skill(name) {
   const migrated = {
-    'spectre-scope': ['spectre-plan', 'references/scope.md'],
     'spectre-create_plan': ['spectre-plan', 'references/create-plan.md'],
   }[name];
   if (migrated) {
