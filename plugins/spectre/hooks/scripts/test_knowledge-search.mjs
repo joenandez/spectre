@@ -41,6 +41,16 @@ function importedWork(id, overrides = {}) {
   };
 }
 
+function capturedWork(id, overrides = {}) {
+  const { work = {}, ...record } = overrides;
+  return {
+    schemaVersion: 1, id, kind: 'work', title: id, summary: 'Captured work history.', tags: [],
+    applicability: { scope: 'work', workId: id }, provenance: { origin: 'captured', capturedAt: '2026-07-19T00:00:00.000Z' }, relatedRecordIds: [],
+    work: { requestedOutcome: 'Capture the assigned result.', scope: 'Bounded implementation work.', actualChanges: 'Implemented a focused change.', reasons: 'No separate rationale.', discoveries: 'No separate discoveries.', verification: 'Focused tests passed.', remainingWork: 'None.', relatedContext: 'No separate source context.', execution: { state: 'finalized' }, verificationState: { state: 'passed' }, pullRequest: { state: 'none' }, associations: { sourceRunIds: [], pullRequestIds: [], candidates: [] }, ...work },
+    ...record,
+  };
+}
+
 function write(storePath, record) {
   const target = path.join(storePath, 'knowledge', record.id);
   fs.mkdirSync(target, { recursive: true });
@@ -60,6 +70,113 @@ test('unique imported constraints outrank weak maintained matches and untagged c
   const found = await searchKnowledge(options(value, { query: 'gateway idempotency retry', paths: ['payments/gateway.js'] }));
   assert.deepEqual(found.results.map(({ id }) => id), ['legacy-constraint']);
   assert.equal(found.results[0].activation, 'imported-history');
+});
+
+test('searches maintained bodies and captured work substance without metadata terms', async (t) => {
+  const value = await fixture(t);
+  write(value.storePath, knowledge('maintained-body-only', {
+    title: 'Runtime guardrail',
+    summary: 'General maintained guidance.',
+    useWhen: 'Use for ordinary runtime changes.',
+    content: 'Route ClockSkewSentinel through reconcileDeadlineWindow before retrying.',
+    evidence: 'Observed in plugins/spectre/hooks/scripts/runtime/deadline.mjs line 77.',
+  }));
+  write(value.storePath, capturedWork('captured-work-discovery', {
+    title: 'Worker implementation account',
+    summary: 'Historical work account.',
+    work: {
+      discoveries: 'The token bucket saturated because refreshBackpressureGate ignored drained permits.',
+      relatedContext: 'Entry point: plugins/spectre/hooks/scripts/knowledge/capture.mjs refreshBackpressureGate line 214 routes this mechanism.',
+    },
+  }));
+
+  const maintained = await searchKnowledge(options(value, { query: 'ClockSkewSentinel reconcileDeadlineWindow' }));
+  const work = await searchKnowledge(options(value, { query: 'refreshBackpressureGate drained permits' }));
+
+  assert.equal(maintained.results[0].id, 'maintained-body-only');
+  assert.match(maintained.results[0].matchedSignals.join(' '), /body:clockskewsentinel|body:reconciledeadlinewindow/);
+  assert.equal(work.results[0].id, 'captured-work-discovery');
+  assert.equal(work.results[0].activation, 'work-history');
+  assert.match(work.results[0].matchedSignals.join(' '), /body:refreshbackpressuregate|body:permits/);
+});
+
+test('literal locator queries prefer complete source-body matches over generic metadata overlap', async (t) => {
+  const value = await fixture(t);
+  write(value.storePath, knowledge('generic-capture-guidance', {
+    useWhen: 'Use for knowledge capture scripts.',
+  }));
+  write(value.storePath, capturedWork('owned-locator-work', {
+    summary: 'A locator-bearing work record.',
+    work: {
+      relatedContext: 'Selected entry point: plugins/spectre/hooks/scripts/knowledge/records.mjs indexEntry line 841 owns generated source bodies.',
+    },
+  }));
+
+  const found = await searchKnowledge(options(value, {
+    query: 'plugins/spectre/hooks/scripts/knowledge/records.mjs indexEntry',
+  }));
+
+  assert.equal(found.results[0].id, 'owned-locator-work');
+  assert.match(found.results[0].matchedSignals.join(' '), /body:phrase|body:indexentry|body:records|body:mjs/);
+});
+
+test('exact IDs only win inside admitted filters and active corrections beat superseded conflicts', async (t) => {
+  const value = await fixture(t);
+  await ensureTags({ ...options(value), tags: [
+    { id: 'runtime-core', description: 'Runtime behavior.' },
+    { id: 'search-core', description: 'Search behavior.' },
+  ] });
+  write(value.storePath, knowledge('knowledge-runtime-correction', {
+    tags: ['runtime-core'],
+    summary: 'Current correction for runtime routing.',
+    useWhen: 'Use for runtime correction decisions.',
+    content: 'Current conclusion: use bounded source-body indexing for runtime recall.',
+  }));
+  write(value.storePath, knowledge('knowledge-runtime-correction-notes', {
+    tags: ['search-core'],
+    summary: 'Search-side discussion of knowledge-runtime-correction.',
+    useWhen: 'Use for search discussion.',
+    content: 'Mentions knowledge-runtime-correction as background only.',
+  }));
+  write(value.storePath, knowledge('superseded-runtime-rule', {
+    status: 'superseded',
+    summary: 'Old runtime rule.',
+    useWhen: 'Use for runtime correction decisions.',
+    content: 'Superseded conclusion: disable source-body indexing for runtime recall.',
+  }));
+  write(value.storePath, knowledge('z-canonical-runtime-id', {
+    tags: ['runtime-core'],
+    summary: 'The exact canonical ID target.',
+    useWhen: 'Use for exact ID routing.',
+  }));
+  write(value.storePath, knowledge('a-canonical-runtime-id-notes', {
+    tags: ['runtime-core'],
+    title: 'Notes mentioning z-canonical-runtime-id',
+    summary: 'Mentions the exact ID words but is not that ID.',
+    useWhen: 'Use for exact ID discussion.',
+  }));
+
+  const exact = await searchKnowledge(options(value, {
+    query: 'knowledge-runtime-correction',
+    tags: ['search-core'],
+  }));
+  const admittedExact = await searchKnowledge(options(value, {
+    query: 'z-canonical-runtime-id',
+    tags: ['runtime-core'],
+  }));
+  const correction = await searchKnowledge(options(value, {
+    query: 'source-body indexing runtime recall',
+  }));
+  const superseded = await searchKnowledge(options(value, {
+    query: 'disable source-body indexing',
+  }));
+
+  assert.deepEqual(exact.results.map(({ id }) => id), ['knowledge-runtime-correction-notes']);
+  assert.equal(admittedExact.results[0].id, 'z-canonical-runtime-id');
+  assert.equal(correction.results[0].id, 'knowledge-runtime-correction');
+  assert.equal(correction.results[0].activation, 'current-guidance');
+  assert.equal(superseded.results[0].id, 'superseded-runtime-rule');
+  assert.equal(superseded.results[0].activation, 'inactive-history');
 });
 
 test('ranks applicability metadata and tag descriptions above generic imported-body overlap', async (t) => {

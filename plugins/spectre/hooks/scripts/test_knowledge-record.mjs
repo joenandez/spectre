@@ -852,7 +852,9 @@ describe('derived current knowledge index', () => {
       id: 'superseded-knowledge',
       status: 'superseded',
     }));
-    writeRecordPackage(storePath, workRecord());
+    const indexedWork = workRecord();
+    indexedWork.work.relatedContext = 'Entry point: plugins/spectre/hooks/scripts/knowledge/records.mjs indexEntry line 841.';
+    writeRecordPackage(storePath, indexedWork);
 
     const { index, rebuilt, errors } = refreshKnowledgeIndex(storePath, {
       now: () => Date.parse('2026-07-19T00:00:00.000Z'),
@@ -869,6 +871,8 @@ describe('derived current knowledge index', () => {
     assert.equal(knowledgeEntry.category, 'pattern');
     assert.equal(knowledgeEntry.status, 'active');
     assert.equal(knowledgeEntry.useWhen, 'Changing retry behavior around authenticated requests.');
+    assert.match(knowledgeEntry.sourceBody, /Refresh the token, then retry the request exactly once\./);
+    assert.match(knowledgeEntry.sourceBody, /Reproduced the 401 twice/);
     assert.deepEqual(knowledgeEntry.tags, ['auth', 'http']);
     assert.deepEqual(knowledgeEntry.applicability, { scope: 'project' });
     assert.equal(knowledgeEntry.recordPath, path.join('knowledge', 'active-knowledge', 'record.json'));
@@ -878,6 +882,8 @@ describe('derived current knowledge index', () => {
     assert.equal(workEntry.imported, true);
     assert.equal(workEntry.useWhen, 'Investigating the historical auth retry work.');
     assert.deepEqual(workEntry.cues, ['auth retry', 'token refresh']);
+    assert.match(workEntry.sourceBody, /records\.mjs indexEntry line 841/);
+    assert.match(workEntry.sourceBody, /Original legacy guidance is retained/);
     assert.equal(workEntry.status, 'active');
     assert.equal(workEntry.version, '1');
     for (const retired of ['description', 'triggers', 'version', 'sourceFingerprint']) {
