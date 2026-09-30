@@ -7,6 +7,17 @@
   "useWhen": "<when this guidance applies>",
   "content": "<maintained guidance>",
   "evidence": "<accepted evidence or authority>",
+  "entryPoints": {
+    "locations": [
+      {
+        "path": "<selected/source/path>",
+        "symbol": "<function-or-symbol-name>",
+        "line": 1,
+        "role": "<why this is the relevant entry point>"
+      }
+    ],
+    "explanation": "<optional truthful limitation for unavailable or non-code entry points>"
+  },
   "tags": [
     {
       "id": "<canonical-or-new-tag>",

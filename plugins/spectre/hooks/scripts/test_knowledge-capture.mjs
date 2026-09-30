@@ -94,6 +94,15 @@ function storedRecord(value, workId) {
   return JSON.parse(fs.readFileSync(path.join(value.storePath, 'knowledge', workId, 'record.json'), 'utf8'));
 }
 
+function storedRecordText(value, recordId) {
+  return fs.readFileSync(path.join(value.storePath, 'knowledge', recordId, 'record.json'), 'utf8');
+}
+
+function withoutEntryPoints(input) {
+  const { entryPoints, ...rest } = input;
+  return rest;
+}
+
 function knowledgeInput(overrides = {}) {
   return {
     inputVersion: 1,
@@ -104,6 +113,14 @@ function knowledgeInput(overrides = {}) {
     useWhen: 'Capturing authentication guidance.',
     content: 'Reuse the canonical authentication path.',
     evidence: 'Capture acceptance test.',
+    entryPoints: {
+      locations: [{
+        path: 'plugins/spectre/hooks/scripts/knowledge/capture.mjs',
+        symbol: 'captureCanonicalKnowledge',
+        line: 710,
+        role: 'Semantic captures are validated before tags or work identity are mutated.',
+      }],
+    },
     tags: [{ id: 'auth' }],
     ...overrides,
   };
@@ -122,6 +139,14 @@ function workInput(overrides = {}) {
     verification: 'Focused tests cover the public contract.',
     remainingWork: 'No remaining work is known.',
     relatedContext: 'Knowledge capture authoring feature.',
+    entryPoints: {
+      locations: [{
+        path: 'plugins/spectre/hooks/scripts/knowledge/capture.mjs',
+        symbol: 'constructWork',
+        line: 616,
+        role: 'Work capture projects semantic input into the stored v1 work record.',
+      }],
+    },
     tags: [{ id: 'credentials' }],
     ...overrides,
   };
@@ -291,7 +316,7 @@ describe('semantic knowledge capture', () => {
       assert.equal(output(revised).recoveryInput, undefined);
       assert.deepEqual(fs.readdirSync(value.stdinTemp), []);
 
-      const work = run(kind, ['capture', '--kind', 'work', '--input', '-', '--source-run-id', `run-stdin-${kind}`], value, `${JSON.stringify(filledTemplate('work'))}\n`);
+      const work = run(kind, ['capture', '--kind', 'work', '--input', '-', '--source-run-id', `run-stdin-${kind}`, '--branch', 'feature/stdin'], value, `${JSON.stringify(filledTemplate('work'))}\n`);
       assert.equal(work.status, 0, work.stderr);
       assert.match(output(work).workId, /^work-/);
       assert.equal(fs.existsSync(output(work).recordPath), true);
@@ -352,7 +377,115 @@ describe('semantic knowledge capture', () => {
       const resolved = run(kind, ['work', 'resolve', '--source-run-id', `run-unresolved-${kind}`], value);
       assert.equal(resolved.status, 0, resolved.stderr);
       assert.match(output(resolved).nextAction.command, /--input -/);
+      assert.match(output(resolved).nextAction.command, /--branch <exact-branch>/);
     }
+  });
+
+  it('requires entry points for new captures and accepts a specific unavailable explanation', async (t) => {
+    const value = await fixture(t);
+    const beforeTags = fs.readFileSync(path.join(value.storePath, 'tags.json'), 'utf8');
+
+    const missing = inputPath(value, 'missing-entry-points.json', withoutEntryPoints(knowledgeInput({
+      id: 'missing-entry-points',
+      tags: [{ id: 'new-entry-tag', description: 'Entry-point validation fixture.' }],
+    })));
+    const rejected = run('bundled', ['capture', '--kind', 'knowledge', '--input', missing], value);
+    assert.equal(rejected.status, 1);
+    assert.equal(output(rejected).code, 'CAPTURE_INPUT_INVALID');
+    assert.match(output(rejected).message, /entryPoints/);
+    assert.equal(fs.readFileSync(path.join(value.storePath, 'tags.json'), 'utf8'), beforeTags);
+    assert.equal(fs.existsSync(path.join(value.storePath, 'knowledge', 'missing-entry-points')), false);
+
+    const unavailable = inputPath(value, 'unavailable-entry-points.json', knowledgeInput({
+      id: 'unavailable-entry-points',
+      entryPoints: {
+        locations: [],
+        explanation: 'This accepted user correction applies to project policy text and has no code-owned enforcement point.',
+      },
+    }));
+    const accepted = run('bundled', ['capture', '--kind', 'knowledge', '--input', unavailable], value);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    const stored = storedRecord(value, 'unavailable-entry-points');
+    assert.equal(Object.hasOwn(stored, 'entryPoints'), false);
+    assert.match(stored.evidence, /spectre-entry-points:v1/);
+    assert.match(stored.evidence, /no code-owned enforcement point/);
+  });
+
+  it('projects, replaces, no-ops, and rejects malformed owned entry-point blocks', async (t) => {
+    const value = await fixture(t);
+    const source = inputPath(value, 'entry-points.json', knowledgeInput({
+      evidence: 'Human authority before the owned block.',
+    }));
+    const created = run('bundled', ['capture', '--kind', 'knowledge', '--input', source], value);
+    assert.equal(created.status, 0, created.stderr);
+    const initialText = storedRecordText(value, 'capture-auth-guidance');
+    const initial = storedRecord(value, 'capture-auth-guidance');
+    assert.equal(Object.hasOwn(initial, 'entryPoints'), false);
+    assert.match(initial.evidence, /^Human authority before the owned block\.\n\n<!-- spectre-entry-points:v1 -->/);
+    assert.equal((initial.evidence.match(/spectre-entry-points:v1/g) || []).length, 1);
+
+    const repeated = run('bundled', ['capture', '--kind', 'knowledge', '--input', source], value);
+    assert.equal(repeated.status, 0, repeated.stderr);
+    assert.equal(output(repeated).status, 'noop');
+    assert.equal(storedRecordText(value, 'capture-auth-guidance'), initialText);
+
+    const changed = inputPath(value, 'entry-points-changed.json', knowledgeInput({
+      evidence: initial.evidence,
+      entryPoints: {
+        locations: [{
+          path: 'plugins/spectre/hooks/scripts/knowledge/registration.mjs',
+          symbol: 'registerCanonicalKnowledge',
+          line: 246,
+          role: 'Registration preserves revision-safe package replacement after capture validation.',
+        }],
+      },
+      tags: undefined,
+    }));
+    const updated = run('bundled', [
+      'capture', '--kind', 'knowledge', '--input', changed, '--expected-revision', output(created).revisionToken,
+    ], value);
+    assert.equal(updated.status, 0, updated.stderr);
+    const replaced = storedRecord(value, 'capture-auth-guidance').evidence;
+    assert.match(replaced, /^Human authority before the owned block\.\n\n<!-- spectre-entry-points:v1 -->/);
+    assert.match(replaced, /registerCanonicalKnowledge/);
+    assert.doesNotMatch(replaced, /captureCanonicalKnowledge/);
+    assert.equal((replaced.match(/spectre-entry-points:v1/g) || []).length, 1);
+
+    const duplicate = inputPath(value, 'entry-points-duplicate.json', knowledgeInput({
+      id: 'duplicate-entry-points',
+      evidence: [
+        'Duplicate marker fixture.',
+        '<!-- spectre-entry-points:v1 -->',
+        '{}',
+        '<!-- /spectre-entry-points -->',
+        '<!-- spectre-entry-points:v1 -->',
+        '{}',
+        '<!-- /spectre-entry-points -->',
+      ].join('\n'),
+      tags: [{ id: 'duplicate-entry-points', description: 'Duplicate marker fixture.' }],
+    }));
+    const rejectedDuplicate = run('bundled', ['capture', '--kind', 'knowledge', '--input', duplicate], value);
+    assert.equal(rejectedDuplicate.status, 1);
+    assert.equal(output(rejectedDuplicate).code, 'CAPTURE_INPUT_INVALID');
+    assert.match(output(rejectedDuplicate).message, /entry-point block/);
+
+    const legacy = await registerResourceRecord(value, knowledgeInput({
+      id: 'legacy-entry-retry',
+      evidence: 'Legacy byte-identical evidence without an owned block.',
+    }));
+    const legacyPath = path.join(value.storePath, 'knowledge', 'legacy-entry-retry', 'record.json');
+    const before = fs.readFileSync(legacyPath, 'utf8');
+    const retry = run('bundled', ['capture', '--kind', 'knowledge', '--input', inputPath(value, 'legacy-retry.json', withoutEntryPoints({
+      ...knowledgeInput({
+        id: 'legacy-entry-retry',
+        evidence: 'Legacy byte-identical evidence without an owned block.',
+        tags: undefined,
+      }),
+    }))], value);
+    assert.equal(retry.status, 0, retry.stderr);
+    assert.equal(output(retry).status, 'noop');
+    assert.equal(fs.readFileSync(legacyPath, 'utf8'), before);
+    assert.equal(output(retry).revisionToken, legacy.revisionToken);
   });
 
   it('captures canonicalized tag intent and repeats identical knowledge input as a no-op through both public CLIs', async (t) => {
@@ -386,13 +519,13 @@ describe('semantic knowledge capture', () => {
     for (const kind of ['bundled', 'npm']) {
       const value = await fixture(t);
       const invalid = inputPath(value, `${kind}-invalid.json`, filledTemplate('work', { tags: [] }));
-      const rejected = run(kind, ['capture', '--kind', 'work', '--input', invalid, '--source-run-id', 'run-capture'], value);
+      const rejected = run(kind, ['capture', '--kind', 'work', '--input', invalid, '--source-run-id', 'run-capture', '--branch', 'feature/capture'], value);
       assert.equal(rejected.status, 1);
       assert.equal(output(rejected).code, 'CAPTURE_INPUT_INVALID');
       assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
 
       const source = inputPath(value, `${kind}-work.json`, filledTemplate('work'));
-      const created = run(kind, ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-capture'], value);
+      const created = run(kind, ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-capture', '--branch', 'feature/capture'], value);
       assert.equal(created.status, 0, created.stderr);
       const captured = output(created);
       assert.match(captured.workId, /^work-/);
@@ -404,11 +537,32 @@ describe('semantic knowledge capture', () => {
     }
   });
 
+  it('requires exact branch evidence before allocating new semantic work identities', async (t) => {
+    const value = await fixture(t);
+    const tagsPath = path.join(value.storePath, 'tags.json');
+    const beforeTags = fs.readFileSync(tagsPath, 'utf8');
+    for (const [name, args] of [
+      ['missing', []],
+      ['unknown', ['--branch', 'unknown']],
+      ['unavailable', ['--branch', 'unavailable']],
+    ]) {
+      const rejected = run('bundled', [
+        'capture', '--kind', 'work', '--input', inputPath(value, `branch-${name}.json`, workInput()),
+        '--source-run-id', `run-branch-${name}`, ...args,
+      ], value);
+      assert.equal(rejected.status, 1);
+      assert.equal(output(rejected).code, 'CAPTURE_INPUT_INVALID');
+      assert.match(output(rejected).message, /branch/);
+      assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
+      assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
+    }
+  });
+
   it('rejects oversized work accounts before allocation and preserves legacy accounts until a compact revision', async (t) => {
     const value = await fixture(t);
     const oversized = workInput({ actualChanges: 'x'.repeat(12_000) });
     const newInput = inputPath(value, 'oversized-new-work.json', oversized);
-    const rejectedNew = run('bundled', ['capture', '--kind', 'work', '--input', newInput, '--source-run-id', 'run-oversized-new'], value);
+    const rejectedNew = run('bundled', ['capture', '--kind', 'work', '--input', newInput, '--source-run-id', 'run-oversized-new', '--branch', 'feature/oversized'], value);
     assert.equal(rejectedNew.status, 1);
     assert.equal(output(rejectedNew).code, 'WORK_RECORD_TOO_LARGE');
     assert.equal(output(rejectedNew).recoveryInput, newInput);
@@ -461,7 +615,7 @@ describe('semantic knowledge capture', () => {
     const tagsBefore = fs.readFileSync(tagsPath, 'utf8');
     const source = inputPath(value, 'canonical-ceiling.json', boundaryInput);
     const rejected = run('bundled', [
-      'capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-canonical-ceiling',
+      'capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-canonical-ceiling', '--branch', 'feature/canonical-ceiling',
     ], value);
     assert.equal(rejected.status, 1);
     assert.equal(output(rejected).code, 'WORK_RECORD_TOO_LARGE');
@@ -543,7 +697,7 @@ describe('semantic knowledge capture', () => {
       tags: [{ id: 'new-capture-tag', description: 'New capture tag.' }],
       execution: { state: 'definitely-invalid' },
     }));
-    const result = run('bundled', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-invalid-lifecycle'], value);
+    const result = run('bundled', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-invalid-lifecycle', '--branch', 'feature/invalid-lifecycle'], value);
     assert.equal(result.status, 1);
     assert.equal(output(result).code, 'CAPTURE_INPUT_INVALID');
     assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
@@ -558,7 +712,7 @@ describe('semantic knowledge capture', () => {
       tags: [{ id: 'another-new-capture-tag', description: 'Another new capture tag.' }],
       verificationState: { state: 'unknown', unexpected: 'field' },
     }));
-    const result = run('npm', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-invalid-shape'], value);
+    const result = run('npm', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-invalid-shape', '--branch', 'feature/invalid-shape'], value);
     assert.equal(result.status, 1);
     assert.equal(output(result).code, 'CAPTURE_INPUT_INVALID');
     assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
@@ -567,7 +721,7 @@ describe('semantic knowledge capture', () => {
 
   it('preserves existing package resources and no-ops on identical semantic capture', async (t) => {
     const value = await fixture(t);
-    const input = knowledgeInput();
+    const input = withoutEntryPoints(knowledgeInput());
     const registered = await registerResourceRecord(value, input);
     const source = inputPath(value, 'resource-record.json', input);
     const result = run('bundled', ['capture', '--kind', 'knowledge', '--input', source], value);
@@ -598,7 +752,7 @@ describe('semantic knowledge capture', () => {
   it('merges later work source runs into associations, applicability, and provenance', async (t) => {
     const value = await fixture(t);
     const source = inputPath(value, 'work-runs.json', workInput());
-    const created = run('bundled', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-a'], value);
+    const created = run('bundled', ['capture', '--kind', 'work', '--input', source, '--source-run-id', 'run-a', '--branch', 'feature/work-runs'], value);
     assert.equal(created.status, 0, created.stderr);
     const initial = output(created);
     const updated = run('bundled', ['capture', '--kind', 'work', '--input', source, '--work-id', initial.workId, '--source-run-id', 'run-b', '--expected-revision', initial.revisionToken], value);
@@ -618,7 +772,7 @@ describe('semantic knowledge capture', () => {
     assert.deepEqual(tags.tags.authentication.aliases, ['auth', 'login']);
 
     const work = inputPath(value, 'work-record-id.json', workInput());
-    const rejected = run('npm', ['capture', '--kind', 'work', '--input', work, '--record-id', 'ignored', '--source-run-id', 'run-work-id'], value);
+    const rejected = run('npm', ['capture', '--kind', 'work', '--input', work, '--record-id', 'ignored', '--source-run-id', 'run-work-id', '--branch', 'feature/work-id'], value);
     assert.equal(rejected.status, 1);
     assert.equal(output(rejected).code, 'CAPTURE_INPUT_INVALID');
   });
@@ -664,7 +818,7 @@ describe('semantic knowledge capture', () => {
     await assert.rejects(
       captureCanonicalKnowledge({
         projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work', inputPath: source,
-        sourceRunId: 'run-recovery', afterIndexRefresh: () => { throw new Error('forced registration failure'); },
+        sourceRunId: 'run-recovery', branch: 'feature/recovery', afterIndexRefresh: () => { throw new Error('forced registration failure'); },
       }),
       (error) => {
         assert.equal(error.recoveryInput, source);
@@ -784,7 +938,7 @@ describe('semantic knowledge capture', () => {
         captureCanonicalKnowledge({
           projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
           inputPath: inputPath(value, `lifecycle-probe-${index}.json`, workInput({ remainingWork })),
-          sourceRunId: `run-lifecycle-probe-${index}`,
+          sourceRunId: `run-lifecycle-probe-${index}`, branch: 'feature/lifecycle-probe',
         }),
         (error) => {
           assert.equal(error.code, 'CAPTURE_INPUT_INVALID', remainingWork);
@@ -808,7 +962,7 @@ describe('semantic knowledge capture', () => {
       const captured = await captureCanonicalKnowledge({
         projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
         inputPath: inputPath(value, `lifecycle-accept-${index}.json`, workInput({ remainingWork })),
-        sourceRunId: `run-lifecycle-accept-${index}`,
+        sourceRunId: `run-lifecycle-accept-${index}`, branch: 'feature/lifecycle-accept',
       });
       assert.equal(captured.ok, true, remainingWork);
       assert.equal(storedRecord(value, captured.workId).work.remainingWork, remainingWork);
@@ -943,7 +1097,7 @@ describe('Execute delivery receipt capture', () => {
     const captured = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-start.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
 
     const record = storedRecord(value, captured.workId);
@@ -956,9 +1110,31 @@ describe('Execute delivery receipt capture', () => {
     await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-start-again.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
     assert.equal(fs.readFileSync(recordFile(value, captured.workId), 'utf8'), before);
+  });
+
+  it('rejects new source-run work when explicit branch contradicts run-start evidence', async (t) => {
+    const value = await receiptFixture(t);
+    const run = await startedRun(value);
+    const beforeTags = fs.readFileSync(path.join(value.storePath, 'tags.json'), 'utf8');
+
+    await assert.rejects(
+      captureCanonicalKnowledge({
+        projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
+        inputPath: inputPath(value, 'receipt-branch-mismatch.json', workInput()),
+        sourceRunId: run.runId, branch: 'feature/other-branch',
+      }),
+      (error) => {
+        assert.equal(error.code, 'CAPTURE_INPUT_INVALID');
+        assert.match(error.message, /branch/);
+        assert.equal(error.recoveryInput, path.join(value.root, 'receipt-branch-mismatch.json'));
+        return true;
+      },
+    );
+    assert.equal(fs.readFileSync(path.join(value.storePath, 'tags.json'), 'utf8'), beforeTags);
+    assert.equal(fs.existsSync(path.join(value.storePath, 'work-associations.json')), false);
   });
 
   it('completes the receipt at the terminal boundary from accepted commit evidence', async (t) => {
@@ -971,7 +1147,7 @@ describe('Execute delivery receipt capture', () => {
     const captured = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-terminal.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
 
     const receipt = storedRecord(value, captured.workId).work.deliveryReceipt;
@@ -997,7 +1173,7 @@ describe('Execute delivery receipt capture', () => {
     const captured = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-no-evidence.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
 
     const record = storedRecord(value, captured.workId);
@@ -1016,7 +1192,7 @@ describe('Execute delivery receipt capture', () => {
     const captured = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-complete.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
     const complete = storedRecord(value, captured.workId).work.deliveryReceipt;
     assert.equal(classifyDeliveryReceipt(storedRecord(value, captured.workId)).state, 'complete');
@@ -1044,7 +1220,7 @@ describe('Execute delivery receipt capture', () => {
     const captured = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-explicit.json', workInput({ deliveryReceipt })),
-      sourceRunId: 'run_00000000-0000-4000-8000-0000000000aa',
+      sourceRunId: 'run_00000000-0000-4000-8000-0000000000aa', branch: RECEIPT_BRANCH,
     });
 
     assert.deepEqual(storedRecord(value, captured.workId).work.deliveryReceipt, deliveryReceipt);
@@ -1057,7 +1233,7 @@ describe('Execute delivery receipt capture', () => {
     const created = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'fabricate-start.json', workInput()),
-      sourceRunId: 'run-nothing',
+      sourceRunId: 'run-nothing', branch: RECEIPT_BRANCH,
     });
     assert.equal(
       Object.hasOwn(storedRecord(value, created.workId).work, 'deliveryReceipt'),
@@ -1096,7 +1272,7 @@ describe('Execute delivery receipt capture', () => {
     const created = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'stored-receipt.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
     const owned = storedRecord(value, created.workId).work.deliveryReceipt;
 
@@ -1123,7 +1299,7 @@ describe('Execute delivery receipt capture', () => {
       inputPath: inputPath(value, 'receipt-partial.json', workInput({
         deliveryReceipt: { runId: 'run_00000000-0000-4000-8000-0000000000cc' },
       })),
-      sourceRunId: 'run_00000000-0000-4000-8000-0000000000cc',
+      sourceRunId: 'run_00000000-0000-4000-8000-0000000000cc', branch: RECEIPT_BRANCH,
     });
 
     const record = storedRecord(value, captured.workId);
@@ -1136,7 +1312,7 @@ describe('Execute delivery receipt capture', () => {
     const created = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'cross-run-start.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
     const owned = storedRecord(value, created.workId).work.deliveryReceipt;
 
@@ -1204,7 +1380,7 @@ describe('Execute delivery receipt capture', () => {
     const captured = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-repair.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
 
     const receipt = storedRecord(value, captured.workId).work.deliveryReceipt;
@@ -1238,7 +1414,7 @@ describe('Execute delivery receipt capture', () => {
     const captured = await captureCanonicalKnowledge({
       projectDir: value.projectDir, spectreHome: value.spectreHome, kind: 'work',
       inputPath: inputPath(value, 'receipt-blocked.json', workInput()),
-      sourceRunId: run.runId,
+      sourceRunId: run.runId, branch: RECEIPT_BRANCH,
     });
     const blocked = storedRecord(value, captured.workId).work.deliveryReceipt;
     assert.equal(blocked.terminalHead, proved);

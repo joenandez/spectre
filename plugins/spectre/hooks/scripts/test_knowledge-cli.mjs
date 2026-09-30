@@ -493,7 +493,16 @@ describe('public delivery CLI parity', () => {
         requestedOutcome: 'Carry a receipt through capture.', scope: 'The capture surface only.',
         actualChanges: 'Captured one work record.', reasons: 'Confirm receipt-aware capture.',
         discoveries: 'The receipt survives the CLI boundary.', verification: 'Focused node tests.',
-        remainingWork: 'None.', relatedContext: 'CLI parity fixture.', deliveryReceipt: receipt,
+        remainingWork: 'None.', relatedContext: 'CLI parity fixture.',
+        entryPoints: {
+          locations: [{
+            path: 'plugins/spectre/hooks/scripts/knowledge-cli.mjs',
+            symbol: 'main',
+            line: 149,
+            role: 'The public CLI forwards semantic work capture input to the canonical writer.',
+          }],
+        },
+        deliveryReceipt: receipt,
         tags: [{ id: 'delivery-cli', description: 'Receipt-aware capture coverage for the public CLI.' }],
       });
       const result = run(kind, ['capture', '--kind', 'work', '--input', inputPath, '--source-run-id', 'run-captured', '--branch', 'feature'], value);

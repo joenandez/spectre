@@ -10,6 +10,17 @@
   "verification": "<verification and evidence>",
   "remainingWork": "<remaining work and unknowns>",
   "relatedContext": "<related knowledge and source context>",
+  "entryPoints": {
+    "locations": [
+      {
+        "path": "<selected/source/path>",
+        "symbol": "<function-or-symbol-name>",
+        "line": 1,
+        "role": "<why this is the relevant entry point>"
+      }
+    ],
+    "explanation": "<optional truthful limitation for unavailable or not-yet-created entry points>"
+  },
   "execution": { "state": "<unknown|in-progress|implementation-ready|acceptance-pending|blocked|finalized>" },
   "verificationState": { "state": "<unknown|not-run|checked|passed|failed>", "evidenceRef": "<optional evidence reference>" },
   "pullRequest": { "state": "<unknown|none|draft-open|closed|merged>" },
