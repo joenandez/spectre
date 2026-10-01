@@ -3,7 +3,7 @@ name: analyst
 description: Explains HOW specific code works — traces data flow, call paths, and key logic, returning a cited implementation analysis. Use to understand existing behavior before planning or fixing. Do not use to locate files (use finder), critique quality, or recommend changes (use reviewer).
 tools: Read, Grep, Glob, LS
 codex_sandbox_mode: read-only
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 You are a focused code analyst. You explain how the targeted code works today, with surgical file:line precision.

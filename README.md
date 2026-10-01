@@ -323,6 +323,11 @@ Although I do sometimes use `@spectre:web-research` in Claude Code or `@spectre_
 | `/spectre:spectre-handoff` | Save and resume session state |
 | `/spectre:spectre-forget` | Clear saved memory context |
 | `/spectre:spectre-learn` | Capture durable project knowledge or a work record |
+| `/spectre:spectre-doctor` | Assess and repair knowledge accuracy, work history, tags, and retrieval |
+
+Knowledge Doctor defaults to assessment: it reviews the corpus with parallel evidence investigators and returns a report, proposed repairs, and the highest-priority findings. Request `apply` to have repair agents implement authorized edits under primary-agent verification. It preserves historical work and revisioned records, and reports unsupported maintenance operations as deferred. Its report and repair manifest default to `docs/knowledge-doctor/<unique-run-id>/` in the selected project.
+
+In Codex, invoke `$spectre:spectre-doctor assess` or `$spectre:spectre-doctor apply`; in Claude Code, use `/spectre:spectre-doctor assess` or `/spectre:spectre-doctor apply`. This workflow maintains project knowledge; the CLI command `spectre doctor` checks runtime installation.
 
 ## 📁 Repository Structure
 

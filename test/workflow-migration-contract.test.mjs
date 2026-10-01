@@ -24,7 +24,7 @@ test('canonical entry points retain only the reviewed workflow and utility inven
     .sort();
 
   assert.deepEqual(names, [
-    'spectre-capture', 'spectre-code_review', 'spectre-create_pr', 'spectre-execute',
+    'spectre-capture', 'spectre-code_review', 'spectre-create_pr', 'spectre-doctor', 'spectre-execute',
     'spectre-feature-root', 'spectre-fix', 'spectre-fix-core', 'spectre-forget',
     'spectre-handoff', 'spectre-learn', 'spectre-plan', 'spectre-plan-route',
     'spectre-prototype', 'spectre-research', 'spectre-scope', 'spectre-ship', 'spectre-validate',

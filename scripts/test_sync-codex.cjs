@@ -43,7 +43,7 @@ test('agent translator rewrites user-facing workflow commands for Codex', () => 
   const source = `---
 name: sync
 description: Called by /spectre:spectre-handoff.
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 Resume with /spectre:spectre-execute.
@@ -74,7 +74,7 @@ function repositoryTokenCount(repoRoot, filePath) {
 }
 
 const USER_HANDOFF_SKILLS = [
-  'spectre-code_review', 'spectre-create_pr', 'spectre-execute', 'spectre-fix',
+  'spectre-code_review', 'spectre-create_pr', 'spectre-doctor', 'spectre-execute', 'spectre-fix',
   'spectre-plan', 'spectre-prototype', 'spectre-research', 'spectre-ship',
   'spectre-scope', 'spectre-ux', 'spectre-validate',
 ];
@@ -142,7 +142,7 @@ function createFixture(root) {
     `---
 name: dev
 description: Implementation specialist.
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 Write code carefully.
@@ -153,7 +153,7 @@ Write code carefully.
     `---
 name: tester
 description: Test specialist.
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 Write tests carefully.
@@ -187,7 +187,7 @@ test('agent translator emits the expected Codex TOML shape', () => {
   const source = `---
 name: finder
 description: Locate files.
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 Find relevant files.
@@ -214,7 +214,7 @@ Find relevant files.
 
 test('agent translator maps current Claude models to Codex tiers at high effort', () => {
   const cases = [
-    ['claude-sonnet-5', 'gpt-6-luna', 'high'],
+    ['claude-sonnet-5-5', 'gpt-6-luna', 'high'],
     ['claude-opus-5-5', 'gpt-6-sol', 'high'],
   ];
 
@@ -1688,6 +1688,30 @@ test('Execute pre-Handoff contract stays pinned after fix-source preparation', (
   assert.match(beforeHandoff, /Expensive harness\/performance\/full qualification runs only for the final relevant candidate/);
 });
 
+test('Doctor is invocable and its bundled runtime and capture references resolve on both hosts', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  for (const [rootName, rootVariable] of [['spectre', 'CLAUDE_PLUGIN_ROOT'], ['spectre-codex', 'PLUGIN_ROOT']]) {
+    const pluginRoot = path.join(repoRoot, 'plugins', rootName);
+    const source = fs.readFileSync(path.join(pluginRoot, 'skills', 'spectre-doctor', 'SKILL.md'), 'utf8');
+    const { frontmatter } = skills.parseFrontmatter(source, 'SKILL.md');
+    assert.equal(frontmatter.name, 'spectre-doctor');
+    assert.equal(frontmatter['user-invocable'], 'true');
+    const references = [...source.matchAll(/\$\{(?:CLAUDE_PLUGIN_ROOT|PLUGIN_ROOT)\}\/([A-Za-z0-9_./-]+)/g)];
+    assert.ok(references.length > 0, `${rootName}/Doctor has no bundled references`);
+    for (const [reference, relative] of references) {
+      assert.ok(reference.startsWith(`\$\{${rootVariable}\}/`), `${rootName} uses the wrong plugin-root variable`);
+      assert.ok(fs.statSync(path.join(pluginRoot, relative)).isFile(), `${rootName} has an unresolved reference: ${relative}`);
+    }
+    for (const [captureSkill, kind] of [['spectre-capture', 'knowledge'], ['spectre-work-record', 'work']]) {
+      const contract = JSON.parse(fs.readFileSync(path.join(pluginRoot, 'skills', captureSkill, 'references', `${kind}-capture-input.json`), 'utf8'));
+      assert.equal(contract.inputVersion, 1);
+    }
+    const help = execFileSync(process.execPath, [path.join(pluginRoot, 'hooks', 'scripts', 'knowledge-cli.mjs'), 'help'], { encoding: 'utf8' });
+    assert.ok(help.includes('capture --kind knowledge|work'));
+    assert.ok(help.includes('--expected-revision'));
+  }
+});
+
 test('user-facing handoffs use the compact table contract without changing internal protocols', () => {
   const repoRoot = path.resolve(__dirname, '..');
   const requiredRows = [
@@ -1907,14 +1931,14 @@ test('work records bind to exact runs and one PR associates a plural selection i
 
     assert.match(
       workRecord,
-      /one record per exact Execute run[\s\S]*distinct runs never fold[\s\S]*Branches and PRs may each reference multiple records/i,
+      /one record per exact Execute run[\s\S]*distinct runs never fold[\s\S]*Branches\/PRs may reference multiple records/i,
     );
-    assert.match(workRecord, /--source-run-id <exact-run>[\s\S]*with any other identity flag/i);
-    assert.match(workRecord, /receipt derivation uses that run.s event log/i);
-    assert.match(workRecord, /four complementary groups[\s\S]*`actualChanges` states delivered behavior/i);
-    assert.match(workRecord, /observed positive line, and role/i);
-    assert.match(workRecord, /Typed locations[\s\S]*project to `relatedContext`/i);
-    assert.match(workRecord, /capture --kind work --input - --branch <exact-branch>/i);
+    assert.match(workRecord, /Execute-owned writes include `--source-run-id <exact-run>`[\s\S]*alongside other identity flags/i);
+    assert.match(workRecord, /--source-run-id <exact-run>[\s\S]*receipt derivation/i);
+    assert.match(workRecord, /Complementary fields:[\s\S]*`actualChanges`: delivered behavior\/artifacts/i);
+    assert.match(workRecord, /path, symbol\/document section, observed positive line, role/i);
+    assert.match(workRecord, /`relatedContext`: typed entry points and bounded references/i);
+    assert.match(workRecord, /capture --kind work --input -[\s\S]*New\/current-run writes add `--branch <exact-branch>`/i);
     assert.doesNotMatch(workRecord, /branch pointer/i);
 
     assert.match(execute, /`run finish` first[\s\S]*Skill\(spectre-work-record\)[\s\S]*--source-run-id <exact-run>/i);

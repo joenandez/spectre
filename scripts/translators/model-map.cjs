@@ -21,7 +21,7 @@ const roleHints = {
 };
 
 const codexDefaultsByClaudeModel = {
-  'claude-sonnet-5': {
+  'claude-sonnet-5-5': {
     model: 'gpt-6-luna',
     model_reasoning_effort: 'high',
   },

@@ -1,10 +1,11 @@
 # Skills expected in plugins/spectre/skills/.
 # Gate 1 fails if any is missing, or if an unlisted one appears.
-# Core workflows, standalone Scope, ten public utilities, and five internal skills.
+# Core workflows, standalone Scope, public utilities, and five internal skills.
 
 spectre-capture
 spectre-code_review
 spectre-create_pr
+spectre-doctor
 spectre-execute
 spectre-feature-root
 spectre-fix

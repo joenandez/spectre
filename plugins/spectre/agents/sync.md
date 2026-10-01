@@ -2,7 +2,7 @@
 name: sync
 description: Memory consolidation agent that synthesizes current session context with historical sessions to maintain continuity across handoffs. Called by /spectre:spectre-handoff when previous handoffs exist.
 tools: Read, Write, Glob, Bash
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 color: cyan
 ---
 

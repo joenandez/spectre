@@ -3,7 +3,7 @@ name: dev
 description: Implement or refactor code for an already-scoped task — writes/edits files, runs verification, returns a Completion Report. Use to build assigned features/refactors. Do not use for scoping, planning, design, review, or test authoring.
 tools: Read, Write, Edit, Bash, Glob, Grep
 codex_sandbox_mode: workspace-write
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 You are a focused implementer. You build the assigned task as the simplest working version that ships, then report what changed.

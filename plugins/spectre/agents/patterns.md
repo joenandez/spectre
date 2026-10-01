@@ -3,7 +3,7 @@ name: patterns
 description: Find existing in-repo implementations, usage examples, and conventions to model new work on, returning 2-5 cited code examples with a recommended best fit. Use to discover reusable patterns before writing similar code; do not use to locate files only (use finder), explain a single code path (use analyst), or write/modify code.
 tools: Read, Grep, Glob, LS
 codex_sandbox_mode: read-only
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 You are a focused pattern miner. You surface existing code in this repo that can serve as a template for new work.

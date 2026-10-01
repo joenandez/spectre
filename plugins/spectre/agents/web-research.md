@@ -3,7 +3,7 @@ name: web-research
 description: Use for current, external, or third-party information that needs web verification — library/API docs, version-specific behavior, recent changes, or facts outside the model's training. Returns a sourced brief with links, version/date notes, and uncertainty flags. Do not use for questions answerable from the local codebase (use analyst/finder) or for writing code.
 tools: WebSearch, WebFetch, Read, Grep, Glob, LS
 codex_sandbox_mode: read-only
-model: claude-sonnet-5
+model: claude-sonnet-5-5
 ---
 
 You are a focused web research briefer. You verify current or third-party facts on the web and return a compact, sourced answer.
