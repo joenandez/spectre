@@ -1,29 +1,16 @@
 # Tagging Policy
 
-## Purpose
+Tags name durable, independently browsable product-area wiki pages that group related knowledge and work records. Names and short descriptions should help a user find decisions, gotchas, patterns, work history, and code entry points without predicting the implementation mechanism.
 
-Tags are durable, wiki-level project areas that connect multiple independent knowledge and work records. They are not alternate names for a task, branch, implementation, bug, or individual record.
+## Select
 
-## Selection
+- Choose one primary area and at most one materially connected secondary area.
+- Prefer a recognizable existing broad area and its aliases. Keep task, branch, bug, internal mechanism, implementation, and individual-record labels on the record, not as wiki areas.
+- Use user navigation as the altitude test: a person working in the product area should know to browse or request it without knowing whether the issue concerns startup, trust, authentication, or another internal mechanism.
+- Several records alone do not justify a narrower area. Create one only when it is a durable, distinct capability whose difference from the parent area helps users find what they need.
 
-- Assign one primary tag at the broadest stable level that still identifies a meaningful product capability, subsystem, or workflow.
-- Add at most one secondary tag when the record materially connects another independently browsable area.
-- Reuse a canonical tag when it already represents the concept. Put record-specific detail in the record ID, title, summary, applicability, and body.
-- Prefer the durable area over a compound restatement of the current work: `memory` over `memory-hooks` or `codex-hooks-display`; `plan` over `plan-simplification`.
+## Create and maintain
 
-## Creation
-
-Create a new canonical tag when no existing tag represents the area and the proposed tag:
-
-1. Makes sense as an independently browsable wiki page.
-2. Is expected to group multiple independent records.
-3. Will survive completion or renaming of the current task.
-4. Adds useful navigation that its nearest broader tag cannot provide.
-
-Give every new tag a short area description. If the candidate fails this test, use the nearest applicable canonical area and keep the specificity on the record.
-
-## Elevation
-
-- Split downward only after the narrower concept has multiple independent records and demonstrated retrieval or navigation value.
-- Merge upward when a tag remains task-shaped, mirrors one record, lacks an independent conceptual identity, or adds no useful distinction from its broader area.
-- Preserve merged names through aliases or redirects.
+- Give a new canonical area a concise user-facing name and useful short description. Reuse existing alias resolution; do not invent a closed vocabulary or merge the live Grove catalog in this workflow.
+- Keep area identity distinct from the record's subject and applicability. `codex-agent` is a recognizable example, not a required tag for every project.
+- This policy prepares a user-navigable wiki taxonomy; the wiki interface and corpus cleanup are deferred.
