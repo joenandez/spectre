@@ -500,6 +500,9 @@ function validateWorkBranchPrecondition({ kind, current, options, runBranch }) {
   if (exactBranch && runBranch && exactBranch !== runBranch) {
     throw codedError('CAPTURE_INPUT_INVALID', `Capture branch ${exactBranch} contradicts source run branch ${runBranch}.`);
   }
+  if (exactBranch && current && !storedBranch && !runBranch) {
+    throw codedError('CAPTURE_INPUT_INVALID', 'Capture cannot fill an unknown historical branch from the current checkout.');
+  }
 }
 
 /**

@@ -108,6 +108,8 @@ const AGENT_SKILLS_FIELDS = new Set([
   'metadata',
   'allowed-tools',
 ]);
+const ENTRY_POINTS_START = '<!-- spectre-entry-points:v1 -->';
+const ENTRY_POINTS_END = '<!-- /spectre-entry-points -->';
 
 function recordError(recordPath, message) {
   return new Error(`${recordPath}: ${message}`);
@@ -611,6 +613,37 @@ function deliveryReceiptLines(receipt) {
   ];
 }
 
+function entryPointValueText(value) {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (Array.isArray(value)) return value.map(entryPointValueText).filter(Boolean).join('\n');
+  if (isPlainObject(value)) return Object.values(value).map(entryPointValueText).filter(Boolean).join('\n');
+  return '';
+}
+
+function indexableEntryPointBlock(raw) {
+  try {
+    return entryPointValueText(JSON.parse(raw));
+  } catch {
+    return '';
+  }
+}
+
+function sourceBodyText(value) {
+  let text = String(value ?? '');
+  let result = '';
+  for (;;) {
+    const start = text.indexOf(ENTRY_POINTS_START);
+    if (start < 0) return result + text;
+    const contentStart = start + ENTRY_POINTS_START.length;
+    const end = text.indexOf(ENTRY_POINTS_END, contentStart);
+    if (end < 0) return result + text;
+    result += text.slice(0, start);
+    result += indexableEntryPointBlock(text.slice(contentStart, end).trim());
+    text = text.slice(end + ENTRY_POINTS_END.length);
+  }
+}
+
 function substantiveSourceBody(record) {
   if (record.kind === 'knowledge') {
     return [
@@ -618,14 +651,14 @@ function substantiveSourceBody(record) {
       record.evidence,
       record.blocker?.condition,
       record.blocker?.resolutionCriterion,
-    ].filter(isNonEmptyString).join('\n\n');
+    ].filter(isNonEmptyString).map(sourceBodyText).join('\n\n');
   }
   return [
     ...WORK_SECTION_FIELDS.map((field) => record.work[field]),
     record.importedSource?.body,
     record.importedSource?.useWhen,
     ...(record.importedSource?.cues || []),
-  ].filter(isNonEmptyString).join('\n\n');
+  ].filter(isNonEmptyString).map(sourceBodyText).join('\n\n');
 }
 
 function section(heading, body) {

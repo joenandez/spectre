@@ -98,6 +98,8 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(workRecord, /`pullRequest`[\s\S]*unknown\|none\|draft-open\|closed\|merged[\s\S]*bare `open` is invalid/i);
   assert.match(workRecord, /git rev-parse --abbrev-ref HEAD[\s\S]*(?:skip|recovery)/i);
   assert.match(workRecord, /if unavailable, return recovery\/skip without guessing/i);
+  assert.match(workRecord, /historical correction[\s\S]*(?:omit `--branch`|must omit `--branch`)/i);
+  assert.match(workRecord, /unknown old branch[\s\S]*never fill it from today's checkout/i);
   assert.match(workRecord, /never changes Execute, Ship, Create PR, verification, or acceptance authority/i);
   assert.match(workRecord, /spectre-capture\/references\/tagging-policy\.md/);
   assert.match(workRecord, /four complementary groups/i);
@@ -110,6 +112,7 @@ test('knowledge and work-record skills have separate self-sufficient routing con
   assert.match(workRecord, /new semantic work capture requires explicit exact branch evidence/i);
   assert.match(workRecord, /Compare against independent run-start branch evidence/i);
   assert.match(workRecord, /capture --kind work --input - --branch <exact-branch>/i);
+  assert.match(workRecord, /capture --kind work --input - --work-id <exact-id> --expected-revision <revision>/i);
 
   assert.match(taggingPolicy, /durable, independently browsable product-area wiki pages/i);
   assert.match(taggingPolicy, /user navigation as the altitude test/i);

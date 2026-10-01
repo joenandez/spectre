@@ -199,7 +199,7 @@ function minimumPreview(entry, descriptionLimit = 160) {
 }
 
 function boundedPage(results, base, limit, cursorState, offset) {
-  const entries = [];
+  let entries = [];
   const end = Math.min(results.length, offset + limit);
   const responseFor = (candidate) => {
     const next = offset + candidate.length;
@@ -219,6 +219,11 @@ function boundedPage(results, base, limit, cursorState, offset) {
       const compact = minimumPreview(results[position]);
       if (fits([...entries, compact])) {
         entries.push(compact);
+        continue;
+      }
+      const compactEntries = entries.map((entry) => minimumPreview(entry));
+      if (entries.length > 0 && fits([...compactEntries, compact])) {
+        entries = [...compactEntries, compact];
         continue;
       }
       if (entries.length === 0) {
@@ -278,7 +283,10 @@ export async function searchKnowledge(options = {}) {
   const ranked = admitted.map((entry) => {
     const state = activation(entry, options);
     const match = score(entry, query, queryTokens, catalog, paths, requestedTags, exactRecordId);
-    const relatedExactCurrent = exactRelatedCurrentIds.has(entry.id) && !state.historical;
+    const relatedExactCurrent = !state.historical && (
+      exactRelatedCurrentIds.has(entry.id)
+      || (exactRecordId !== null && entry.relatedRecordIds.includes(exactRecordId))
+    );
     return {
       ...preview(entry, match, state),
       exactId: match.exactId,
@@ -290,7 +298,6 @@ export async function searchKnowledge(options = {}) {
     };
   })
     .filter((entry) => query === '' || entry.tier > 0)
-    .filter((entry) => exactEntry == null || entry.exactId || entry.relatedExactCurrent)
     .sort(compare)
     .map(({ exactId, relatedExactCurrent, tier, coverage, metadataCoverage, current, ...entry }) => entry);
   return boundedPage(

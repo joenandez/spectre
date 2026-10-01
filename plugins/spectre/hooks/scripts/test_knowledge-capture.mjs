@@ -558,6 +558,27 @@ describe('semantic knowledge capture', () => {
     }
   });
 
+  it('does not backfill an unknown historical branch from the current checkout', async (t) => {
+    const value = await fixture(t);
+    const legacy = await registerResourceWork(value, 'legacy-unknown-branch', workInput(), { legacyImport: true });
+    const recordPath = path.join(value.storePath, 'knowledge', 'legacy-unknown-branch', 'record.json');
+    const beforeRecord = fs.readFileSync(recordPath, 'utf8');
+    const tagsPath = path.join(value.storePath, 'tags.json');
+    const beforeTags = fs.readFileSync(tagsPath, 'utf8');
+    const source = inputPath(value, 'legacy-unknown-branch-update.json', workInput({ tags: undefined }));
+
+    const rejected = run('bundled', [
+      'capture', '--kind', 'work', '--input', source, '--work-id', 'legacy-unknown-branch',
+      '--branch', 'feature/current-checkout', '--expected-revision', legacy.revisionToken,
+    ], value);
+
+    assert.equal(rejected.status, 1);
+    assert.equal(output(rejected).code, 'CAPTURE_INPUT_INVALID');
+    assert.match(output(rejected).message, /historical branch/i);
+    assert.equal(fs.readFileSync(tagsPath, 'utf8'), beforeTags);
+    assert.equal(fs.readFileSync(recordPath, 'utf8'), beforeRecord);
+  });
+
   it('rejects oversized work accounts before allocation and preserves legacy accounts until a compact revision', async (t) => {
     const value = await fixture(t);
     const oversized = workInput({ actualChanges: 'x'.repeat(12_000) });

@@ -120,6 +120,29 @@ test('literal locator queries prefer complete source-body matches over generic m
   assert.match(found.results[0].matchedSignals.join(' '), /body:phrase|body:indexentry|body:records|body:mjs/);
 });
 
+test('owned entry-point boilerplate does not create body matches but values remain discoverable', async (t) => {
+  const value = await fixture(t);
+  const entryPointBlock = [
+    '<!-- spectre-entry-points:v1 -->',
+    '{"locations":[{"path":"plugins/spectre/hooks/scripts/knowledge/records.mjs","symbol":"indexEntry","line":841,"role":"Owns generated source bodies."}],"explanation":"Fallback details live in record rendering."}',
+    '<!-- /spectre-entry-points -->',
+  ].join('\n');
+  write(value.storePath, knowledge('locator-values', {
+    title: 'Indexed source locator',
+    summary: 'Substantive locator guidance.',
+    useWhen: 'Use for substantive locator discovery.',
+    content: 'Current conclusion: source body discovery keeps useful locator values searchable.',
+    evidence: entryPointBlock,
+  }));
+
+  const boilerplate = await searchKnowledge(options(value, { query: 'entry points symbol line role' }));
+  const values = await searchKnowledge(options(value, { query: 'records.mjs indexEntry generated source bodies' }));
+
+  assert.deepEqual(boilerplate.results.map(({ id }) => id), []);
+  assert.equal(values.results[0].id, 'locator-values');
+  assert.match(values.results[0].matchedSignals.join(' '), /body:records|body:indexentry|body:generated|body:bodies/);
+});
+
 test('exact IDs only win inside admitted filters and active corrections beat superseded conflicts', async (t) => {
   const value = await fixture(t);
   await ensureTags({ ...options(value), tags: [
@@ -207,8 +230,8 @@ test('exact historical ID search also exposes known related current guidance', a
   write(value.storePath, knowledge('passive-related-history', {
     tags: ['runtime-core'],
     status: 'superseded',
-    summary: 'Another old rule linked to obsolete-rule-7.',
-    useWhen: 'Use only for unrelated historical context.',
+    summary: 'Archived runtime note.',
+    useWhen: 'Inspect unrelated historical context.',
     relatedRecordIds: ['obsolete-rule-7'],
   }));
 
@@ -221,6 +244,46 @@ test('exact historical ID search also exposes known related current guidance', a
   assert.equal(found.results[0].activation, 'inactive-history');
   assert.equal(found.results[1].activation, 'current-guidance');
   assert.equal(found.results.some(({ id }) => id === 'passive-related-history'), false);
+});
+
+test('exact ID search uses relationship as precedence without excluding reverse-only current matches', async (t) => {
+  const value = await fixture(t);
+  write(value.storePath, knowledge('obsolete-rule', {
+    status: 'superseded',
+    summary: 'Old release guidance.',
+    useWhen: 'Use only for historical release inspection.',
+    content: 'Superseded conclusion: use the old release flow.',
+  }));
+  write(value.storePath, knowledge('release-correction', {
+    summary: 'Current correction for obsolete-rule.',
+    useWhen: 'Use for release changes.',
+    content: 'Current conclusion: obsolete-rule now routes through the corrected release flow.',
+    relatedRecordIds: ['obsolete-rule'],
+  }));
+
+  const found = await searchKnowledge(options(value, { query: 'obsolete-rule' }));
+
+  assert.deepEqual(found.results.slice(0, 2).map(({ id }) => id), ['obsolete-rule', 'release-correction']);
+  assert.equal(found.results[0].activation, 'inactive-history');
+  assert.equal(found.results[1].activation, 'current-guidance');
+});
+
+test('single-word exact IDs remain ordering precedence instead of an exclusive filter', async (t) => {
+  const value = await fixture(t);
+  write(value.storePath, knowledge('release', {
+    summary: 'Canonical release record.',
+    useWhen: 'Use for release coordination.',
+    content: 'Current conclusion: release automation owns the workflow.',
+  }));
+  write(value.storePath, knowledge('release-candidate-checks', {
+    summary: 'Release candidate checks.',
+    useWhen: 'Use for release candidate verification.',
+    content: 'Current conclusion: run focused release checks before publishing.',
+  }));
+
+  const found = await searchKnowledge(options(value, { query: 'release' }));
+
+  assert.deepEqual(found.results.slice(0, 2).map(({ id }) => id), ['release', 'release-candidate-checks']);
 });
 
 test('comparable complete relevance keeps applicable current body guidance on the first page', async (t) => {
