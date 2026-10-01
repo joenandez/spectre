@@ -26,15 +26,14 @@ describe('bounded SessionStart tag registry', () => {
     assert.ok(result.includedEntries.length > 0);
     assert.ok(result.omittedCount > 0);
     assert.match(result.content, /Omitted tags: \d+; omitted tags remain searchable/);
-    assert.match(result.content, /Before broad source\/filename discovery[\s\S]*search '<task>'[\s\S]*assess preview applicability[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines/i);
+    assert.match(result.content, /Before broad source\/filename discovery[\s\S]*actual task[\s\S]*search '<task>'[\s\S]*assess applicability previews[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines/i);
     assert.match(result.content, /Broaden only if focused hints prove insufficient\/stale\/unavailable/i);
     assert.match(result.content, /omitted\/untagged/i);
-    assert.match(result.content, /Substance insufficient/i);
-    assert.match(result.content, /Discovery is per question/i);
-    assert.match(result.content, /reuse results\/loads[\s\S]*refine only unresolved\/new subject/i);
-    assert.match(result.content, /never repeat equivalent search/i);
-    assert.match(result.content, /#tag:[\s\S]*search --tag '<tag>'[\s\S]*previews[\s\S]*exact-load/i);
-    assert.match(result.content, /never authorize guesses\/create tags/i);
+    assert.match(result.content, /Discovery is per question, not skill/i);
+    assert.match(result.content, /reuse results\/loads[\s\S]*refine only for an unresolved question or new subject/i);
+    assert.match(result.content, /never repeat an equivalent query/i);
+    assert.match(result.content, /#tag is explicit:[\s\S]*search --tag '<tag>'[\s\S]*previews[\s\S]*exact-load/i);
+    assert.match(result.content, /tags never authorize guesses\/create tags/);
     assert.match(result.content, /Oversized loads require blocked decision/i);
     assert.doesNotMatch(result.content, /recordPath|revisionToken|successfulLoads|PRIVATE_BODY|ID: /);
     for (const id of result.includedEntries) {
@@ -47,7 +46,7 @@ describe('bounded SessionStart tag registry', () => {
 
     assert.match(result.content, /No tagged records yet; imported work remains searchable/);
     assert.match(result.content, /Unrelated chat: load nothing/);
-    assert.match(result.content, /knowledge-cli\.mjs' --project-dir \./);
+    assert.match(result.content, /knowledge-cli\.mjs' with --project-dir \./);
     assert.match(result.content, /search '<task>'/);
     assert.match(result.content, /load '<id>'/);
     assert.equal(result.omittedCount, 0);
@@ -66,7 +65,7 @@ describe('bounded SessionStart tag registry', () => {
       assert.ok(nonempty.omittedCount > 0);
       assert.equal(nonempty.includedEntries.length + nonempty.omittedCount, 20);
       assert.match(nonempty.content, new RegExp(`Omitted tags: ${nonempty.omittedCount}; omitted tags remain searchable`));
-      assert.match(nonempty.content, /Before broad source\/filename discovery[\s\S]*search '<task>'[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines/i);
+      assert.match(nonempty.content, /Before broad source\/filename discovery[\s\S]*search the actual task[\s\S]*search '<task>'[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines/i);
       assert.match(nonempty.content, /Broaden only if focused hints prove insufficient\/stale\/unavailable/i);
       for (const id of nonempty.includedEntries) {
         assert.match(nonempty.content, new RegExp(`^- ${id}:`, 'm'));
