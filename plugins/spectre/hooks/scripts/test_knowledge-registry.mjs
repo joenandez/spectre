@@ -24,6 +24,8 @@ describe('bounded SessionStart tag registry', () => {
     assert.ok(result.omittedCount > 0);
     assert.match(result.content, /Omitted tags: \d+; omitted tags remain searchable/);
     assert.match(result.content, /actual task[\s\S]*search '<task>'[\s\S]*assess.*preview/i);
+    assert.match(result.content, /search '<task>'[\s\S]*assess applicability previews[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines[\s\S]*before broad search/i);
+    assert.match(result.content, /broaden only when loaded hints are unavailable, stale, or insufficient/i);
     assert.match(result.content, /omitted\/untagged knowledge/i);
     assert.match(result.content, /Substance alone is insufficient/i);
     assert.match(result.content, /Discovery is per question, not skill/i);

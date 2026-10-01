@@ -22,7 +22,7 @@ function renderTagEntry([id, tag]) {
 function renderContent(entries, omittedCount, cliPath) {
   return [
     '## Project knowledge',
-    `Use ${shellQuote(cliPath)} with --project-dir . Substantive work: search the actual task with search '<task>' across mixed knowledge/work previews incl. omitted/untagged knowledge; assess applicability previews, exact-load applicable records. Substance alone is insufficient.`,
+    `Use ${shellQuote(cliPath)} with --project-dir . Substantive work: search the actual task with search '<task>' across mixed knowledge/work previews incl. omitted/untagged knowledge; assess applicability previews; load '<id>' exact applicable records; read selected paths/symbols/lines before broad search. Broaden only when loaded hints are unavailable, stale, or insufficient. Substance alone is insufficient.`,
     'Discovery is per question, not skill: reuse results/loads; refine only for an unresolved question or new subject; never repeat an equivalent query.',
     "Use load '<id>' for questions; work is historical: --inspect-historical. Oversized loads require a blocked decision. Unrelated chat: load nothing.",
     "#tag is explicit: search --tag '<tag>'; assess previews, exact-load applicable matches. tags never authorize guesses; never create tags.",
