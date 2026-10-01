@@ -2,11 +2,22 @@
   "inputVersion": 1,
   "id": "<canonical-record-id>",
   "title": "<durable knowledge title>",
-  "summary": "<short durable summary>",
+  "summary": "<short routing cue; do not repeat the guidance>",
   "category": "pattern",
-  "useWhen": "<when this guidance applies>",
-  "content": "<maintained guidance>",
-  "evidence": "<accepted evidence or authority>",
+  "useWhen": "<when this applies>",
+  "content": "<current conclusion first, then why and practical consequences>",
+  "evidence": "<supporting evidence or authority; keep distinct from guidance>",
+  "entryPoints": {
+    "locations": [
+      {
+        "path": "<relevant/acquired/source>",
+        "symbol": "<observed-symbol-or-document-section>",
+        "line": 1,
+        "role": "<how this location routes to the guidance>"
+      }
+    ],
+    "explanation": "<specific actual unavailable or non-code limitation; omit when none>"
+  },
   "tags": [
     {
       "id": "<canonical-or-new-tag>",

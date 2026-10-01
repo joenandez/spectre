@@ -224,7 +224,7 @@ export async function main(argv = process.argv.slice(2)) {
         ...result,
         nextAction: {
           template: 'skills/spectre-work-record/references/work-capture-input.json',
-          command: 'knowledge-cli.mjs capture --kind work --input - --source-run-id <exact-run-id> --project-dir <project-dir> --json',
+          command: 'knowledge-cli.mjs capture --kind work --input - --source-run-id <exact-run-id> --branch <exact-branch> --project-dir <project-dir> --json',
         },
       } : result, flags);
     } catch (error) { throw codedError(error?.code || 'WORK_RESOLUTION_FAILED', error instanceof Error ? error.message : String(error)); }

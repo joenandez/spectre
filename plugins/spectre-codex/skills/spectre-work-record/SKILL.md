@@ -1,6 +1,6 @@
 ---
 name: "spectre-work-record"
-description: "Use only for one bounded historical account at an explicit ownership boundary, not as proactive project memory. Fires on: Execute start after exact run/work identity exists; a meaningful blocked handoff or its resolution; Execute completion; Ship after the PR exists; standalone Create PR when no Execute or Ship parent owns the record; an explicit user request to snapshot or summarize a body of work; or a historical correction. Workflow ownership or explicit historical intent is required. Not for reusable guidance, routine progress, or orchestrated Create PR."
+description: "Record one bounded historical account at an owned Execute, Ship, standalone Create PR, blocked-handoff, snapshot, or correction boundary. Use only when exact work ownership is known. Do not use for reusable guidance, task/check batches, routine progress, or orchestrated Create PR."
 user-invocable: false
 ---
 
@@ -8,39 +8,51 @@ user-invocable: false
 
 ## Purpose
 
-Preserve one bounded historical account of a body of work at explicit ownership boundaries. Live execution state and telemetry remain authoritative for progress.
+Preserve concise, truthful work history at existing ownership boundaries. Execution state and telemetry remain authoritative for live progress.
 
 ## Inputs
 
-- A permitted boundary, exact run, PR, or repository/base/head/diff association, plus an exact branch and prior revision when revising.
-- Truthful seven-section account, lifecycle facts, candidate/PR evidence, and tag intent.
-- Explicit snapshots and historical corrections may occur outside a workflow; standalone Create PR owns one terminal write only when no Execute or Ship parent owns it.
+- One permitted boundary and exact run/work identity, plus exact branch, PR, or repository/base/head/diff association as applicable.
+- A truthful account, observed lifecycle/PR facts, relevant entry points, tag intent, and prior revision when revising.
+- An explicit snapshot or historical correction may occur outside a workflow. Standalone Create PR owns one terminal write only when no Execute or Ship parent owns it.
 
 ## Working Set
 
-- Exact verified association, bounded candidate search/load results, current revision token, and evidence references.
-- `${PLUGIN_ROOT}/skills/spectre-capture/references/tagging-policy.md` and `references/work-capture-input.json`; do not duplicate persistence, association, history, or tag logic.
+- Exact verified association, already-discovered/loaded candidates, current revision token, and evidence references. Reuse candidates that answer the same question; refine only an unresolved question.
+- Read `references/work-capture-input.json` and `${PLUGIN_ROOT}/skills/spectre-capture/references/tagging-policy.md`.
+- Use relevant files already acquired for typed entry points; focus-read to validate observed lines when needed. Explain actual unavailable/non-code portions; never invent locations or dump files.
 
 ## Outputs + DONE
 
-- A created, updated, no-op, conflict, skipped, or surfaced-failure work result with exact work ID, revision, and canonical `recordPath` where applicable.
+- A created, updated, no-op, conflict, skipped, or surfaced-failure result with exact work ID, revision, and canonical `recordPath` when applicable.
+- Keep the incumbent fields, authored as four complementary groups:
 
-**DONE when:** the permitted boundary has a truthful historical account or a truthful skip/no-op/failure; a capture result never changes Execute, Ship, Create PR, verification, or acceptance authority.
+| Group | Fields and responsibility |
+| --- | --- |
+| Requested outcome and scope | `requestedOutcome` says what was asked; `scope` gives meaningful boundaries. Do not repeat the same description. |
+| Delivered result and decisions | `actualChanges` states delivered behavior, capability, or concrete artifact. `reasons` contains only non-obvious rationale/trade-offs. At start or blocked handoff, state truthfully what has and has not been delivered. |
+| Discoveries and entry points | `discoveries` holds useful findings and links maintained authority when available. Typed locations and bounded references project to `relatedContext`; do not repeat delivery narrative. |
+| Verification and remaining implementation | `verification` records checks and observed results; `remainingWork` contains genuine residual implementation. Structured verification and PR lifecycle remain authoritative. |
+
+Keep a short title and routing summary. Required prose may truthfully say no separate rationale, discovery, or residual implementation exists; never add filler. Retain required identity/provenance/status metadata and derive it where reliable. Do not duplicate the input model or repeat account state across fields.
+
+**DONE when:** the permitted boundary has a truthful account or truthful skip/no-op/failure. A capture result never changes Execute, Ship, Create PR, verification, or acceptance authority.
 
 ## Method / guardrails
 
-1. Automatic boundaries are one minimal truthful Execute-start record after exact branch/run/work identity exists; one meaningful blocked handoff or resolution when execution cannot safely continue or resume across an authority, control, or context boundary; one Execute completion; and one Ship update after the PR exists. Identity is one record per exact Execute run: a resume of the same run revises only that record, distinct runs never fold even on one branch, feature root, or candidate, and a branch and a pull request may each reference many records. Read the exact branch from checkout with `git rev-parse --abbrev-ref HEAD` for `provenance.sourceBranch`; if it cannot be read, skip capture with recovery output rather than guessing. When the resolved record already carries a PR identity or URL, before capture and outside every store lock run `gh pr view <identity-or-url> --json state` and carry the observed state in the capture input under `pullRequest`. If that query is unavailable, unknown, or conflicts with stored terminal history, return recovery/skip for the work capture; it does not block Execute or guess. A draft-open record with no queryable PR identity also skips. At Execute start, state every not-yet-true section in plain prose such as `None yet.`; never use angle-bracket, `TODO`, or `REPLACE_ME` placeholders. If resolution coincides with completion, completion is sufficient.
-2. Orchestrated Create PR returns PR evidence to Ship and does not write a work record. Standalone Create PR may write once at its terminal boundary only when no parent owns the record. An explicit user snapshot and historical correction are allowed, but do not replace normal ownership boundaries.
-3. Never write for individual tasks, batches, checks, reviews, commits, ordinary decisions, routine progress, transient remediation, or active-context refreshes. Reusable guidance belongs to `Skill(spectre-capture)`.
-4. Read the shared tagging policy and work input reference. Select or create tags at the policy's durable area altitude, fill the semantic JSON outside the store, then submit it through standard input: `knowledge-cli.mjs capture --kind work --input - --branch <exact-branch> --work-id <exact-id>|--source-run-id <exact-run>|--pull-request-id <exact-pr>|--candidate <exact-json> --project-dir <project-dir> --json`. Every Execute-owned boundary also passes `--source-run-id <exact-run>` in addition to any other identity flag, because the delivery receipt derives only from that exact run's event log. Use `--input <path>` only for an explicitly manual/advanced capture or a returned `recoveryInput` file. Set `execution`, `verificationState`, and `pullRequest` from observed fact: `execution.state` is one of `unknown|in-progress|implementation-ready|acceptance-pending|blocked|finalized`, `verificationState.state` one of `unknown|not-run|checked|passed|failed`, and `pullRequest.state` one of `unknown|none|draft-open|closed|merged`, so a bare `open` is rejected. At a successful authorized terminal Execute boundary send `"execution": {"state": "finalized"}` with `"remainingWork": "None."`; a blocked, failed, or interrupted run sends a non-final state with truthful scoped residual work. A finalize that omits that exact `None.` string is rejected as `CAPTURE_INPUT_INVALID`. Keep the three dimensions separate; review, CI, PR readiness, merge, and closure are verification or PR facts and never populate `remainingWork`, and a draft PR is never merged.
-5. Retain all seven sections and exact associations. Carry the loaded `revisionToken` for changed records, preserve omitted tags, and treat unchanged retries as no-ops. Every new or revised account has a hard 2,000 estimated rendered-token ceiling; compact it and retry when exceeded, referencing evidence rather than copying logs.
-6. Return the exact work ID, revision/conflict, canonical `recordPath`, and `recoveryInput` for manual recovery after conflicts or capture failure. Failure is non-blocking and must not prevent Execute, Ship, or PR delivery; later explicit snapshot or historical correction can repair missing historical detail.
+1. Write only at these boundaries: one minimal truthful Execute-start account after exact run/work identity and branch exist; one meaningful blocked handoff or resolution when work cannot safely continue or resume across an authority, control, or context boundary; one Execute completion; one Ship update after the PR exists; or the explicitly owned standalone Create PR terminal boundary. Explicit snapshots and historical corrections are allowed. At Execute start, mark every not-yet-true section `None yet.` in plain prose; never use angle-bracket, `TODO`, or `REPLACE_ME` placeholders. Never write for individual tasks, batches, checks, reviews, commits, ordinary decisions, routine progress, transient remediation, or active-context refreshes.
+2. There is one record per exact Execute run. Resume revises only that run's record; distinct runs never fold, even on the same branch, feature, or candidate. Branches and PRs may each reference multiple records. Execute-owned writes include `--source-run-id <exact-run>` with any other identity flag so receipt derivation uses that run's event log.
+3. Read the exact current branch using `git rev-parse --abbrev-ref HEAD`. A new semantic work capture requires explicit exact branch evidence; if unavailable, return recovery/skip without guessing. Compare against independent run-start branch evidence when available. Preserve known branch on same-run updates; a historical correction by exact work ID may retain an unknown old branch but must never fill it from today's checkout. A new historical snapshot needs verified original branch evidence.
+4. If the resolved record already has a PR identity or URL, run `gh pr view <identity-or-url> --json state` outside every store lock before capture and pass the observed state in `pullRequest`. If unavailable, unknown, contradictory to terminal history, or an unqueryable draft PR lacks identity, return recovery/skip; never guess. Keep execution, verification, and PR states separate. For an authorized terminal Execute write, send `execution.state: finalized` with `remainingWork: "None."` exactly. Blocked, failed, or interrupted work uses a non-final state and genuine scoped residual work. A finalized account without exact `None.` is rejected as `CAPTURE_INPUT_INVALID`; review, CI, PR readiness, merge, and closure never become implementation work.
+5. Read `references/work-capture-input.json`, fill its semantic JSON outside the store, then submit through standard input: `knowledge-cli.mjs capture --kind work --input - --branch <exact-branch> --work-id <exact-id>|--source-run-id <exact-run>|--pull-request-id <exact-pr>|--candidate <exact-json> --project-dir <project-dir> --json`. Set `execution`, `verificationState`, and `pullRequest` from observation. States are `unknown|in-progress|implementation-ready|acceptance-pending|blocked|finalized`, `unknown|not-run|checked|passed|failed`, and `unknown|none|draft-open|closed|merged`; bare `open` is invalid. Use `--input <path>` only for explicit manual/advanced capture or returned `recoveryInput`.
+6. Include relevant typed entry points at these boundaries: locations carry path, symbol or document section, observed positive line, and role; a specific explanation covers actual unavailable/non-code portions, including locations not yet created at start. At an already-owned terminal boundary, promote only a qualified reusable discovery missing from maintained guidance, or link existing authority. Do not require a knowledge record at every completion or add a scan/write boundary. Reusable guidance belongs to `Skill(spectre-capture)`.
+7. Keep every new or revised account under 2,000 estimated rendered tokens; reference evidence instead of copying logs. Unchanged retries are no-ops. Changed records carry the loaded `revisionToken` and preserve omitted tags. Failure/conflict returns recovery input and stays non-blocking.
 
 ## Handoff
 
-Return boundary, work ID, revision/conflict, canonical `recordPath`, exact associations, lifecycle facts, and `recoveryInput` when applicable.
+Return boundary, exact work ID, revision/conflict, canonical `recordPath`, associations, lifecycle facts, and recovery input when applicable.
 
 ## Escalate-If
 
-- The boundary is not permitted, exact association is ambiguous, or authoritative historical facts conflict.
-- A write cannot recover through the available path; report recovery without blocking delivery.
+- Boundary or exact ownership is unclear, or authoritative historical facts conflict; skip/surface rather than guessing.
+- A write cannot recover through the available path; report recovery without blocking work delivery.

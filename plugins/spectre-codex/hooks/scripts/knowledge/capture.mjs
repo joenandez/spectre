@@ -22,14 +22,17 @@ const WORK_FIELDS = [
 ];
 const KNOWLEDGE_FIELDS = new Set([
   'inputVersion', 'id', 'title', 'summary', 'category', 'useWhen', 'content',
-  'evidence', 'tags', 'status', 'blocker', 'relatedRecordIds', 'applicability',
+  'evidence', 'entryPoints', 'tags', 'status', 'blocker', 'relatedRecordIds', 'applicability',
 ]);
 const WORK_INPUT_FIELDS = new Set([
   'inputVersion', 'title', 'summary', ...WORK_FIELDS, 'tags', 'execution',
-  'verificationState', 'pullRequest', 'relatedRecordIds', 'deliveryReceipt',
+  'verificationState', 'pullRequest', 'relatedRecordIds', 'deliveryReceipt', 'entryPoints',
 ]);
 const PLACEHOLDER = /^(?:<[^>]+>|{{[^}]+}}|TODO|REPLACE[_ -]?ME)$/i;
 const UNKNOWN_STATE = { state: 'unknown' };
+const ENTRY_POINTS_START = '<!-- spectre-entry-points:v1 -->';
+const ENTRY_POINTS_END = '<!-- /spectre-entry-points -->';
+const BRANCH_SENTINELS = new Set(['unknown', 'unavailable']);
 
 // `remainingWork` states residual IMPLEMENTATION work. Review, CI, PR readiness, merge, and
 // closure are verification and pull-request facts, so a record that reports them as remaining
@@ -90,6 +93,10 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim() !== '';
 }
 
+function substantiveExplanation(value) {
+  return isNonEmptyString(value) && value.trim().split(/\s+/).length >= 6;
+}
+
 function readInput(inputPath) {
   if (!inputPath) throw codedError('CAPTURE_INPUT_INVALID', 'Missing required --input <json>.');
   try {
@@ -147,6 +154,104 @@ function validateTagIntent(tags, { required }) {
       throw codedError('CAPTURE_INPUT_INVALID', `Tag ${tag.id} has invalid aliases.`);
     }
   }
+}
+
+function entryPointBlockState(text) {
+  const starts = text.split(ENTRY_POINTS_START).length - 1;
+  const ends = text.split(ENTRY_POINTS_END).length - 1;
+  if (starts !== ends || starts > 1) {
+    throw codedError('CAPTURE_INPUT_INVALID', 'Capture input has duplicate or malformed owned entry-point block markers.');
+  }
+  if (starts === 0) return { state: 'absent' };
+  const start = text.indexOf(ENTRY_POINTS_START);
+  const end = text.indexOf(ENTRY_POINTS_END, start + ENTRY_POINTS_START.length);
+  if (end < 0) throw codedError('CAPTURE_INPUT_INVALID', 'Capture input has a malformed owned entry-point block.');
+  return { state: 'present', start, end: end + ENTRY_POINTS_END.length };
+}
+
+function assertValidEntryPoints(entryPoints) {
+  if (!isPlainObject(entryPoints)) {
+    throw codedError('CAPTURE_INPUT_INVALID', 'Capture input entryPoints must be an object.');
+  }
+  const unknown = Object.keys(entryPoints).filter((key) => !['locations', 'explanation'].includes(key));
+  if (unknown.length > 0) {
+    throw codedError('CAPTURE_INPUT_INVALID', `Capture input entryPoints has unknown field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}.`);
+  }
+  if (!Array.isArray(entryPoints.locations)) {
+    throw codedError('CAPTURE_INPUT_INVALID', 'Capture input entryPoints.locations must be an array.');
+  }
+  for (const [index, location] of entryPoints.locations.entries()) {
+    if (!isPlainObject(location)) {
+      throw codedError('CAPTURE_INPUT_INVALID', `Capture input entryPoints.locations[${index}] must be an object.`);
+    }
+    const extra = Object.keys(location).filter((key) => !['path', 'symbol', 'documentSection', 'line', 'role'].includes(key));
+    if (extra.length > 0) {
+      throw codedError('CAPTURE_INPUT_INVALID', `Capture input entryPoints.locations[${index}] has unknown field${extra.length === 1 ? '' : 's'}: ${extra.join(', ')}.`);
+    }
+    if (!isNonEmptyString(location.path)) {
+      throw codedError('CAPTURE_INPUT_INVALID', `Capture input entryPoints.locations[${index}] requires a non-empty path.`);
+    }
+    if (!isNonEmptyString(location.symbol) && !isNonEmptyString(location.documentSection)) {
+      throw codedError('CAPTURE_INPUT_INVALID', `Capture input entryPoints.locations[${index}] requires symbol or documentSection.`);
+    }
+    if (!Number.isInteger(location.line) || location.line <= 0) {
+      throw codedError('CAPTURE_INPUT_INVALID', `Capture input entryPoints.locations[${index}] requires a positive observed line.`);
+    }
+    if (!isNonEmptyString(location.role)) {
+      throw codedError('CAPTURE_INPUT_INVALID', `Capture input entryPoints.locations[${index}] requires a non-empty role.`);
+    }
+  }
+  if (entryPoints.locations.length === 0 && !substantiveExplanation(entryPoints.explanation)) {
+    throw codedError('CAPTURE_INPUT_INVALID', 'Capture input entryPoints with no locations requires a substantive explanation.');
+  }
+  if (entryPoints.explanation !== undefined && !substantiveExplanation(entryPoints.explanation)) {
+    throw codedError('CAPTURE_INPUT_INVALID', 'Capture input entryPoints.explanation must be substantive when supplied.');
+  }
+}
+
+function canonicalEntryPoints(entryPoints) {
+  const result = {
+    locations: entryPoints.locations.map((location) => ({
+      path: location.path.trim(),
+      ...(isNonEmptyString(location.symbol) ? { symbol: location.symbol.trim() } : {}),
+      ...(isNonEmptyString(location.documentSection) ? { documentSection: location.documentSection.trim() } : {}),
+      line: location.line,
+      role: location.role.trim(),
+    })),
+    ...(entryPoints.explanation === undefined ? {} : { explanation: entryPoints.explanation.trim() }),
+  };
+  return `${ENTRY_POINTS_START}\n${JSON.stringify(result)}\n${ENTRY_POINTS_END}`;
+}
+
+function projectEntryPointsText(text, entryPoints) {
+  const state = entryPointBlockState(text);
+  const block = canonicalEntryPoints(entryPoints);
+  if (state.state === 'absent') return `${text.trimEnd()}\n\n${block}`;
+  return `${text.slice(0, state.start).trimEnd()}\n\n${block}${text.slice(state.end)}`;
+}
+
+function constructRawForComparison(input, kind, current, requested, options, tags) {
+  return kind === 'knowledge'
+    ? constructKnowledge(input, current, tags, options)
+    : constructWork(input, current, current?.id || options.workId || 'work-00000000-0000-0000-0000-000000000000', tags, requested, options);
+}
+
+function applyEntryPoints(input, kind, current, requested, options, tags) {
+  const target = kind === 'knowledge' ? 'evidence' : 'relatedContext';
+  if (input.entryPoints !== undefined) {
+    assertValidEntryPoints(input.entryPoints);
+    return {
+      ...input,
+      [target]: projectEntryPointsText(input[target], input.entryPoints),
+      entryPoints: undefined,
+    };
+  }
+  entryPointBlockState(input[target]);
+  if (current) {
+    const raw = constructRawForComparison(input, kind, current.record, requested, options, tags);
+    if (revisionTokenFor(raw, current.resourceDigests) === current.revisionToken) return input;
+  }
+  throw codedError('CAPTURE_INPUT_INVALID', 'New or changed semantic captures require entryPoints with selected locations or a truthful unavailable explanation.');
 }
 
 function requestedAssociations(options) {
@@ -310,16 +415,16 @@ function terminalEvidence(projectDir, state, events) {
   return { terminalHead, acceptedCommits: commits, acceptedPatchIds: patchIds };
 }
 
-/** Read one exact run's receipt evidence. Work capture is never a delivery authority, so an
- * unreadable or unknown run yields no receipt rather than an error. */
-async function deliveryReceiptFromRun({ projectDir, spectreHome, sourceRunId }) {
-  if (typeof sourceRunId !== 'string' || !RECEIPT_RUN_ID_PATTERN.test(sourceRunId)) return undefined;
+/** Read one exact run's branch and receipt evidence. Work capture is never a delivery authority,
+ * so unreadable delivery details yield no receipt rather than an error. */
+async function workflowEvidenceFromRun({ projectDir, spectreHome, sourceRunId }) {
+  if (typeof sourceRunId !== 'string' || !RECEIPT_RUN_ID_PATTERN.test(sourceRunId)) return {};
   let loaded;
   try {
     loaded = await readWorkflowRun({ projectDir, spectreHome, runId: sourceRunId });
   } catch (error) {
     debugLog('capture.receipt_run_unreadable', { runId: sourceRunId, code: error?.code || 'UNKNOWN' });
-    return undefined;
+    return {};
   }
   const { state, events } = loaded;
   const branch = receiptToken(state?.branch);
@@ -328,7 +433,7 @@ async function deliveryReceiptFromRun({ projectDir, spectreHome, sourceRunId }) 
     debugLog('capture.receipt_start_unprovable', {
       runId: sourceRunId, branch: Boolean(branch), startHead: Boolean(startHead),
     });
-    return undefined;
+    return { runBranch: branch };
   }
   const receipt = { runId: sourceRunId, branch, startHead, ...terminalEvidence(projectDir, state, events) };
   debugLog('capture.receipt_derived', {
@@ -336,7 +441,7 @@ async function deliveryReceiptFromRun({ projectDir, spectreHome, sourceRunId }) 
     terminal: Boolean(receipt.terminalHead),
     acceptedCommits: receipt.acceptedCommits?.length || 0,
   });
-  return receipt;
+  return { deliveryReceipt: receipt, runBranch: branch };
 }
 
 const START_ONLY_RECEIPT_FIELDS = ['runId', 'branch', 'startHead'];
@@ -374,6 +479,27 @@ function receiptForStoredRun(stored, derived) {
   if (!derived || !isPlainObject(stored) || !stored.runId || stored.runId === derived.runId) return derived;
   debugLog('capture.receipt_run_mismatch', { stored: stored.runId, derived: derived.runId });
   return undefined;
+}
+
+function assertExactBranch(value) {
+  if (!isNonEmptyString(value) || BRANCH_SENTINELS.has(value.trim().toLowerCase())) {
+    throw codedError('CAPTURE_INPUT_INVALID', 'New semantic work captures require --branch with the exact source branch.');
+  }
+  return value.trim();
+}
+
+function validateWorkBranchPrecondition({ kind, current, options, runBranch }) {
+  if (kind !== 'work') return;
+  if (options.branch !== undefined) assertExactBranch(options.branch);
+  if (!current) assertExactBranch(options.branch);
+  const exactBranch = options.branch?.trim();
+  const storedBranch = current?.provenance?.sourceBranch;
+  if (exactBranch && storedBranch && exactBranch !== storedBranch) {
+    throw codedError('CAPTURE_INPUT_INVALID', `Capture branch ${exactBranch} contradicts stored source branch ${storedBranch}.`);
+  }
+  if (exactBranch && runBranch && exactBranch !== runBranch) {
+    throw codedError('CAPTURE_INPUT_INVALID', `Capture branch ${exactBranch} contradicts source run branch ${runBranch}.`);
+  }
 }
 
 /**
@@ -498,7 +624,7 @@ function constructWork(input, current, workId, tags, associations, options) {
   const runIds = mergeUnique(current?.applicability.runIds, sourceRunIds);
   const applicability = current?.applicability || { scope: 'work', workId };
   const provenance = current?.provenance || { origin: 'captured', capturedAt: nowIso(options) };
-  const sourceBranch = options.branch === undefined ? provenance.sourceBranch : options.branch;
+  const sourceBranch = provenance.sourceBranch || options.branch;
   const stored = current?.work.deliveryReceipt;
   // The caller-supplied fallback is add-only: once a receipt is stored, only the run's own log
   // may revise it. Otherwise a capture input naming the stored run could rewrite `branch` and
@@ -582,7 +708,7 @@ function recovery(error, details) {
 
 /** Construct semantic input above the existing validator and sole registration writer. */
 export async function captureCanonicalKnowledge(options) {
-  const input = readInput(options.inputPath);
+  let input = readInput(options.inputPath);
   const kind = options.kind;
   if (kind !== 'knowledge' && kind !== 'work') {
     throw codedError('CAPTURE_INPUT_INVALID', '--kind must be knowledge or work.');
@@ -590,8 +716,8 @@ export async function captureCanonicalKnowledge(options) {
   if (kind === 'work' && options.recordId !== undefined) {
     throw codedError('CAPTURE_INPUT_INVALID', '--record-id is only valid for knowledge capture.');
   }
-  if (options.branch !== undefined && !isNonEmptyString(options.branch)) {
-    throw codedError('CAPTURE_INPUT_INVALID', '--branch must be a non-empty exact branch name.');
+  if (options.branch !== undefined) {
+    assertExactBranch(options.branch);
   }
   if (kind === 'knowledge' && options.recordId !== undefined && input.id !== options.recordId) {
     throw codedError('CAPTURE_INPUT_INVALID', '--record-id must match the semantic knowledge input id.');
@@ -604,14 +730,12 @@ export async function captureCanonicalKnowledge(options) {
   });
   const requested = requestedAssociations(options);
   // Derived before any store lock is taken, because reading the run takes the same store lock.
-  const captureOptions = kind === 'work'
-    ? {
-      ...options,
-      deliveryReceipt: await deliveryReceiptFromRun({
-        projectDir, spectreHome: options.spectreHome, sourceRunId: options.sourceRunId,
-      }),
-    }
-    : options;
+  const runEvidence = kind === 'work'
+    ? await workflowEvidenceFromRun({
+      projectDir, spectreHome: options.spectreHome, sourceRunId: options.sourceRunId,
+    })
+    : {};
+  const captureOptions = kind === 'work' ? { ...options, deliveryReceipt: runEvidence.deliveryReceipt } : options;
   let current = null;
   let workIdentity = null;
   let tagResult = { tags: [], tagOutcomes: [] };
@@ -635,9 +759,11 @@ export async function captureCanonicalKnowledge(options) {
     throw codedError('CAPTURE_KIND_CONFLICT', `${current.record.id} is not a ${kind} record.`);
   }
   try {
+    validateWorkBranchPrecondition({ kind, current: current?.record, options, runBranch: runEvidence.runBranch });
     const preflightTags = await preflightCanonicalTags({
       projectDir: options.projectDir, tags: input.tags, existingTags: current?.record.tags || [], ...storeOptions(options),
     });
+    input = applyEntryPoints(input, kind, current, requested, captureOptions, preflightTags);
     prevalidateSemanticRecord(input, kind, current?.record, requested, captureOptions, preflightTags);
   } catch (error) {
     throw recovery(error, { recoveryInput: path.resolve(options.inputPath) });

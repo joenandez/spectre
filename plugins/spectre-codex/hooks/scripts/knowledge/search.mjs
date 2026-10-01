@@ -106,7 +106,7 @@ function fieldMatches(values, queryTokens, query) {
   return { terms: [...new Set(terms)], phrase };
 }
 
-function score(entry, query, queryTokens, catalog, paths, requestedTags) {
+function score(entry, query, queryTokens, catalog, paths, requestedTags, exactRecordId) {
   const fields = [
     ['use-when', [entry.useWhen]],
     ['summary', [entry.summary]],
@@ -131,20 +131,35 @@ function score(entry, query, queryTokens, catalog, paths, requestedTags) {
   const tagFilterSignals = queryTokens.length === 0
     ? requestedTags.map((tag) => `tag:${tag}`)
     : [];
+  const queryTermCount = new Set(queryTokens).size;
+  const combinedTerms = new Set([...metadata.flatMap(({ terms }) => terms), ...(body?.terms || [])]);
+  const combinedCoverage = combinedTerms.size;
+  const completeCoverage = queryTermCount > 0 && combinedCoverage === queryTermCount;
+  const phraseMatch = matches.some(({ phrase }) => phrase);
+  const exactId = exactRecordId !== null && entry.id === exactRecordId;
   const signals = [...new Set([...pathMatches, ...metadataSignals, ...bodySignals, ...tagFilterSignals])].slice(0, 4);
   const metadataCoverage = new Set(metadata.flatMap(({ terms }) => terms)).size;
   const bodyCoverage = new Set(body?.terms || []).size;
   return {
-    tier: pathMatches.length > 0 ? 4 : metadataCoverage > 0 || tagFilterSignals.length > 0 ? 3 : bodyCoverage > 0 ? 1 : 0,
-    coverage: Math.max(metadataCoverage, bodyCoverage) + pathMatches.length,
-    signals,
+    exactId,
+    tier: pathMatches.length > 0 ? 4
+      : completeCoverage || phraseMatch ? 3
+        : metadataCoverage > 0 || tagFilterSignals.length > 0 ? 2
+          : bodyCoverage > 0 ? 1
+            : 0,
+    coverage: combinedCoverage + pathMatches.length,
+    metadataCoverage,
+    signals: exactId ? ['title:exact-id', ...signals].slice(0, 4) : signals,
   };
 }
 
 function compare(left, right) {
+  if (left.exactId !== right.exactId) return left.exactId ? -1 : 1;
+  if (left.relatedExactCurrent !== right.relatedExactCurrent) return left.relatedExactCurrent ? -1 : 1;
   if (left.tier !== right.tier) return right.tier - left.tier;
   if (left.coverage !== right.coverage) return right.coverage - left.coverage;
   if (left.current !== right.current) return left.current ? -1 : 1;
+  if (left.metadataCoverage !== right.metadataCoverage) return right.metadataCoverage - left.metadataCoverage;
   return left.id.localeCompare(right.id);
 }
 
@@ -252,18 +267,32 @@ export async function searchKnowledge(options = {}) {
     throw codedError('SEARCH_CURSOR_STALE', 'Search results changed; restart the query.');
   }
   const queryTokens = tokens(query).filter((token) => !LOW_INFORMATION_TOKENS.has(token));
+  const rawQuery = String(options.query ?? '').normalize('NFKC').trim().toLowerCase();
+  const exactRecordId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(rawQuery) ? rawQuery : null;
   const paths = Array.isArray(options.paths) ? options.paths : [];
-  const ranked = index.records
+  const admitted = index.records
     .filter((entry) => kind === 'all' || entry.kind === kind)
-    .filter((entry) => requestedTags.length === 0 || requestedTags.some((tag) => entryTags(entry, catalog).has(tag)))
-    .map((entry) => {
-      const state = activation(entry, options);
-      const match = score(entry, query, queryTokens, catalog, paths, requestedTags);
-      return { ...preview(entry, match, state), tier: match.tier, coverage: match.coverage, current: !state.historical };
-    })
+    .filter((entry) => requestedTags.length === 0 || requestedTags.some((tag) => entryTags(entry, catalog).has(tag)));
+  const exactEntry = exactRecordId === null ? null : admitted.find((entry) => entry.id === exactRecordId);
+  const exactRelatedCurrentIds = new Set(exactEntry?.relatedRecordIds || []);
+  const ranked = admitted.map((entry) => {
+    const state = activation(entry, options);
+    const match = score(entry, query, queryTokens, catalog, paths, requestedTags, exactRecordId);
+    const relatedExactCurrent = exactRelatedCurrentIds.has(entry.id) && !state.historical;
+    return {
+      ...preview(entry, match, state),
+      exactId: match.exactId,
+      relatedExactCurrent,
+      tier: relatedExactCurrent ? Math.max(match.tier, 1) : match.tier,
+      coverage: match.coverage,
+      metadataCoverage: match.metadataCoverage,
+      current: !state.historical,
+    };
+  })
     .filter((entry) => query === '' || entry.tier > 0)
+    .filter((entry) => exactEntry == null || entry.exactId || entry.relatedExactCurrent)
     .sort(compare)
-    .map(({ tier, coverage, current, ...entry }) => entry);
+    .map(({ exactId, relatedExactCurrent, tier, coverage, metadataCoverage, current, ...entry }) => entry);
   return boundedPage(
     ranked,
     { results: [], warnings: errors, query, index: fingerprint },

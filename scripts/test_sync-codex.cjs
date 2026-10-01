@@ -1907,10 +1907,14 @@ test('work records bind to exact runs and one PR associates a plural selection i
 
     assert.match(
       workRecord,
-      /one record per exact Execute run[\s\S]*distinct runs never fold[\s\S]*a branch and a pull request may each reference many records/i,
+      /one record per exact Execute run[\s\S]*distinct runs never fold[\s\S]*Branches and PRs may each reference multiple records/i,
     );
-    assert.match(workRecord, /--source-run-id <exact-run>[\s\S]*in addition to/i);
-    assert.match(workRecord, /delivery receipt derives only from that exact run.s event log/i);
+    assert.match(workRecord, /--source-run-id <exact-run>[\s\S]*with any other identity flag/i);
+    assert.match(workRecord, /receipt derivation uses that run.s event log/i);
+    assert.match(workRecord, /four complementary groups[\s\S]*`actualChanges` states delivered behavior/i);
+    assert.match(workRecord, /observed positive line, and role/i);
+    assert.match(workRecord, /Typed locations[\s\S]*project to `relatedContext`/i);
+    assert.match(workRecord, /capture --kind work --input - --branch <exact-branch>/i);
     assert.doesNotMatch(workRecord, /branch pointer/i);
 
     assert.match(execute, /`run finish` first[\s\S]*Skill\(spectre-work-record\)[\s\S]*--source-run-id <exact-run>/i);

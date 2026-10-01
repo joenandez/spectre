@@ -611,6 +611,23 @@ function deliveryReceiptLines(receipt) {
   ];
 }
 
+function substantiveSourceBody(record) {
+  if (record.kind === 'knowledge') {
+    return [
+      record.content,
+      record.evidence,
+      record.blocker?.condition,
+      record.blocker?.resolutionCriterion,
+    ].filter(isNonEmptyString).join('\n\n');
+  }
+  return [
+    ...WORK_SECTION_FIELDS.map((field) => record.work[field]),
+    record.importedSource?.body,
+    record.importedSource?.useWhen,
+    ...(record.importedSource?.cues || []),
+  ].filter(isNonEmptyString).join('\n\n');
+}
+
 function section(heading, body) {
   return [`## ${heading}`, '', body, ''];
 }
@@ -848,6 +865,8 @@ function indexEntry(storePath, recordPath, parsed) {
     summary: record.summary,
     tags: [...record.tags],
     applicability: canonicalize(record.applicability),
+    relatedRecordIds: [...record.relatedRecordIds],
+    sourceBody: substantiveSourceBody(record),
     ...(record.kind === 'knowledge'
       ? { category: record.category, useWhen: record.useWhen, status: record.status }
       : {
@@ -855,7 +874,6 @@ function indexEntry(storePath, recordPath, parsed) {
         imported: record.provenance.origin === LEGACY_IMPORT_ORIGIN,
         useWhen: record.importedSource?.useWhen,
         cues: record.importedSource?.cues || [],
-        sourceBody: record.importedSource?.body,
         category: record.importedSource?.category,
         status: record.importedSource?.status,
         version: record.importedSource?.version,
