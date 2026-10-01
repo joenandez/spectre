@@ -22,10 +22,10 @@ function renderTagEntry([id, tag]) {
 function renderContent(entries, omittedCount, cliPath) {
   return [
     '## Project knowledge',
-    `Use ${shellQuote(cliPath)} with --project-dir . Before broad source/filename discovery: search the actual task with search '<task>' across mixed knowledge/work previews incl omitted/untagged; assess applicability previews; load '<id>' exact applicable record; read selected paths/symbols/lines. Broaden only if focused hints prove insufficient/stale/unavailable.`,
+    `Use ${shellQuote(cliPath)} with --project-dir . Before broad source/filename discovery: search the actual task with search '<task>' across mixed knowledge/work previews incl omitted/untagged; assess applicability previews; load '<id>' exact applicable; read selected paths/symbols/lines. Broaden only after focused hints fail/stale/unavailable.`,
     'Discovery is per question, not skill: reuse results/loads; refine only for an unresolved question or new subject; never repeat an equivalent query.',
-    "Work historical: load with --inspect-historical. Oversized loads require blocked decision. Unrelated chat: load nothing.",
-    "#tag is explicit: search --tag '<tag>'; assess previews; exact-load matches. tags never authorize guesses/create tags.",
+    "Work historical: --inspect-historical. Oversized loads need blocked decision. Unrelated chat: load nothing.",
+    "#tag is explicit: search --tag '<tag>'; assess previews; exact-load. tags never authorize guesses/create tags.",
     ...(entries.length > 0 ? entries.map(renderTagEntry) : ['- No tagged records yet; imported work remains searchable.']),
     `Omitted tags: ${omittedCount}; omitted tags remain searchable.`,
   ].join('\n');

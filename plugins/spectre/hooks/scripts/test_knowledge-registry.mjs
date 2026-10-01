@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { estimatePayloadTokens } from './knowledge/payload.mjs';
@@ -8,6 +10,18 @@ import { renderKnowledgeRegistry, SESSION_START_TOKEN_LIMIT } from './knowledge/
 
 const INSTALLED_CODEX_CLI = '/Users/joe/.codex/plugins/cache/spectre/spectre/7.6.0/hooks/scripts/knowledge-cli.mjs';
 const STAGED_CODEX_CLI = '/private/tmp/q/spectre-knowledge-evaluation-cell-aBcDeF/codex-home/plugins/cache/evaluation/spectre/7.6.0/hooks/scripts/knowledge-cli.mjs';
+const PACKED_CODEX_CLI = path.join(
+  os.tmpdir(),
+  'spectre-pack-install-ABCDEF',
+  'node_modules',
+  '@codename_inc',
+  'spectre',
+  'plugins',
+  'spectre-codex',
+  'hooks',
+  'scripts',
+  'knowledge-cli.mjs',
+);
 
 function catalog(count = 0) {
   return {
@@ -27,14 +41,14 @@ describe('bounded SessionStart tag registry', () => {
     assert.ok(result.omittedCount > 0);
     assert.match(result.content, /Omitted tags: \d+; omitted tags remain searchable/);
     assert.match(result.content, /Before broad source\/filename discovery[\s\S]*actual task[\s\S]*search '<task>'[\s\S]*assess applicability previews[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines/i);
-    assert.match(result.content, /Broaden only if focused hints prove insufficient\/stale\/unavailable/i);
+    assert.match(result.content, /Broaden only after focused hints fail\/stale\/unavailable/i);
     assert.match(result.content, /omitted\/untagged/i);
     assert.match(result.content, /Discovery is per question, not skill/i);
     assert.match(result.content, /reuse results\/loads[\s\S]*refine only for an unresolved question or new subject/i);
     assert.match(result.content, /never repeat an equivalent query/i);
     assert.match(result.content, /#tag is explicit:[\s\S]*search --tag '<tag>'[\s\S]*previews[\s\S]*exact-load/i);
     assert.match(result.content, /tags never authorize guesses\/create tags/);
-    assert.match(result.content, /Oversized loads require blocked decision/i);
+    assert.match(result.content, /Oversized loads need blocked decision/i);
     assert.doesNotMatch(result.content, /recordPath|revisionToken|successfulLoads|PRIVATE_BODY|ID: /);
     for (const id of result.includedEntries) {
       assert.match(result.content, new RegExp(`^- ${id}:`, 'm'));
@@ -66,10 +80,34 @@ describe('bounded SessionStart tag registry', () => {
       assert.equal(nonempty.includedEntries.length + nonempty.omittedCount, 20);
       assert.match(nonempty.content, new RegExp(`Omitted tags: ${nonempty.omittedCount}; omitted tags remain searchable`));
       assert.match(nonempty.content, /Before broad source\/filename discovery[\s\S]*search the actual task[\s\S]*search '<task>'[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines/i);
-      assert.match(nonempty.content, /Broaden only if focused hints prove insufficient\/stale\/unavailable/i);
+      assert.match(nonempty.content, /Broaden only after focused hints fail\/stale\/unavailable/i);
       for (const id of nonempty.includedEntries) {
         assert.match(nonempty.content, new RegExp(`^- ${id}:`, 'm'));
       }
     }
+  });
+
+  it('fits the packed npm Codex CLI path while including one existing tag', () => {
+    const empty = renderKnowledgeRegistry({ cliPath: PACKED_CODEX_CLI, catalog: catalog() });
+    assert.ok(empty.measurement.measured <= SESSION_START_TOKEN_LIMIT);
+    assert.equal(empty.omittedCount, 0);
+
+    const packed = renderKnowledgeRegistry({
+      cliPath: PACKED_CODEX_CLI,
+      catalog: {
+        tags: {
+          'packed-retrieval': {
+            description: 'Packed retrieval checks.',
+            aliases: [],
+          },
+        },
+      },
+    });
+
+    assert.ok(packed.measurement.measured <= SESSION_START_TOKEN_LIMIT);
+    assert.deepEqual(packed.includedEntries, ['packed-retrieval']);
+    assert.equal(packed.omittedCount, 0);
+    assert.match(packed.content, /packed-retrieval/);
+    assert.match(packed.content, /Before broad source\/filename discovery[\s\S]*search the actual task[\s\S]*load '<id>'[\s\S]*read selected paths\/symbols\/lines/i);
   });
 });
