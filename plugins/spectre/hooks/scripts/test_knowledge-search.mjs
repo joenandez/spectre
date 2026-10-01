@@ -179,6 +179,72 @@ test('exact IDs only win inside admitted filters and active corrections beat sup
   assert.equal(superseded.results[0].activation, 'inactive-history');
 });
 
+test('exact historical ID search also exposes known related current guidance', async (t) => {
+  const value = await fixture(t);
+  await ensureTags({ ...options(value), tags: [
+    { id: 'runtime-core', description: 'Runtime behavior.' },
+  ] });
+  write(value.storePath, knowledge('runtime-correction', {
+    tags: ['runtime-core'],
+    summary: 'Current runtime retry guidance.',
+    useWhen: 'Use for bounded runtime retry decisions.',
+    content: 'Current conclusion: route retries through the bounded retry gate.',
+    relatedRecordIds: ['obsolete-rule-7'],
+  }));
+  write(value.storePath, knowledge('obsolete-rule-7', {
+    tags: ['runtime-core'],
+    status: 'superseded',
+    summary: 'Old logical runtime rule.',
+    useWhen: 'Use only for historical inspection of the old rule.',
+    content: 'Superseded conclusion: route retries through the legacy retry gate.',
+    relatedRecordIds: ['runtime-correction'],
+  }));
+  write(value.storePath, knowledge('unrelated-current', {
+    tags: ['runtime-core'],
+    summary: 'Current guidance unrelated to the stale ID.',
+    useWhen: 'Use for unrelated runtime maintenance.',
+  }));
+  write(value.storePath, knowledge('passive-related-history', {
+    tags: ['runtime-core'],
+    status: 'superseded',
+    summary: 'Another old rule linked to obsolete-rule-7.',
+    useWhen: 'Use only for unrelated historical context.',
+    relatedRecordIds: ['obsolete-rule-7'],
+  }));
+
+  const found = await searchKnowledge(options(value, {
+    query: 'obsolete-rule-7',
+    tags: ['runtime-core'],
+  }));
+
+  assert.deepEqual(found.results.slice(0, 2).map(({ id }) => id), ['obsolete-rule-7', 'runtime-correction']);
+  assert.equal(found.results[0].activation, 'inactive-history');
+  assert.equal(found.results[1].activation, 'current-guidance');
+  assert.equal(found.results.some(({ id }) => id === 'passive-related-history'), false);
+});
+
+test('comparable complete relevance keeps applicable current body guidance on the first page', async (t) => {
+  const value = await fixture(t);
+  write(value.storePath, knowledge('current-body-authority', {
+    summary: 'Current source body authority.',
+    useWhen: 'Use for unrelated routing.',
+    content: 'Current conclusion: alpha beta gamma must use the active body guidance.',
+  }));
+  for (let index = 0; index < 5; index += 1) {
+    write(value.storePath, knowledge(`historical-metadata-${index}`, {
+      status: 'superseded',
+      summary: `Historical alpha beta gamma metadata ${index}.`,
+      useWhen: 'Use for alpha beta gamma historical inspection.',
+      content: 'Superseded material with no stronger current authority.',
+    }));
+  }
+
+  const found = await searchKnowledge(options(value, { query: 'alpha beta gamma' }));
+
+  assert.ok(found.results.some(({ id }) => id === 'current-body-authority'));
+  assert.equal(found.results.find(({ id }) => id === 'current-body-authority').activation, 'current-guidance');
+});
+
 test('ranks applicability metadata and tag descriptions above generic imported-body overlap', async (t) => {
   const value = await fixture(t);
   await ensureTags({ ...options(value), tags: [

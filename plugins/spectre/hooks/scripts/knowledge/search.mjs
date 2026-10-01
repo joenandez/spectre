@@ -155,10 +155,11 @@ function score(entry, query, queryTokens, catalog, paths, requestedTags, exactRe
 
 function compare(left, right) {
   if (left.exactId !== right.exactId) return left.exactId ? -1 : 1;
+  if (left.relatedExactCurrent !== right.relatedExactCurrent) return left.relatedExactCurrent ? -1 : 1;
   if (left.tier !== right.tier) return right.tier - left.tier;
   if (left.coverage !== right.coverage) return right.coverage - left.coverage;
-  if (left.metadataCoverage !== right.metadataCoverage) return right.metadataCoverage - left.metadataCoverage;
   if (left.current !== right.current) return left.current ? -1 : 1;
+  if (left.metadataCoverage !== right.metadataCoverage) return right.metadataCoverage - left.metadataCoverage;
   return left.id.localeCompare(right.id);
 }
 
@@ -269,17 +270,29 @@ export async function searchKnowledge(options = {}) {
   const rawQuery = String(options.query ?? '').normalize('NFKC').trim().toLowerCase();
   const exactRecordId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(rawQuery) ? rawQuery : null;
   const paths = Array.isArray(options.paths) ? options.paths : [];
-  const ranked = index.records
+  const admitted = index.records
     .filter((entry) => kind === 'all' || entry.kind === kind)
-    .filter((entry) => requestedTags.length === 0 || requestedTags.some((tag) => entryTags(entry, catalog).has(tag)))
-    .map((entry) => {
-      const state = activation(entry, options);
-      const match = score(entry, query, queryTokens, catalog, paths, requestedTags, exactRecordId);
-      return { ...preview(entry, match, state), exactId: match.exactId, tier: match.tier, coverage: match.coverage, metadataCoverage: match.metadataCoverage, current: !state.historical };
-    })
+    .filter((entry) => requestedTags.length === 0 || requestedTags.some((tag) => entryTags(entry, catalog).has(tag)));
+  const exactEntry = exactRecordId === null ? null : admitted.find((entry) => entry.id === exactRecordId);
+  const exactRelatedCurrentIds = new Set(exactEntry?.relatedRecordIds || []);
+  const ranked = admitted.map((entry) => {
+    const state = activation(entry, options);
+    const match = score(entry, query, queryTokens, catalog, paths, requestedTags, exactRecordId);
+    const relatedExactCurrent = exactRelatedCurrentIds.has(entry.id) && !state.historical;
+    return {
+      ...preview(entry, match, state),
+      exactId: match.exactId,
+      relatedExactCurrent,
+      tier: relatedExactCurrent ? Math.max(match.tier, 1) : match.tier,
+      coverage: match.coverage,
+      metadataCoverage: match.metadataCoverage,
+      current: !state.historical,
+    };
+  })
     .filter((entry) => query === '' || entry.tier > 0)
+    .filter((entry) => exactEntry == null || entry.exactId || entry.relatedExactCurrent)
     .sort(compare)
-    .map(({ exactId, tier, coverage, metadataCoverage, current, ...entry }) => entry);
+    .map(({ exactId, relatedExactCurrent, tier, coverage, metadataCoverage, current, ...entry }) => entry);
   return boundedPage(
     ranked,
     { results: [], warnings: errors, query, index: fingerprint },

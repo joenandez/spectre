@@ -865,6 +865,7 @@ function indexEntry(storePath, recordPath, parsed) {
     summary: record.summary,
     tags: [...record.tags],
     applicability: canonicalize(record.applicability),
+    relatedRecordIds: [...record.relatedRecordIds],
     sourceBody: substantiveSourceBody(record),
     ...(record.kind === 'knowledge'
       ? { category: record.category, useWhen: record.useWhen, status: record.status }
