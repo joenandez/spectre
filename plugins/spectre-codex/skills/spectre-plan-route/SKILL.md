@@ -8,7 +8,7 @@ user-invocable: false
 
 ## Purpose
 
-Return plan-routing/v1 to Plan/Execute; caller owns authority.
+Classify into plan-routing/v1 for Plan/Execute; caller owns authority.
 
 ## Inputs
 
@@ -24,7 +24,7 @@ Return plan-routing/v1 to Plan/Execute; caller owns authority.
 
 ## Outputs + DONE
 
-Return `plan-routing/v1`: shape ATOMIC|DIRECT|STRUCTURED; uncertainty LOW|MODERATE|HIGH; evidence SUFFICIENT|PROBE_REQUIRED|PROBED; protected_boundaries[] {type, threatened_invariant, failure_mode}; task_graph_risk LOW|HIGH; design flag, size, route, rationale. Observed adds regret, reason codes, KEEP|RERUN_SMALLER|RERUN_LARGER.
+Produce `plan-routing/v1`: shape ATOMIC|DIRECT|STRUCTURED; uncertainty LOW|MODERATE|HIGH; evidence SUFFICIENT|PROBE_REQUIRED|PROBED; protected_boundaries[] {type, threatened_invariant, failure_mode}; task_graph_risk LOW|HIGH; design flag, size, route, rationale. Observed adds regret, reason codes, KEEP|RERUN_SMALLER|RERUN_LARGER.
 
 DONE when fields validate; probe is consumed; STRUCTURED names workstreams; HIGH graph risk names an implementation-graph failure; only table derives size/route.
 
@@ -46,11 +46,11 @@ DONE when fields validate; probe is consumed; STRUCTURED names workstreams; HIGH
 - Design authority needs unresolved product, compatibility, destructive, migration/rollback, or architecture choice; size and routine placement never create it.
 - Observed consumes the completed minimum-solution selection before drafting, reports regret and KEEP|RERUN_SMALLER|RERUN_LARGER, and never repeats work or removes artifacts. The same routing table alone maps selected structural facts, uncertainty, protected boundaries, graph risk, and assurance floor; it does not select solution shape.
 - Normalize legacy once: MICRO→XS, LIGHT→S, STANDARD-DIRECT→M, STANDARD→L, COMPREHENSIVE→XL; labels never decide.
-- Never use file volume, dependency count, surface counts, or sensitive-domain keywords as size authority, and never let them create workstreams. Never plan, write artifacts, emit telemetry, or present gates.
+- Never use file volume, dependency count, surface counts, or sensitive-domain keywords as size authority, and never let them create workstreams. Never plan, write artifacts, emit telemetry, or present gates while classifying; these limits end with the record and never bind the caller's next step.
 
 ## Handoff
 
-Return record/probe as data. DONE does not end caller's turn; caller owns persistence, explanation, orchestration, gates, telemetry.
+Inline (Plan): keep record/probe as internal data; never print it as a reply. DONE does not end caller's turn: in the same response, run the caller's next step. Child (Execute): final message is the record. Caller owns persistence, explanation, orchestration, gates, telemetry.
 
 ## Escalate-If
 

@@ -1126,7 +1126,9 @@ test('Plan and Execute emit one non-authoritative calibration lifecycle', () => 
     assert.ok(initialRoute !== -1 && planStart > initialRoute);
     assert.ok(observedRoute > planStart && reclassified > observedRoute);
     assert.match(plan, /Child skill DONE is internal: resume the next Plan step in this turn/i);
-    assert.match(plan, /Report size\/rationale as progress; continue to step 3/i);
+    assert.match(plan, /initial` mode\. Never print its record; its DONE and limits end at the record\. In the same response, run `spectre-workflow plan start`/i);
+    assert.match(plan, /Report size\/rationale in one progress line beside that call; continue to step 3/i);
+    assert.match(plan, /observed` mode[^\n]*never print its record, and continue to step 6 in the same response/i);
     for (const eventType of [
       'plan.started',
       'plan.reclassified',
@@ -1247,7 +1249,8 @@ test('Plan delegates one semantic XS-S-M-L-XL classifier and keeps orchestration
     assert.match(route, /exactly one bounded probe/);
     assert.match(route, /Honor confirmed Scope assumptions/i);
     assert.match(route, /KEEP\|RERUN_SMALLER\|RERUN_LARGER/);
-    assert.match(route, /Never plan, write artifacts, emit telemetry, or present gates/i);
+    assert.match(route, /Never plan, write artifacts, emit telemetry, or present gates while classifying; these limits end with the record and never bind the caller's next step/i);
+    assert.doesNotMatch(route, /\bReturn\b/);
 
     assert.equal(routeCalls.length, 2);
     assert.doesNotMatch(plan, /ATOMIC[^\n]*LOW[^\n]*XS/);
@@ -2415,7 +2418,9 @@ test('Plan selects and binds the minimum solution before it renders a draft', ()
     assert.match(route, /observed[\s\S]*completed minimum-solution selection[\s\S]*before drafting/i);
     assert.match(route, /selected structural facts[\s\S]*assurance floor/i);
     assert.match(route, /same routing table.*alone maps/i);
-    assert.match(route, /DONE does not end caller's turn/i);
+    assert.match(route, /Inline \(Plan\): keep record\/probe as internal data; never print it as a reply/i);
+    assert.match(route, /DONE does not end caller's turn: in the same response, run the caller's next step/i);
+    assert.match(route, /Child \(Execute\): final message is the record/i);
 
     assert.match(
       createPlan,
